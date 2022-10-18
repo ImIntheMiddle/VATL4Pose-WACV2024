@@ -79,8 +79,8 @@ class SimplePose(nn.Module):
                 nn.init.normal_(m.weight, std=0.001)
                 nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
-        out = self.preact(x)
-        out = self.deconv_layers(out)
-        out = self.final_layer(out)
+    def forward(self, x): #make prediction
+        out = self.preact(x) # x is fed into ResNet
+        out = self.deconv_layers(out) # deconvolution and get 
+        out = self.final_layer(out) # through final layer
         return out

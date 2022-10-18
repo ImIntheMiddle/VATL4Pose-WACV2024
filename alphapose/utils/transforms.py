@@ -557,12 +557,12 @@ def heatmap_to_coord_simple(hms, bbox, hms_flip=None, **kwargs):
         hms = (hms + hms_flip) / 2
     if not isinstance(hms,np.ndarray):
         hms = hms.cpu().data.numpy()
-    coords, maxvals = get_max_pred(hms)
+    coords, maxvals = get_max_pred(hms) # こいつでヒートマップから座標を得ている
 
     hm_h = hms.shape[1]
     hm_w = hms.shape[2]
 
-    # post-processing
+    # post-processing 以降微調整。いじらんでよし
     for p in range(coords.shape[0]):
         hm = hms[p]
         px = int(round(float(coords[p][0])))
@@ -572,15 +572,15 @@ def heatmap_to_coord_simple(hms, bbox, hms_flip=None, **kwargs):
                              hm[py + 1][px] - hm[py - 1][px]))
             coords[p] += np.sign(diff) * .25
 
-    preds = np.zeros_like(coords)
-
     # transform bbox to scale
     xmin, ymin, xmax, ymax = bbox
     w = xmax - xmin
     h = ymax - ymin
     center = np.array([xmin + w * 0.5, ymin + h * 0.5])
     scale = np.array([w, h])
-    # Transform back
+
+    # Transform back. Get preds using coords and whcs above
+    preds = np.zeros_like(coords) 
     for i in range(coords.shape[0]):
         preds[i] = transform_preds(coords[i], center, scale,
                                    [hm_w, hm_h])
@@ -715,22 +715,24 @@ def transform_preds(coords, center, scale, output_size):
 
 
 def get_max_pred(heatmaps):
-    num_joints = heatmaps.shape[0]
+    num_joints = heatmaps.shape[0] # キーポイント数分のヒートマップがあります
     width = heatmaps.shape[2]
-    heatmaps_reshaped = heatmaps.reshape((num_joints, -1))
-    idx = np.argmax(heatmaps_reshaped, 1)
-    maxvals = np.max(heatmaps_reshaped, 1)
+    heatmaps_reshaped = heatmaps.reshape((num_joints, -1)) # ヒートマップを1列にして値を並べる
+    maxvals = np.max(heatmaps_reshaped, 1) # 各キーポイントの行でヒートマップの値の最大値を得る
+    idx = np.argmax(heatmaps_reshaped, 1) # 各キーポイントに対しヒートマップが最大になる画素のインデックスを取得
+    
+    maxvals = maxvals.reshape((num_joints, 1)) # 全キーポイントのヒートマップピークの値を取得
+    idx = idx.reshape((num_joints, 1)) #　全キーポイントのヒートマップピークの位置に対応するインデックス
 
-    maxvals = maxvals.reshape((num_joints, 1))
-    idx = idx.reshape((num_joints, 1))
-
+    # 以下、インデックスを画像上の座標の形に直していく作業
     preds = np.tile(idx, (1, 2)).astype(np.float32)
 
-    preds[:, 0] = (preds[:, 0]) % width
+    preds[:, 0] = (preds[:, 0]) % width # 
     preds[:, 1] = np.floor((preds[:, 1]) / width)
 
-    pred_mask = np.tile(np.greater(maxvals, 0.0), (1, 2))
+    pred_mask = np.tile(np.greater(maxvals, 0.0), (1, 2)) 
     pred_mask = pred_mask.astype(np.float32)
+
 
     preds *= pred_mask
     return preds, maxvals
@@ -960,5 +962,4 @@ def get_func_heatmap_to_coord(cfg):
             return heatmap_to_coord_simple_regress
         elif cfg.LOSS.TYPE == 'Combined':
             return [heatmap_to_coord_simple, heatmap_to_coord_simple_regress]
-    else:
-        raise NotImplementedError
+    else: heatmap_to_coord_simple_regress

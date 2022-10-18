@@ -20,7 +20,6 @@ from alphapose.utils.detector import DetectionLoader
 from alphapose.utils.file_detector import FileDetectionLoader
 from alphapose.utils.transforms import flip, flip_heatmap
 from alphapose.utils.vis import getTime
-from alphapose.utils.webcam_detector import WebCamDetectionLoader
 from alphapose.utils.writer import DataWriter
 
 """----------------------------- Demo options -----------------------------"""
@@ -67,17 +66,15 @@ parser.add_argument('--qsize', type=int, dest='qsize', default=1024,
                     help='the length of result buffer, where reducing it will lower requirement of cpu memory')
 parser.add_argument('--flip', default=False, action='store_true',
                     help='enable flip testing')
-parser.add_argument('--debug', default=False, action='store_true',
+parser.add_argument('--debug', default=True, action='store_true',
                     help='print detail information')
 """----------------------------- Video options -----------------------------"""
 parser.add_argument('--video', dest='video',
                     help='video-name', default="")
-parser.add_argument('--webcam', dest='webcam', type=int,
-                    help='webcam number', default=-1)
 parser.add_argument('--save_video', dest='save_video',
                     help='whether to save rendered video', default=False, action='store_true')
 parser.add_argument('--vis_fast', dest='vis_fast',
-                    help='use fast rendering', action='store_true', default=False)
+                    help='use fast rendering', action='store_true', default=True)
 """----------------------------- Tracking options -----------------------------"""
 parser.add_argument('--pose_flow', dest='pose_flow',
                     help='track humans in video with PoseFlow', action='store_true', default=False)
@@ -102,10 +99,6 @@ if not args.sp:
 
 
 def check_input():
-    # for wecam
-    if args.webcam != -1:
-        args.detbatch = 1
-        return 'webcam', int(args.webcam)
 
     # for video
     if len(args.video):
@@ -166,10 +159,7 @@ if __name__ == "__main__":
         os.makedirs(args.outputpath)
 
     # Load detection loader
-    if mode == 'webcam':
-        det_loader = WebCamDetectionLoader(input_source, get_detector(args), cfg, args)
-        det_worker = det_loader.start()
-    elif mode == 'detfile':
+    if mode == 'detfile':
         det_loader = FileDetectionLoader(input_source, cfg, args)
         det_worker = det_loader.start()
     else:
@@ -197,25 +187,17 @@ if __name__ == "__main__":
     }
 
     # Init data writer
-    queueSize = 2 if mode == 'webcam' else args.qsize
     if args.save_video and mode != 'image':
         from alphapose.utils.writer import DEFAULT_VIDEO_SAVE_OPT as video_save_opt
         if mode == 'video':
             video_save_opt['savepath'] = os.path.join(args.outputpath, 'AlphaPose_' + os.path.basename(input_source))
-        else:
-            video_save_opt['savepath'] = os.path.join(args.outputpath, 'AlphaPose_webcam' + str(input_source) + '.mp4')
         video_save_opt.update(det_loader.videoinfo)
-        writer = DataWriter(cfg, args, save_video=True, video_save_opt=video_save_opt, queueSize=queueSize).start()
+        writer = DataWriter(cfg, args, save_video=True, video_save_opt=video_save_opt, queueSize=args.qsize).start()
     else:
-        writer = DataWriter(cfg, args, save_video=False, queueSize=queueSize).start()
+        writer = DataWriter(cfg, args, save_video=False, queueSize=args.qsize).start()
 
-    if mode == 'webcam':
-        print('Starting webcam demo, press Ctrl + C to terminate...')
-        sys.stdout.flush()
-        im_names_desc = tqdm(loop())
-    else:
-        data_len = det_loader.length
-        im_names_desc = tqdm(range(data_len), dynamic_ncols=True)
+    data_len = det_loader.length
+    im_names_desc = tqdm(range(data_len), dynamic_ncols=True)
 
     batchSize = args.posebatch
     if args.flip:

@@ -3,7 +3,9 @@
 # Written by Jiefeng Li (jeff.lee.sjtu@gmail.com) and Haoyi Zhu
 # -----------------------------------------------------
 
-"""Custum training dataset."""
+"""Custum training dataset.
+get_itemはここに。"""
+
 import copy
 import os
 import pickle as pk

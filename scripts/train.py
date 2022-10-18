@@ -47,12 +47,12 @@ def train(opt, train_loader, m, criterion, optimizer, writer):
             labels = labels.cuda()
             label_masks = label_masks.cuda()
 
-        output = m(inps)
+        output = m(inps) # input inps into model
 
         if cfg.LOSS.get('TYPE') == 'MSELoss':
             loss = 0.5 * criterion(output.mul(label_masks), labels.mul(label_masks))
             acc = calc_accuracy(output.mul(label_masks), labels.mul(label_masks))
-        elif cfg.LOSS.get('TYPE') == 'Combined':
+        elif cfg.LOSS.get('TYPE') == 'Combined': #めんどい方のロス計算
             if output.size()[1] == 68:
                 face_hand_num = 42
             else:
@@ -120,7 +120,7 @@ def train(opt, train_loader, m, criterion, optimizer, writer):
 def validate(m, opt, heatmap_to_coord, batch_size=20):
     det_dataset = builder.build_dataset(cfg.DATASET.TEST, preset_cfg=cfg.DATA_PRESET, train=False, opt=opt)
     det_loader = torch.utils.data.DataLoader(
-        det_dataset, batch_size=batch_size, shuffle=False, num_workers=20, drop_last=False)
+        det_dataset, batch_size=batch_size, shuffle=False, num_workers=20, drop_last=False, pin_memory=True)
     kpt_json = []
     eval_joints = det_dataset.EVAL_JOINTS
 
@@ -150,6 +150,9 @@ def validate(m, opt, heatmap_to_coord, batch_size=20):
 
         for i in range(output.shape[0]):
             bbox = crop_bboxes[i].tolist()
+
+            # get keipoint coord from heatmaps
+            
             if combined_loss:
                 pose_coords_body_foot, pose_scores_body_foot = heatmap_to_coord[0](
                     pred[i][det_dataset.EVAL_JOINTS[:-face_hand_num]], bbox, hm_shape=hm_size, norm_type=norm_type)
@@ -186,15 +189,13 @@ def validate_gt(m, opt, cfg, heatmap_to_coord, batch_size=20):
     eval_joints = gt_val_dataset.EVAL_JOINTS
 
     gt_val_loader = torch.utils.data.DataLoader(
-        gt_val_dataset, batch_size=batch_size, shuffle=False, num_workers=20, drop_last=False)
+        gt_val_dataset, batch_size=batch_size, shuffle=False, num_workers=20, drop_last=False, pin_memory=True)
     kpt_json = []
     m.eval()
 
     norm_type = cfg.LOSS.get('NORM_TYPE', None)
     hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
     combined_loss = (cfg.LOSS.get('TYPE') == 'Combined')
-
-    halpe = (cfg.DATA_PRESET.NUM_JOINTS == 133) or (cfg.DATA_PRESET.NUM_JOINTS == 136)
 
     for inps, labels, label_masks, img_ids, bboxes in tqdm(gt_val_loader, dynamic_ncols=True):
         if isinstance(inps, list):
@@ -252,6 +253,9 @@ def main():
     logger.info(cfg)
     logger.info('******************************')
 
+    # CUDA settings
+    torch.backends.cudnn.benchmark = True
+
     # Model Initialize
     m = preset_model(cfg)
     m = nn.DataParallel(m).cuda()
@@ -276,7 +280,7 @@ def main():
 
     train_dataset = builder.build_dataset(cfg.DATASET.TRAIN, preset_cfg=cfg.DATA_PRESET, train=True)
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE * num_gpu, shuffle=True, num_workers=opt.nThreads)
+        train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE * num_gpu, shuffle=True, num_workers=opt.nThreads, pin_memory=True)
 
     heatmap_to_coord = get_func_heatmap_to_coord(cfg)
 
