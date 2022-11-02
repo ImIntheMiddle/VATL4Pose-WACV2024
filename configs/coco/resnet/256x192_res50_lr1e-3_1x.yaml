@@ -55,7 +55,8 @@ DETECTOR:
 
 TRAIN:
   WORLD_SIZE: 4
-  BATCH_SIZE: 120
+  BATCH_SIZE: 80
+  GPU: [1] #GPU IDs. if [], use all GPUs
   BEGIN_EPOCH: 0
   END_EPOCH: 200
   OPTIMIZER: 'adam'

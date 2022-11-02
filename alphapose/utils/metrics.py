@@ -62,7 +62,7 @@ def mask_cross_entropy(pred, target):
         pred, target, reduction='mean')[None]
 
 
-def evaluate_mAP(res_file, ann_type='bbox', ann_file='./data/coco/annotations/person_keypoints_val2017.json', silence=True, halpe=False):
+def evaluate_mAP(res_file, ann_type='bbox', ann_file='./data/coco/annotations/person_keypoints_val2017.json', silence=False):
     """Evaluate mAP result for coco dataset.
 
     Parameters
@@ -87,10 +87,6 @@ def evaluate_mAP(res_file, ann_type='bbox', ann_file='./data/coco/annotations/pe
         nullwrite = NullWriter()
         oldstdout = sys.stdout
         sys.stdout = nullwrite  # disable output
-
-    if halpe:
-        from halpecocotools.coco import COCO
-        from halpecocotools.cocoeval import COCOeval
     else:
         from pycocotools.coco import COCO
         from pycocotools.cocoeval import COCOeval

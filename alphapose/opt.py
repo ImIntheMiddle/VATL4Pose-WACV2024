@@ -22,7 +22,7 @@ parser.add_argument('--exp-id', default='default', type=str,
                     help='Experiment ID')
 
 "----------------------------- General options -----------------------------"
-parser.add_argument('--nThreads', default=60, type=int,
+parser.add_argument('--nThreads', default=28, type=int,
                     help='Number of data loading threads')
 parser.add_argument('--snapshot', default=2, type=int,
                     help='How often to take a snapshot of the model (0 = never)')
@@ -45,7 +45,7 @@ parser.add_argument('--detector', dest='detector',
 "----------------------------- Log options -----------------------------"
 parser.add_argument('--board', default=True, dest='board',
                     help='Logging with tensorboard', action='store_true')
-parser.add_argument('--debug', default=False, dest='debug',
+parser.add_argument('--debug', default=True, dest='debug',
                     help='Visualization debug', action='store_true')
 parser.add_argument('--map', default=True, dest='map',
                     help='Evaluate mAP per epoch', action='store_true')

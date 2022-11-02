@@ -179,7 +179,7 @@ def validate(m, opt, heatmap_to_coord, batch_size=20):
     sysout = sys.stdout
     with open(os.path.join(opt.work_dir, 'test_kpt.json'), 'w') as fid:
         json.dump(kpt_json, fid)
-    res = evaluate_mAP(os.path.join(opt.work_dir, 'test_kpt.json'), ann_type='keypoints', ann_file=os.path.join(cfg.DATASET.VAL.ROOT, cfg.DATASET.VAL.ANN), halpe=halpe)
+    res = evaluate_mAP(os.path.join(opt.work_dir, 'test_kpt.json'), ann_type='keypoints', ann_file=os.path.join(cfg.DATASET.VAL.ROOT, cfg.DATASET.VAL.ANN))
     sys.stdout = sysout
     return res
 
@@ -241,7 +241,7 @@ def validate_gt(m, opt, cfg, heatmap_to_coord, batch_size=20):
     sysout = sys.stdout
     with open(os.path.join(opt.work_dir, 'test_gt_kpt.json'), 'w') as fid:
         json.dump(kpt_json, fid)
-    res = evaluate_mAP(os.path.join(opt.work_dir, 'test_gt_kpt.json'), ann_type='keypoints', ann_file=os.path.join(cfg.DATASET.VAL.ROOT, cfg.DATASET.VAL.ANN), halpe=halpe)
+    res = evaluate_mAP(os.path.join(opt.work_dir, 'test_gt_kpt.json'), ann_type='keypoints', ann_file=os.path.join(cfg.DATASET.VAL.ROOT, cfg.DATASET.VAL.ANN))
     sys.stdout = sysout
     return res
 
@@ -250,8 +250,8 @@ def main():
     logger.info('******************************')
     logger.info(opt)
     logger.info('******************************')
-    logger.info(cfg)
-    logger.info('******************************')
+    #logger.info(cfg)
+    #logger.info('******************************')
 
     # CUDA settings
     torch.backends.cudnn.benchmark = True

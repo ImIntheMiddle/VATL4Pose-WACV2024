@@ -1,7 +1,8 @@
 """能動学習を実行する本体部分のスクリプト。全てはここをベースにして開発してゆく。
 1. PoseTrack21の該当するディレクトリから動画の各フレーム読み込み
+2. モデルを用意する（MS COCO で事前学習済みの姿勢推定器）
+3. 
 
-2. モデルを用意する（事前学習済みの姿勢推定器）
 """
 ##general library##
 import argparse
@@ -24,10 +25,8 @@ def parse_args():
     return: args parsed by parser"""
 
     parser = argparse.ArgumentParser(description='AlphaPose Demo')
-    parser.add_argument('--cfg', type=str, required=True,
+    parser.add_argument('--cfg', type=str, required=True, default="configs/active_learning/al_settings.yaml"
                         help='experiment configure file name')
-    parser.add_argument('--checkpoint', type=str, required=True,
-                        help='checkpoint file name')
     parser.add_argument('--sp', default=False, action='store_true',
                         help='Use single process for pytorch')
     parser.add_argument('--detector', dest='detector',
@@ -64,8 +63,6 @@ def parse_args():
                         help='choose which cuda device to use by index and input comma to use multi gpus, e.g. 0,1,2,3. (input -1 for cpu only)')
     parser.add_argument('--qsize', type=int, dest='qsize', default=1024,
                         help='the length of result buffer, where reducing it will lower requirement of cpu memory')
-    parser.add_argument('--flip', default=False, action='store_true',
-                        help='enable flip testing')
     parser.add_argument('--debug', default=True, action='store_true',
                         help='print detail information')
 
@@ -77,10 +74,6 @@ def parse_args():
     parser.add_argument('--vis_fast', dest='vis_fast',
                         help='use fast rendering', action='store_true', default=True)
 
-    """----------------------------- Tracking options -----------------------------"""
-    parser.add_argument('--pose_flow', dest='pose_flow',
-                        help='track humans in video with PoseFlow', action='store_true', default=False)
-
     args = parser.parse_args()
     return args
 
@@ -90,17 +83,14 @@ def parse_args():
 
 def main(): # rough flow of active learning
     """Setup, Active Learning iteration, and evaluation."""
-    ###各種変数、実験設定の読み込み###
+    ###各種変数の設定と実験設定の読み込み###
     args = parse_args()
     cfg = update_config(args.cfg)
 
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
-    ###能動学習対象の動画フレームの読み込み###
-
-
-    ###初期姿勢推定器の構築###
+    
 
 
     ###能動学習イテレーション###
@@ -120,5 +110,6 @@ def main(): # rough flow of active learning
     
 
 
-if __name__ == '__main__': # Do active learning
+if __name__ == '__main__': # Do active learninｇ
     main()
+    print("finished!!")
