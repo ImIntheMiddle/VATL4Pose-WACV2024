@@ -1,8 +1,8 @@
 DATASET:
   VAL:
-    TYPE: ''
+    TYPE: 'HaloPose'
     ROOT: './data/HaloPose/val'
-    IMG_PREFIX: ''
+    IMG_PREFIX: 'val'
     ANN: 'annotations/person_keypoints_val2017.json'
 
 DATA_PRESET:
@@ -19,6 +19,7 @@ DATA_PRESET:
 MODEL:
   TYPE: 'FastPose'
   PRETRAINED: 'pretrained_models/fast_res50_256x192.pth'
+  TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256
   - 256

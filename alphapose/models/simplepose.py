@@ -83,4 +83,4 @@ class SimplePose(nn.Module):
         out = self.preact(x) # x is fed into ResNet
         out = self.deconv_layers(out) # deconvolution and get 
         out = self.final_layer(out) # through final layer
-        return out
+        return out # heatmap of simplepose

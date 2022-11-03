@@ -33,7 +33,7 @@ DATA_PRESET:
   - 48
 MODEL:
   TYPE: 'SimplePose'
-  PRETRAINED: ''
+  PRETRAINED: 'pretrained_models/simple_res50_256x192.pth'
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256

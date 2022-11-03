@@ -54,7 +54,7 @@ def parse_args():
                         help='choose which cuda device to use by index and input comma to use multi gpus, e.g. 0,1,2,3. (input -1 for cpu only)')
     parser.add_argument('--qsize', type=int, dest='qsize', default=1024,
                         help='the length of result buffer, where reducing it will lower requirement of cpu memory')
-    parser.add_argument('--debug', default=True, action='store_true',
+    parser.add_argument('--debug', default=False, action='store_true',
                         help='print detail information')
     # video options:
     parser.add_argument('--video', dest='video',
@@ -64,41 +64,54 @@ def parse_args():
     parser.add_argument('--vis_fast', dest='vis_fast',
                         help='use fast rendering', action='store_true', default=True)
     args = parser.parse_args()
+    if args.debug:
+        import pdb # import python debugger
     return args
 
+def setup_opt(opt):
+    """Setup opt for active learning
+    opt: parsed arguments
+    return: opt  updated
+    """
+    opt.gpus = [int(i) for i in opt.gpus.split(',')]
+    opt.device = torch.device('cuda:{}'.format(opt.gpus[0])) if opt.gpus[0] >= 0 else torch.device('cpu')
+    if not os.path.exists(opt.outdir):
+    os.makedirs(opt.outdir)
+    cfg = update_config(opt.cfg)
+    return opt, cfg
 
+def initial_estimator(cfg):
+    """Setup initial pose estimator.
+    cfg: config file
+    return: model
+    """
+    model = builder.build_sppe(cfg.MODEL, preset_cfg=cfg.DATA_PRESET)
+    print(f'Loading model from {cfg.MODEL.PRETRAINED}...') # pretrained by MSCOCO2017
+    model.load_state_dict(torch.load(cfg.MODEL.PRETRAINED)) 
+    model = torch.nn.DataParallel(model, device_ids=gpus).cuda()
+    return model
 
 """---------------------------------- Main Process ----------------------------------"""
 def main(): # rough flow of active learning
     """
     Setup for active learning.
-    1. get exp settings.
-    2. prepare models, dataloaders, lists for labeled & unlabeled data, respectively.
-    3. 
+    1. get experiment settings.
+    2. prepare models, data loaders, lists for labeled & unlabeled data, respectively.
+    3. set the stopping criteria of  active learning.
     """
-    opt = parse_args()
-    gpus = [int(i) for i in opt.gpus.split(',')]
-    opt.gpus = [gpus[0]]
-    opt.device = torch.device("cuda:" + str(opt.gpus[0]) if opt.gpus[0] >= 0 else "cpu")
-    cfg = update_config(opt.cfg)
-    if not os.path.exists(opt.outdir):
-        os.makedirs(opt.outdir)
-    
-    # Load an initial pose estimator
-    model = builder.build_sppe(cfg.MODEL, preset_cfg=cfg.DATA_PRESET)
-    print(f'Loading model from {cfg.MODEL.PRETRAINED}...') # pretrained by MSCOCO2017
-    model.load_state_dict(torch.load(cfg.MODEL.PRETRAINED)) 
-    model = torch.nn.DataParallel(model, device_ids=gpus).cuda()
-    
-    # Create the DataLoader for Prediction
-    val_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
+    opt = parse_args() # get exp settings
+    opt, cfg = setup_opt(opt) # update opt, cfg
+    model = initial_estimator(cfg) # Load an initial pose estimator
+    # Information about the dataset
     eval_joints = val_dataset.EVAL_JOINTS
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=32, drop_last=False)
-    print(val_loader.__len__())
-    
     # Information about heatmap
     hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
     heatmap_to_coord = get_func_heatmap_to_coord(cfg) # way to get final prediction from heatmap
+
+    # Create the DataLoader for Prediction
+    val_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=32, drop_last=False)
+    print(val_loader.__len__())
 
     ###能動学習イテレーション###
     FINISH_AL = False
@@ -110,12 +123,10 @@ def main(): # rough flow of active learning
 
             # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
             local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
-            
                 # そのサンプルのindexをlabeledに追加。unlabeledから抜く。
 
 
         print('##### gt box: {} mAP #####'.format(gt_AP))
-    
 
 """---------------------------------- Execution ----------------------------------"""
 if __name__ == '__main__': # Do active learning
