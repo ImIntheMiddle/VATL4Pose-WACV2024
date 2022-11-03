@@ -45,12 +45,10 @@ class Registry(object):
 
 def build_from_cfg(cfg, registry, default_args=None):
     """Build a module from config dict.
-
     Args:
         cfg (dict): Config dict. It should at least contain the key "type".
         registry (:obj:`Registry`): The registry to search the type from.
         default_args (dict, optional): Default initialization arguments.
-
     Returns:
         obj: The constructed object.
     """
@@ -62,13 +60,11 @@ def build_from_cfg(cfg, registry, default_args=None):
     if isinstance(obj_type, str):
         obj_cls = registry.get(obj_type)
         if obj_cls is None:
-            raise KeyError('{} is not in the {} registry'.format(
-                obj_type, registry.name))
+            raise KeyError('{} is not in the {} registry'.format(obj_type, registry.name))
     elif inspect.isclass(obj_type):
         obj_cls = obj_type
     else:
-        raise TypeError('type must be a str or valid type, but got {}'.format(
-            type(obj_type)))
+        raise TypeError('type must be a str or valid type, but got {}'.format(type(obj_type)))
     if default_args is not None:
         for name, value in default_args.items():
             args.setdefault(name, value)

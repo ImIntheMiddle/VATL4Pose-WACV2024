@@ -5,19 +5,14 @@
 
 """MS COCO Human keypoint dataset."""
 import os
-
 import numpy as np
-
 from alphapose.models.builder import DATASET
 from alphapose.utils.bbox import bbox_clip_xyxy, bbox_xywh_to_xyxy
-
 from .custom import CustomDataset
-
 
 @DATASET.register_module
 class Mscoco(CustomDataset):
     """ COCO Person dataset.
-
     Parameters
     ----------
     train: bool, default is True
@@ -31,14 +26,12 @@ class Mscoco(CustomDataset):
     CLASSES = ['person']
     EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     num_joints = 17
-    joint_pairs = [[1, 2], [3, 4], [5, 6], [7, 8],
-                   [9, 10], [11, 12], [13, 14], [15, 16]]
+    joint_pairs = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]]
 
     def _load_jsons(self):
         """Load all image paths and labels from JSON annotation files into buffer."""
         items = []
         labels = []
-
         _coco = self._lazy_load_ann_file()
         classes = [c['name'] for c in _coco.loadCats(_coco.getCatIds())]
         assert classes == self.CLASSES, "Incompatible category names with COCO. "

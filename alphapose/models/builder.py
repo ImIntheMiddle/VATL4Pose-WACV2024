@@ -1,12 +1,9 @@
 from torch import nn
-
 from alphapose.utils import Registry, build_from_cfg, retrieve_from_cfg
-
 
 SPPE = Registry('sppe')
 LOSS = Registry('loss')
 DATASET = Registry('dataset')
-
 
 def build(cfg, registry, default_args=None):
     if isinstance(cfg, list):
@@ -15,8 +12,7 @@ def build(cfg, registry, default_args=None):
         ]
         return nn.Sequential(*modules)
     else:
-        return build_from_cfg(cfg, registry, default_args)
-
+        return build_from_cfg(cfg, registry, default_args) # f.g.dataloader
 
 def build_sppe(cfg, preset_cfg, **kwargs):
     default_args = {

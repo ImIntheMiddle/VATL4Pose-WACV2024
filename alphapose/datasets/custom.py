@@ -36,14 +36,7 @@ class CustomDataset(data.Dataset):
     """
 
     CLASSES = None
-
-    def __init__(self,
-                 train=True,
-                 dpg=False,
-                 skip_empty=True,
-                 lazy_import=False,
-                 **cfg):
-
+    def __init__(self, train=True, dpg=False, skip_empty=True, lazy_import=False, **cfg):
         self._cfg = cfg
         self._preset_cfg = cfg['PRESET']
         self._root = cfg['ROOT']
@@ -59,7 +52,6 @@ class CustomDataset(data.Dataset):
             self._root = self._root[0]
             self._img_prefix = self._img_prefix[0]
             self._ann_file = self._ann_file[0]
-
             self._ann_file = os.path.join(self._root, self._ann_file)
             self._ann_file_2 = os.path.join(self._root_2, self._ann_file_2)
         else:
@@ -85,11 +77,8 @@ class CustomDataset(data.Dataset):
         self._output_size = self._preset_cfg['HEATMAP_SIZE']
 
         self._sigma = self._preset_cfg['SIGMA']
-
         self._check_centers = False
-
         self.num_class = len(self.CLASSES)
-
         self._loss_type = self._preset_cfg.get('LOSS_TYPE', 'MSELoss')
 
         self.upper_body_ids = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)

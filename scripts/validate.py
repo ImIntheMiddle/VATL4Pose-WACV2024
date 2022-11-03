@@ -166,7 +166,7 @@ def validate_gt(m, cfg, heatmap_to_coord, batch_size=20, num_workers=32):
         for i in range(output.shape[0]):
             bbox = bboxes[i].tolist()
             pose_coords, pose_scores = heatmap_to_coord(
-                pred[i][gt_val_dataset.EVAL_JOINTS], bbox, hm_shape=hm_size, norm_type=norm_type)
+                pred[i][eval_joints], bbox, hm_shape=hm_size, norm_type=norm_type)
 
             keypoints = np.concatenate((pose_coords, pose_scores), axis=1)
             keypoints = keypoints.reshape(-1).tolist()

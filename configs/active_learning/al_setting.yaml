@@ -1,8 +1,8 @@
 DATASET:
   VAL:
-    TYPE: 'Mscoco'
-    ROOT: './data/coco/'
-    IMG_PREFIX: 'val2017'
+    TYPE: ''
+    ROOT: './data/HaloPose/val'
+    IMG_PREFIX: ''
     ANN: 'annotations/person_keypoints_val2017.json'
 
 DATA_PRESET:
@@ -17,9 +17,13 @@ DATA_PRESET:
   - 48
 
 MODEL:
-  TYPE: 'PoseHighResolutionNet'
-  PRETRAINED: ''
-
+  TYPE: 'FastPose'
+  PRETRAINED: 'pretrained_models/fast_res50_256x192.pth'
+  NUM_DECONV_FILTERS:
+  - 256
+  - 256
+  - 256
+  NUM_LAYERS: 50
 
 LOSS:
   TYPE: 'MSELoss'
@@ -47,4 +51,5 @@ TRAIN:
   - 230
   - 250
 
-VAL
+VAL:
+  BATCH_SIZE: 32
