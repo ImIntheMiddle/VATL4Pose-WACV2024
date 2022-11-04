@@ -12,7 +12,7 @@ import pickle as pk
 from abc import abstractmethod, abstractproperty
 
 import torch.utils.data as data
-from pycocotools.coco import COCO
+from pycocotools.coco import COCO # data/coco/cocoapi/PythonAPI/pycocotools/coco.py
 
 from alphapose.utils.presets import SimpleTransform
 
@@ -122,7 +122,7 @@ class CustomDataset(data.Dataset):
             print('Lazy load json...')
             with open(self._ann_file + '.pkl', 'rb') as fid:
                 return pk.load(fid)
-        else:
+        else: # for coco formated json file
             _database = COCO(self._ann_file)
             if os.access(self._ann_file + '.pkl', os.W_OK):
                 with open(self._ann_file + '.pkl', 'wb') as fid:

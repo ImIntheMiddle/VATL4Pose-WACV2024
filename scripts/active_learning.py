@@ -17,6 +17,7 @@ import os
 import platform
 import sys
 import time
+
 # python general libraries
 import numpy as np
 import torch
@@ -76,11 +77,11 @@ def setup_opt(opt):
     opt.gpus = [int(i) for i in opt.gpus.split(',')]
     opt.device = torch.device('cuda:{}'.format(opt.gpus[0])) if opt.gpus[0] >= 0 else torch.device('cpu')
     if not os.path.exists(opt.outdir):
-    os.makedirs(opt.outdir)
+        os.makedirs(opt.outdir)
     cfg = update_config(opt.cfg)
     return opt, cfg
 
-def initial_estimator(cfg):
+def initial_estimator(cfg, opt):
     """Setup initial pose estimator.
     cfg: config file
     return: model
@@ -88,8 +89,9 @@ def initial_estimator(cfg):
     model = builder.build_sppe(cfg.MODEL, preset_cfg=cfg.DATA_PRESET)
     print(f'Loading model from {cfg.MODEL.PRETRAINED}...') # pretrained by MSCOCO2017
     model.load_state_dict(torch.load(cfg.MODEL.PRETRAINED)) 
-    model = torch.nn.DataParallel(model, device_ids=gpus).cuda()
+    model = torch.nn.DataParallel(model, device_ids=opt.gpus).cuda()
     return model
+
 
 """---------------------------------- Main Process ----------------------------------"""
 def main(): # rough flow of active learning
@@ -101,17 +103,17 @@ def main(): # rough flow of active learning
     """
     opt = parse_args() # get exp settings
     opt, cfg = setup_opt(opt) # update opt, cfg
-    model = initial_estimator(cfg) # Load an initial pose estimator
-    # Information about the dataset
-    eval_joints = val_dataset.EVAL_JOINTS
+    model = initial_estimator(cfg, opt) # Load an initial pose estimator
     # Information about heatmap
     hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
     heatmap_to_coord = get_func_heatmap_to_coord(cfg) # way to get final prediction from heatmap
 
     # Create the DataLoader for Prediction
     val_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
+    eval_joints = val_dataset.EVAL_JOINTS
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=32, drop_last=False)
     print(val_loader.__len__())
+
 
     ###能動学習イテレーション###
     FINISH_AL = False
@@ -127,6 +129,7 @@ def main(): # rough flow of active learning
 
 
         print('##### gt box: {} mAP #####'.format(gt_AP))
+
 
 """---------------------------------- Execution ----------------------------------"""
 if __name__ == '__main__': # Do active learning
