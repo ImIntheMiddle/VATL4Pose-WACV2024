@@ -11,7 +11,7 @@ from .layers.SE_Resnet import SEResnet
 
 
 @SPPE.register_module
-class FastPose(nn.Module):
+class FastPose(torch.jit.ScriptModule):
 
     def __init__(self, norm_layer=nn.BatchNorm2d, **cfg):
         super(FastPose, self).__init__()
@@ -34,8 +34,7 @@ class FastPose(nn.Module):
         x = eval(f"tm.resnet{cfg['NUM_LAYERS']}(pretrained=True)")
 
         model_state = self.preact.state_dict()
-        state = {k: v for k, v in x.state_dict().items()
-                 if k in self.preact.state_dict() and v.size() == self.preact.state_dict()[k].size()}
+        state = {k: v for k, v in x.state_dict().items() if k in self.preact.state_dict() and v.size() == self.preact.state_dict()[k].size()}
         model_state.update(state)
         self.preact.load_state_dict(model_state)
 
@@ -48,6 +47,7 @@ class FastPose(nn.Module):
         self.conv_out = nn.Conv2d(
             self.conv_dim, self._preset_cfg['NUM_JOINTS'], kernel_size=3, stride=1, padding=1)
 
+    @torch.jit.script_method
     def forward(self, x):
         out = self.preact(x)
         out = self.suffle1(out)

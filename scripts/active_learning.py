@@ -41,34 +41,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Active Learning Script')
     parser.add_argument('--cfg', type=str, required=True, default="configs/active_learning/al_settings.yaml",
                         help='experiment configure file name')
-    parser.add_argument('--outdir', dest='outdir',
-                        help='output-directory', default="examples/res/")
-    parser.add_argument('--save_img', default=False, action='store_true',
-                        help='save result as image')
-    parser.add_argument('--vis', default=False, action='store_true',
-                        help='visualize image')
-    parser.add_argument('--profile', default=False, action='store_true',
-                        help='add speed profiling at screen output')
-    parser.add_argument('--format', type=str, default="coco", 
-                        help='save in the format of cmu or coco or openpose, option: coco/cmu/open')
-    parser.add_argument('--min_box_area', type=int, default=0,
-                        help='min box area to filter out')
-    parser.add_argument('--gpus', type=str, dest='gpus', default="0",
+    parser.add_argument('--gpus', type=str, required=True, dest='gpus', default="0",
                         help='choose which cuda device to use by index and input comma to use multi gpus, e.g. 0,1,2,3. (input -1 for cpu only)')
-    parser.add_argument('--qsize', type=int, dest='qsize', default=1024,
-                        help='the length of result buffer, where reducing it will lower requirement of cpu memory')
     parser.add_argument('--debug', default=False, action='store_true',
                         help='print detail information')
-    # video options:
-    parser.add_argument('--video', dest='video',
-                        help='video-name', default="")
-    parser.add_argument('--save_video', dest='save_video',
-                        help='whether to save rendered video', default=False, action='store_true')
-    parser.add_argument('--vis_fast', dest='vis_fast',
-                        help='use fast rendering', action='store_true', default=True)
     args = parser.parse_args()
-    if args.debug:
-        import pdb;pdb.set_trace() # import python debugger
     return args
 
 def setup_opt(opt):
@@ -78,72 +55,89 @@ def setup_opt(opt):
     """
     opt.gpus = [int(i) for i in opt.gpus.split(',')]
     opt.device = torch.device('cuda:{}'.format(opt.gpus[0])) if opt.gpus[0] >= 0 else torch.device('cpu')
+    # default settings
+    opt.format = "coco"
+    opt.min_box_area = 0 # min box area to filter out
+    opt.qsize = 1024 # the length of result buffer, where reducing it will lower requirement of cpu memory
+
     if not os.path.exists(opt.outdir):
         os.makedirs(opt.outdir)
-    cfg = update_config(opt.cfg)
-    return opt, cfg
 
-def initial_estimator(cfg, opt):
-    """Setup initial pose estimator.
-    cfg: config file
-    return: model
-    """
-    model = builder.build_sppe(cfg.MODEL, preset_cfg=cfg.DATA_PRESET)
-    print(f'Loading model from {cfg.MODEL.PRETRAINED}...') # pretrained by MSCOCO2017
-    model.load_state_dict(torch.load(cfg.MODEL.PRETRAINED)) 
-    model = torch.nn.DataParallel(model, device_ids=opt.gpus).cuda()
-    return model
+    if opt.debug: # for efficient debug
+        import pdb;pdb.set_trace() # import python debugger
+        opt.vis = True # visualize option
+        opt.profile = True
+        opt.save_video = True
+        opt.vis_fast = True
+    return opt
 
-
-"""---------------------------------- Main Process ----------------------------------"""
-
+"""---------------------------------- Main Class ----------------------------------"""a
+class ActiveLearning():
+    def __init__(self, cfg, opt):
+        self.cfg = cfg
+        self.opt = opt
+        self.model = self.initialize_estimator()
 
 
-def main(): # rough flow of active learning
-    """
-    Setup for active learning.
-    1. get experiment settings.
-    2. prepare models, data loaders, lists for labeled & unlabeled data, respectively.
-    3. set the stopping criteria of  active learning.
-    """
-    opt = parse_args() # get exp settings
-    opt, cfg = setup_opt(opt) # update opt, cfg
-    model = initial_estimator(cfg, opt) # Load an initial pose estimator
-    # Information about heatmap
-    hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
-    heatmap_to_coord = get_func_heatmap_to_coord(cfg) # function to get final prediction from heatmap
+        self.eval_joints = self.unlabel_dataset.EVAL_JOINTS
+        self.norm_type = self.cfg.LOSS.get('NORM_TYPE', None)
+        self.hm_size = self.cfg.DATA_PRESET.HEATMAP_SIZE
+        self.heatmap_to_coord = get_func_heatmap_to_coord(self.cfg) # function to get final prediction from heatmap
 
-    # Initializaton of active learning
-    unlabel_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
-    print(len(unlabel_dataset))
-    eval_joints = unlabel_dataset.EVAL_JOINTS
-    norm_type = cfg.LOSS.get('NORM_TYPE', None)
+    def initialize_estimator(self): # Load an initial pose estimator
+        """construct a initial pose estimator
+        Args:
+            cfg: configuration file
+            opt: experiment option
+        Returns:
+            model: Initial pose estimator
+        """
+        model = builder.build_sppe(self.cfg.MODEL, preset_cfg=self.cfg.DATA_PRESET)
+        print(f'Loading model from {self.cfg.MODEL.PRETRAINED}...') # pretrained by MSCOCO2017
+        model.load_state_dict(torch.load(self.cfg.MODEL.PRETRAINED))
+        model = torch.nn.DataParallel(model, device_ids=self.opt.gpus).cuda()
+        return model
 
-    unlabel_loader = torch.utils.data.DataLoader(unlabel_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=32, drop_last=False)
-    # print(val_loader.__len__())
+    def main(): # rough flow of active learning
 
-
-    # active learning iteration
-    FINISH_AL = False
-    while not FINISH_AL: # 終了条件が満たされない限り続ける
-        break
-
-        for sample in unlabeled_list:
-            # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
-
-            # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
-            local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
-                # そのサンプルのindexをlabeledに追加。unlabeledから抜く。
+        # Initializaton of active learning
+        unlabel_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
+        print(len(unlabel_dataset))
+        unlabel_loader = torch.utils.data.DataLoader(unlabel_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=os.cpu_count(), 
+                                                    drop_last=False, pin_memory=True)
+        # print(val_loader.__len__())
 
 
-        print('##### gt box: {} mAP #####'.format(gt_AP))
+        # active learning iteration
+        FINISH_AL = False
+        while not FINISH_AL: # 終了条件が満たされない限り続ける
+            break
+
+            for sample in unlabeled_list:
+                # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
+
+                # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
+                local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
+                    # そのサンプルのindexをlabeledに追加。unlabeledから抜く。
+
+
+            print('##### gt box: {} mAP #####'.format(gt_AP))
 
 
 """---------------------------------- Execution ----------------------------------"""
 if __name__ == '__main__': # Do active learning
     """
-    execute active learning for the input directory.
-    after whole active learning process, print "finish".
+    
+    1. get experiment settings.
+    2. construct ActiveLearning class instance
+    3. execute active learning.
     """
-    main()
+    opt = parse_args() # get exp settings
+    opt = setup_opt(opt) # setup option
+    cfg = update_config(opt.cfg) # update config
+    torch.backends.cudnn.benchmark = True
+
+    al = ActiveLearning(cfg, opt) # initialize active learning state
+    # main process of active learning
+
     print("Successfully finished!!")
