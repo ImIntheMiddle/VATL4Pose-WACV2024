@@ -10,7 +10,7 @@ from .layers.Resnet import ResNet
 
 
 @SPPE.register_module
-class SimplePose(nn.Module):
+class SimplePose(torch.jit.ScriptModule):
     def __init__(self, norm_layer=nn.BatchNorm2d, **cfg):
         super(SimplePose, self).__init__()
         self._preset_cfg = cfg['PRESET']
@@ -79,6 +79,7 @@ class SimplePose(nn.Module):
                 nn.init.normal_(m.weight, std=0.001)
                 nn.init.constant_(m.bias, 0)
 
+    @torch.jit.script_method
     def forward(self, x): #make prediction
         out = self.preact(x) # x is fed into ResNet
         out = self.deconv_layers(out) # deconvolution and get 
