@@ -83,7 +83,7 @@ def orb_matching(img1_path, img2_path, vidname, img1_id, img2_id):
         generate_fake_cor(img1, out_path)
 
 if __name__ == '__main__':
-    
+
     parser = argparse.ArgumentParser(description='FoseFlow Matching')
     parser.add_argument('--orb', type=int, default=1)
     args = parser.parse_args()

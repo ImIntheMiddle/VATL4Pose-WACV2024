@@ -11,6 +11,7 @@
 5. 能動学習を終了．能動学習の実行結果をグラフ，動画などに出力する．
 """
 
+"""---------------------------------- Import Libraries ----------------------------------"""
 # general libraries
 import argparse
 import os
@@ -30,6 +31,7 @@ from alphapose.utils.config import update_config
 from alphapose.utils.metrics import evaluate_mAP
 from alphapose.utils.transforms import (flip, flip_heatmap,
                                         get_func_heatmap_to_coord)
+
 """---------------------------------- Functions Set ----------------------------------"""
 def parse_args():
     """
@@ -66,7 +68,7 @@ def parse_args():
                         help='use fast rendering', action='store_true', default=True)
     args = parser.parse_args()
     if args.debug:
-        import pdb # import python debugger
+        import pdb;pdb.set_trace() # import python debugger
     return args
 
 def setup_opt(opt):
@@ -94,6 +96,9 @@ def initial_estimator(cfg, opt):
 
 
 """---------------------------------- Main Process ----------------------------------"""
+
+
+
 def main(): # rough flow of active learning
     """
     Setup for active learning.
@@ -106,22 +111,25 @@ def main(): # rough flow of active learning
     model = initial_estimator(cfg, opt) # Load an initial pose estimator
     # Information about heatmap
     hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
-    heatmap_to_coord = get_func_heatmap_to_coord(cfg) # way to get final prediction from heatmap
+    heatmap_to_coord = get_func_heatmap_to_coord(cfg) # function to get final prediction from heatmap
 
-    # Create the DataLoader for Prediction
-    val_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
-    eval_joints = val_dataset.EVAL_JOINTS
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=32, drop_last=False)
-    print(val_loader.__len__())
+    # Initializaton of active learning
+    unlabel_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
+    print(len(unlabel_dataset))
+    eval_joints = unlabel_dataset.EVAL_JOINTS
+    norm_type = cfg.LOSS.get('NORM_TYPE', None)
+
+    unlabel_loader = torch.utils.data.DataLoader(unlabel_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=32, drop_last=False)
+    # print(val_loader.__len__())
 
 
-    ###能動学習イテレーション###
+    # active learning iteration
     FINISH_AL = False
     while not FINISH_AL: # 終了条件が満たされない限り続ける
         break
 
         for sample in unlabeled_list:
-            # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す   
+            # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
 
             # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
             local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size

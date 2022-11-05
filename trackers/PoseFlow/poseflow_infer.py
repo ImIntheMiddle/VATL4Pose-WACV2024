@@ -181,11 +181,3 @@ class PoseFlowWrapper():
         for pid in range(self.track[frame_name]['num_boxes']):
             self.notrack[frame_name][pid]['idx'] = self.track[frame_name][pid+1]['new_pid']
         return self.notrack[frame_name]
-
-
-
-
-
-
-
-        

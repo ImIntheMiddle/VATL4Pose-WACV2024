@@ -1,8 +1,8 @@
 DATASET:
   VAL:
-    TYPE: 'HaloPose'
-    ROOT: './data/HaloPose/val'
-    IMG_PREFIX: 'val'
+    TYPE: 'Mscoco'
+    ROOT: './data/coco/'
+    IMG_PREFIX: 'val2017'
     ANN: 'annotations/person_keypoints_val2017.json'
 
 DATA_PRESET:
@@ -28,7 +28,7 @@ MODEL:
 
 LOSS:
   TYPE: 'MSELoss'
-  
+
 DETECTOR:
   NAME: 'yolo'
   CONFIG: 'detector/yolo/cfg/yolov3-spp.cfg'
