@@ -250,8 +250,8 @@ def main():
     logger.info('******************************')
     logger.info(opt)
     logger.info('******************************')
-    #logger.info(cfg)
-    #logger.info('******************************')
+    logger.info(cfg)
+    logger.info('******************************')
 
     # CUDA settings
     torch.backends.cudnn.benchmark = True
@@ -341,9 +341,7 @@ def preset_model(cfg):
         logger.info('Create new model')
         logger.info('=> init weights')
         model._initialize()
-
     return model
-
 
 if __name__ == "__main__":
     main()

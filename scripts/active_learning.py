@@ -18,6 +18,7 @@ import os
 import platform
 import sys
 import time
+import random
 
 # python general libraries
 import numpy as np
@@ -134,7 +135,11 @@ if __name__ == '__main__': # Do active learning
     cfg = update_config(opt.cfg) # update config
     if not os.path.exists(cfg.RESULT.OUTDIR):
         os.makedirs(cfg.RESULT.OUTDIR)
+
+    # CUDA settings
     torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.enabled = True
 
     al = ActiveLearning(cfg, opt) # initialize active learning state
 

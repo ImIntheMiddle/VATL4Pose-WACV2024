@@ -33,7 +33,7 @@ class Mscoco(CustomDataset):
         """Load all image paths and labels from JSON annotation files into buffer lazily."""
         items = []
         labels = []
-        _coco = self._lazy_load_ann_file() # get coco object
+        _coco = self._lazy_load_ann_file() # get coco format object
         classes = [c['name'] for c in _coco.loadCats(_coco.getCatIds())]
         assert classes == self.CLASSES, "Incompatible category names with COCO. "
 
@@ -41,30 +41,31 @@ class Mscoco(CustomDataset):
             v: k for k, v in enumerate(_coco.getCatIds())}
 
         # iterate through the annotations
-        image_ids = sorted(_coco.getImgIds())
+        image_ids = sorted(_coco.getImgIds()) # gather image ids in ann_file
         for imgcnt, entry in enumerate(_coco.loadImgs(image_ids)):
             dirname, filename = entry['coco_url'].split('/')[-2:]
             abs_path = os.path.join(self._root, dirname, filename)
             if not os.path.exists(abs_path):
                 raise IOError('Image: {} not exists.'.format(abs_path))
-            label = self._check_load_keypoints(_coco, entry)
+            label = self._check_load_keypoints(_coco, entry) # get all person's keypoints in the image
             if not label:
                 continue
-            # num of items are relative to person, not image
+            # num of items are corresponding to person, not image
             for obj in label:
-                items.append(abs_path)
+                items.append(abs_path) # image path
                 labels.append(obj)
-                imgcnt += 1
+            imgcnt += 1
             # print(f'imgcnt{imgcnt}')
             # print(abs_path, obj)
-            if self.SHORTEN & (imgcnt > 50):
+            if self.SHORTEN & (imgcnt >= 30):
                 break
-        return items, labels # items: bunch of paths, labels: bbox, keypoints coordinates, etc.
+        return items, labels # items: bunch of paths, labels: bbox, keypoints, coordinates, etc.
 
     def _check_load_keypoints(self, coco, entry):
         """Check and load ground-truth keypoints"""
         ann_ids = coco.getAnnIds(imgIds=entry['id'], iscrowd=False)
         objs = coco.loadAnns(ann_ids)
+
         # check valid bboxes
         valid_objs = []
         width = entry['width']
@@ -105,7 +106,7 @@ class Mscoco(CustomDataset):
                 if (num_vis / 80.0 + 47 / 80.0) > ks:
                     continue
 
-            valid_objs.append({
+            valid_objs.append({ # add information for each person in the entry image
                 'bbox': (xmin, ymin, xmax, ymax),
                 'width': width,
                 'height': height,
@@ -121,7 +122,7 @@ class Mscoco(CustomDataset):
                     'height': height,
                     'joints_3d': np.zeros((self.num_joints, 2, 2), dtype=np.float32)
                 })
-        return valid_objs
+        return valid_objs # return a list of annotations for each image
 
     def _get_box_center_area(self, bbox):
         """Get bbox center"""
