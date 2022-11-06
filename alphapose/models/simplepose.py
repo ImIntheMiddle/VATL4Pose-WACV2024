@@ -3,6 +3,7 @@
 # Written by Jiefeng Li (jeff.lee.sjtu@gmail.com)
 # -----------------------------------------------------
 
+import torch
 import torch.nn as nn
 
 from .builder import SPPE
@@ -10,14 +11,14 @@ from .layers.Resnet import ResNet
 
 
 @SPPE.register_module
-class SimplePose(torch.jit.ScriptModule):
+class SimplePose(nn.Module):
     def __init__(self, norm_layer=nn.BatchNorm2d, **cfg):
         super(SimplePose, self).__init__()
         self._preset_cfg = cfg['PRESET']
         self.deconv_dim = cfg['NUM_DECONV_FILTERS']
         self._norm_layer = norm_layer
 
-        self.preact = ResNet(f"resnet{cfg['NUM_LAYERS']}")
+        self.preact = ResNet(f"resnet{cfg['NUM_LAYERS']}") # prepare ResNet instance
 
         # Imagenet pretrain model
         import torchvision.models as tm   # noqa: F401,F403
@@ -79,7 +80,6 @@ class SimplePose(torch.jit.ScriptModule):
                 nn.init.normal_(m.weight, std=0.001)
                 nn.init.constant_(m.bias, 0)
 
-    @torch.jit.script_method
     def forward(self, x): #make prediction
         out = self.preact(x) # x is fed into ResNet
         out = self.deconv_layers(out) # deconvolution and get 

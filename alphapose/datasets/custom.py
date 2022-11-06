@@ -101,7 +101,7 @@ class CustomDataset(data.Dataset):
         # get image id
         if type(self._items[idx]) == dict:
             img_path = self._items[idx]['path']
-            img_id = self._items[idx]['id']
+            img_id = self._items[idx]['id'] # get image id
         else:
             img_path = self._items[idx]
             img_id = int(os.path.splitext(os.path.basename(img_path))[0])

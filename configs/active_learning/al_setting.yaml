@@ -1,12 +1,12 @@
 DATASET:
   VAL:
-    TYPE: 'Mscoco'
-    ROOT: './data/coco/' # Root directory of unlabeld videos
-    IMG_PREFIX: 'val2017'
-    ANN: 'annotations/person_keypoints_val2017.json'
+    TYPE: 'Posetrack21'
+    ROOT: './data/HaloPose/' # Root directory of unlabeld videos
+    IMG_PREFIX: 'images/000522_mpii_test'
+    ANN: 'val_ann/000522_test.json'
 
 RESULT:
-  DIR: 'examples/res/' # output-directory
+  OUTDIR: 'examples/res/' # output-directory
 
 DATA_PRESET:
   TYPE: 'simple'
@@ -20,8 +20,8 @@ DATA_PRESET:
   - 48
 
 MODEL:
-  TYPE: 'FastPose'
-  PRETRAINED: 'pretrained_models/fast_res50_256x192.pth'
+  TYPE: 'SimplePose'
+  PRETRAINED: 'pretrained_models/simple_res50_256x192.pth'
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256

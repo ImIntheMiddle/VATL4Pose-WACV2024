@@ -61,7 +61,7 @@ class Bottleneck(nn.Module):
                  downsample=None, norm_layer=nn.BatchNorm2d, dcn=None):
         super(Bottleneck, self).__init__()
         self.dcn = dcn
-        self.with_dcn = dcn is not None
+        self.with_dcn = dcn is not None # false if dcn is None
 
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = norm_layer(planes, momentum=0.1)
@@ -69,8 +69,7 @@ class Bottleneck(nn.Module):
             fallback_on_stride = dcn.get('FALLBACK_ON_STRIDE', False)
             self.with_modulated_dcn = dcn.get('MODULATED', False)
         if not self.with_dcn or fallback_on_stride:
-            self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                                   padding=1, bias=False)
+            self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,padding=1, bias=False)
         else:
             from .dcn import DeformConv, ModulatedDeformConv
             self.deformable_groups = dcn.get('DEFORM_GROUP', 1)
@@ -104,7 +103,6 @@ class Bottleneck(nn.Module):
 
     def forward(self, x):
         residual = x
-
         out = F.relu(self.bn1(self.conv1(x)), inplace=True)
         if not self.with_dcn:
             out = F.relu(self.bn2(self.conv2(out)), inplace=True)
@@ -149,7 +147,7 @@ class ResNet(nn.Module):
         if architecture == "resnet18" or architecture == 'resnet34':
             self.block = BasicBlock
         else:
-            self.block = Bottleneck
+            self.block = Bottleneck # for ResNet50
         self.layers = layers[architecture]
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7,

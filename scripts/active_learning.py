@@ -25,12 +25,16 @@ import torch
 from tqdm import tqdm
 from skimage.feature import peak_local_max
 
+# 3rd party libraries
+from alipy.experiment import StoppingCriteria
+
 # additional functions
 from alphapose.models import builder
 from alphapose.utils.config import update_config
 from alphapose.utils.metrics import evaluate_mAP
 from alphapose.utils.transforms import (flip, flip_heatmap,
                                         get_func_heatmap_to_coord)
+
 
 """---------------------------------- Functions Set ----------------------------------"""
 def parse_args():
@@ -41,7 +45,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Active Learning Script')
     parser.add_argument('--cfg', type=str, required=True, default="configs/active_learning/al_settings.yaml",
                         help='experiment configure file name')
-    parser.add_argument('--gpus', type=str, required=True, dest='gpus', default="0",
+    parser.add_argument('--gpus', type=str, dest='gpus', default="0",
                         help='choose which cuda device to use by index and input comma to use multi gpus, e.g. 0,1,2,3. (input -1 for cpu only)')
     parser.add_argument('--debug', default=False, action='store_true',
                         help='print detail information')
@@ -60,9 +64,6 @@ def setup_opt(opt):
     opt.min_box_area = 0 # min box area to filter out
     opt.qsize = 1024 # the length of result buffer, where reducing it will lower requirement of cpu memory
 
-    if not os.path.exists(opt.outdir):
-        os.makedirs(opt.outdir)
-
     if opt.debug: # for efficient debug
         import pdb;pdb.set_trace() # import python debugger
         opt.vis = True # visualize option
@@ -71,18 +72,21 @@ def setup_opt(opt):
         opt.vis_fast = True
     return opt
 
-"""---------------------------------- Main Class ----------------------------------"""a
-class ActiveLearning():
+"""---------------------------------- Main Class ----------------------------------"""
+class ActiveLearning:
     def __init__(self, cfg, opt):
         self.cfg = cfg
         self.opt = opt
         self.model = self.initialize_estimator()
+        self.stopping_criterion = StoppingCriteria(stopping_criteria=None)
 
-
-        self.eval_joints = self.unlabel_dataset.EVAL_JOINTS
+        # self.eval_joints = self.unlabel_dataset.EVAL_JOINTS
         self.norm_type = self.cfg.LOSS.get('NORM_TYPE', None)
         self.hm_size = self.cfg.DATA_PRESET.HEATMAP_SIZE
         self.heatmap_to_coord = get_func_heatmap_to_coord(self.cfg) # function to get final prediction from heatmap
+
+    def is_stop(self):
+        return self.stopping_criterion.is_stop()
 
     def initialize_estimator(self): # Load an initial pose estimator
         """construct a initial pose estimator
@@ -107,27 +111,20 @@ class ActiveLearning():
                                                     drop_last=False, pin_memory=True)
         # print(val_loader.__len__())
 
-
-        # active learning iteration
-        FINISH_AL = False
-        while not FINISH_AL: # 終了条件が満たされない限り続ける
-            break
-
-            for sample in unlabeled_list:
+            # for sample in unlabeled_list:
                 # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
 
                 # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
-                local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
+                # local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
                     # そのサンプルのindexをlabeledに追加。unlabeledから抜く。
 
 
-            print('##### gt box: {} mAP #####'.format(gt_AP))
+            # print('##### gt box: {} mAP #####'.format(gt_AP))
 
 
 """---------------------------------- Execution ----------------------------------"""
 if __name__ == '__main__': # Do active learning
     """
-    
     1. get experiment settings.
     2. construct ActiveLearning class instance
     3. execute active learning.
@@ -135,9 +132,29 @@ if __name__ == '__main__': # Do active learning
     opt = parse_args() # get exp settings
     opt = setup_opt(opt) # setup option
     cfg = update_config(opt.cfg) # update config
+    if not os.path.exists(cfg.RESULT.OUTDIR):
+        os.makedirs(cfg.RESULT.OUTDIR)
     torch.backends.cudnn.benchmark = True
 
     al = ActiveLearning(cfg, opt) # initialize active learning state
-    # main process of active learning
+
+    ##　初期性能の評価
+
+    # active learning iteration continue until termination conditions have been met
+    while not al.is_stop():
+        ## モデルによるUnlabeledデータの予測。アノテーション対象のサンプルを出す
+
+        ## インデックスの更新
+        ## データセットの更新（教師付けに対応）
+
+        ## モデルのFineTuningを行い、モデルを更新
+        ## 予測対象動画への予測の評価
+        ## 能動学習の状態を更新、保存（終了判定含む）
+
+        print(f'al state: {al.is_stop()} -> continue!')
+
+    # The condition is met and break the loop.
+
+    ## 実験の評価、結果の保存
 
     print("Successfully finished!!")
