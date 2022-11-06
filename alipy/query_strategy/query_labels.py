@@ -136,7 +136,7 @@ class QueryInstanceUncertainty(BaseIndexQuery):
             The selected indexes which is a subset of unlabel_index.
         """
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         if len(unlabel_index) <= batch_size:
             return unlabel_index
@@ -189,7 +189,7 @@ class QueryInstanceUncertainty(BaseIndexQuery):
             The selected indexes which is a subset of unlabel_index.
         """
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         if len(unlabel_index) <= batch_size:
             return unlabel_index
@@ -275,7 +275,7 @@ class QueryRandom(BaseIndexQuery):
             Add this parameter to ensure the consistency of api of strategies.
             Please ignore it.
 
-        unlabel_index: collections.Iterable
+        unlabel_index: collections.abc.Iterable
             The indexes of unlabeled set.
 
         batch_size: int, optional (default=1)
@@ -305,7 +305,7 @@ class QueryInstanceRandom(BaseIndexQuery):
             Add this parameter to ensure the consistency of api of strategies.
             Please ignore it.
 
-        unlabel_index: collections.Iterable
+        unlabel_index: collections.abc.Iterable
             The indexes of unlabeled set.
 
         batch_size: int, optional (default=1)
@@ -401,8 +401,8 @@ class QueryInstanceQBC(BaseIndexQuery):
             The selected indexes which is a subset of unlabel_index.
         """
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
-        assert (isinstance(label_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
+        assert (isinstance(label_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         label_index = np.asarray(label_index)
         if len(unlabel_index) <= batch_size:
@@ -461,7 +461,7 @@ class QueryInstanceQBC(BaseIndexQuery):
             The selected indexes which is a subset of unlabel_index.
         """
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         if len(unlabel_index) <= batch_size:
             return unlabel_index
@@ -674,8 +674,8 @@ class QueryExpectedErrorReduction(BaseIndexQuery):
             The selected indexes which is a subset of unlabel_index.
         """
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
-        assert (isinstance(label_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
+        assert (isinstance(label_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         label_index = np.asarray(label_index)
         if len(unlabel_index) <= batch_size:
@@ -825,8 +825,8 @@ class QueryInstanceQUIRE(BaseIndexQuery):
         selected_idx: list
             The selected indexes which is a subset of unlabel_index.
         """
-        assert (isinstance(unlabel_index, collections.Iterable))
-        assert (isinstance(label_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
+        assert (isinstance(label_index, collections.abc.Iterable))
         if len(unlabel_index) <= 1:
             return list(unlabel_index)
         unlabel_index = np.asarray(unlabel_index)
@@ -978,8 +978,8 @@ class QueryInstanceGraphDensity(BaseIndexQuery):
         # If a neighbor has already been sampled, reduce the graph density
         # for its direct neighbors to promote diversity.
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
-        assert (isinstance(label_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
+        assert (isinstance(label_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         label_index = np.asarray(label_index)
         if len(unlabel_index) <= batch_size:
@@ -1165,8 +1165,8 @@ class QueryInstanceBMDR(BaseIndexQuery):
         """
         cvxpy = self._cvxpy
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
-        assert (isinstance(label_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
+        assert (isinstance(label_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         label_index = np.asarray(label_index)
         if len(unlabel_index) <= batch_size:
@@ -1441,8 +1441,8 @@ class QueryInstanceSPAL(BaseIndexQuery):
         """
         cvxpy = self._cvxpy
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
-        assert (isinstance(label_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
+        assert (isinstance(label_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         label_index = np.asarray(label_index)
         if len(unlabel_index) <= batch_size:
@@ -1740,8 +1740,8 @@ class QueryInstanceLAL(BaseIndexQuery):
                 "if you have already download the data for training. Otherwise, use download_data() "
                 "method to download the data first.")
         assert (batch_size > 0)
-        assert (isinstance(unlabel_index, collections.Iterable))
-        assert (isinstance(label_index, collections.Iterable))
+        assert (isinstance(unlabel_index, collections.abc.Iterable))
+        assert (isinstance(label_index, collections.abc.Iterable))
         unlabel_index = np.asarray(unlabel_index)
         label_index = np.asarray(label_index)
         if len(unlabel_index) <= batch_size:

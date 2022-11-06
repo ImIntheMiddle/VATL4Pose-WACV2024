@@ -26,7 +26,7 @@ __all__ = ['split',
            ]
 
 def split(X=None, y=None, instance_indexes=None, query_type=None, test_ratio=0.3, initial_label_rate=0.05,
-          split_count=10, all_class=True, saving_path='.'):
+          split_count=10, all_class=True, saving_path='exp/AL_results'):
     """Split given data.
 
     Provide one of X, y or instance_indexes to execute the split.
@@ -64,7 +64,7 @@ def split(X=None, y=None, instance_indexes=None, query_type=None, test_ratio=0.3
         Whether each split will contain at least one instance for each class.
         If False, a totally random split will be performed.
 
-    saving_path: str, optional (default='.')
+    saving_path: str, optional (default='exp/AL_results')
         Giving None to disable saving.
 
     Returns

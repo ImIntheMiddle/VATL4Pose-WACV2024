@@ -27,8 +27,7 @@ from ..index.index_collections import IndexCollection
 from ..utils.multi_thread import aceThreading
 from ..metrics import performance
 
-__all__ = ['AlExperiment',
-           ]
+__all__ = ['AlExperiment']
 
 
 class AlExperiment:
@@ -298,7 +297,8 @@ class AlExperiment:
             test_ratio=test_ratio,
             initial_label_rate=initial_label_rate,
             split_count=split_count,
-            all_class=all_class)
+            all_class=all_class,
+            saving_path='exp/AL_results')
         return self._train_idx, self._test_idx, self._label_idx, self._unlabel_idx
 
     def start_query(self, multi_thread=True, **kwargs):

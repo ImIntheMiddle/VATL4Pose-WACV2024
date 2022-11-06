@@ -85,10 +85,10 @@ class StateIO:
         self.__print_interval = print_interval
         if self.__check_flag:
             # check validity
-            assert (isinstance(train_idx, collections.Iterable))
-            assert (isinstance(test_idx, collections.Iterable))
-            assert (isinstance(init_U, collections.Iterable))
-            assert (isinstance(init_L, collections.Iterable))
+            assert (isinstance(train_idx, collections.abc.Iterable))
+            assert (isinstance(test_idx, collections.abc.Iterable))
+            assert (isinstance(init_U, collections.abc.Iterable))
+            assert (isinstance(init_L, collections.abc.Iterable))
             assert (isinstance(round, int) and round >= 0)
 
         self.round = round
@@ -314,7 +314,7 @@ class StateIO:
             return 0, 0
         else:
             tmp = [self[i].get_value('performance') for i in range(self.__len__())]
-            if isinstance(tmp[0], collections.Iterable):
+            if isinstance(tmp[0], collections.abc.Iterable):
                 return np.NaN, np.NaN
             else:
                 return np.mean(tmp), np.std(tmp)
