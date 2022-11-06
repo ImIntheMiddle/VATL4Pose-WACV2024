@@ -33,8 +33,7 @@ from alipy.experiment import StoppingCriteria
 from alphapose.models import builder
 from alphapose.utils.config import update_config
 from alphapose.utils.metrics import evaluate_mAP
-from alphapose.utils.transforms import (flip, flip_heatmap,
-                                        get_func_heatmap_to_coord)
+from alphapose.utils.transforms import (flip, flip_heatmap, get_func_heatmap_to_coord)
 
 
 """---------------------------------- Functions Set ----------------------------------"""
@@ -81,7 +80,7 @@ class ActiveLearning:
         self.model = self.initialize_estimator()
         self.stopping_criterion = StoppingCriteria(stopping_criteria=None)
 
-        # self.eval_joints = self.unlabel_dataset.EVAL_JOINTS
+
         self.norm_type = self.cfg.LOSS.get('NORM_TYPE', None)
         self.hm_size = self.cfg.DATA_PRESET.HEATMAP_SIZE
         self.heatmap_to_coord = get_func_heatmap_to_coord(self.cfg) # function to get final prediction from heatmap
@@ -106,21 +105,11 @@ class ActiveLearning:
     def main(): # rough flow of active learning
 
         # Initializaton of active learning
-        unlabel_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
+        eval_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
         print(len(unlabel_dataset))
-        unlabel_loader = torch.utils.data.DataLoader(unlabel_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=os.cpu_count(), 
+        self.eval_joints = self.unlabel_dataset.EVAL_JOINTS
+        eval_loader = torch.utils.data.DataLoader(unlabel_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=os.cpu_count(), 
                                                     drop_last=False, pin_memory=True)
-        # print(val_loader.__len__())
-
-            # for sample in unlabeled_list:
-                # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
-
-                # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
-                # local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
-                    # そのサンプルのindexをlabeledに追加。unlabeledから抜く。
-
-
-            # print('##### gt box: {} mAP #####'.format(gt_AP))
 
 
 """---------------------------------- Execution ----------------------------------"""
@@ -139,7 +128,6 @@ if __name__ == '__main__': # Do active learning
     # CUDA settings
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.enabled = True
 
     al = ActiveLearning(cfg, opt) # initialize active learning state
 
@@ -163,3 +151,12 @@ if __name__ == '__main__': # Do active learning
     ## 実験の評価、結果の保存
 
     print("Successfully finished!!")
+
+
+"""---------------------------------- Memo ----------------------------------"""
+    # for sample in unlabeled_list:
+        # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
+
+        # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
+        # local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
+            # そのサンプルのindexをlabeledに追加。unlabeledから抜く。

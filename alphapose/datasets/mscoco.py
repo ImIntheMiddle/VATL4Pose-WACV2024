@@ -50,6 +50,7 @@ class Mscoco(CustomDataset):
             label = self._check_load_keypoints(_coco, entry) # get all person's keypoints in the image
             if not label:
                 continue
+
             # num of items are corresponding to person, not image
             for obj in label:
                 items.append(abs_path) # image path
@@ -59,7 +60,7 @@ class Mscoco(CustomDataset):
             # print(abs_path, obj)
             if self.SHORTEN & (imgcnt >= 30):
                 break
-        return items, labels # items: bunch of paths, labels: bbox, keypoints, coordinates, etc.
+        return items, labels # items: bunch of paths, labels: bbox, keypoint coordinates, etc.
 
     def _check_load_keypoints(self, coco, entry):
         """Check and load ground-truth keypoints"""

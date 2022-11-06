@@ -1,8 +1,8 @@
 DATASET:
-  VAL:
-    TYPE: 'Posetrack21'
+  EVAL:
+    TYPE: 'Halo'
     ROOT: './data/HaloPose/' # Root directory of unlabeld videos
-    IMG_PREFIX: 'images/000522_mpii_test'
+    IMG_PREFIX: 'images/val/000522_mpii_test/'
     ANN: 'val_ann/000522_test.json'
 
 RESULT:
@@ -39,21 +39,5 @@ DETECTOR:
   NMS_THRES: 0.6
   CONFIDENCE: 0.05
 
-TRAIN:
-  WORLD_SIZE: 4
-  BATCH_SIZE: 32
-  BEGIN_EPOCH: 0
-  END_EPOCH: 270
-  OPTIMIZER: 'adam'
-  LR: 0.001
-  LR_FACTOR: 0.1
-  LR_STEP:
-  - 170
-  - 200
-  DPG_MILESTONE: 210
-  DPG_STEP:
-  - 230
-  - 250
-
-VAL:
+EVAL:
   BATCH_SIZE: 32

@@ -35,8 +35,7 @@ class Mpii(CustomDataset):
     def joint_pairs(self):
         """Joint pairs which defines the pairs of joint to be swapped
         when the image is flipped horizontally."""
-        return [[0, 5], [1, 4], [2, 3],
-                [10, 15], [11, 14], [12, 13]]
+        return [[0, 5], [1, 4], [2, 3],[10, 15], [11, 14], [12, 13]]
 
     def _load_jsons(self):
         """Load all image paths and labels from annotation files into buffer."""
