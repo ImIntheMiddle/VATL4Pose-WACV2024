@@ -3,6 +3,7 @@
 # Written by Jiefeng Li (jeff.lee.sjtu@gmail.com)
 # -----------------------------------------------------
 
+import torch
 import torch.nn as nn
 
 from .builder import SPPE
@@ -11,7 +12,7 @@ from .layers.SE_Resnet import SEResnet
 
 
 @SPPE.register_module
-class FastPose(torch.jit.ScriptModule):
+class FastPose(nn.Module):
 
     def __init__(self, norm_layer=nn.BatchNorm2d, **cfg):
         super(FastPose, self).__init__()
@@ -47,7 +48,6 @@ class FastPose(torch.jit.ScriptModule):
         self.conv_out = nn.Conv2d(
             self.conv_dim, self._preset_cfg['NUM_JOINTS'], kernel_size=3, stride=1, padding=1)
 
-    @torch.jit.script_method
     def forward(self, x):
         out = self.preact(x)
         out = self.suffle1(out)

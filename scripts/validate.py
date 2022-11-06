@@ -152,7 +152,7 @@ def validate_gt(m, cfg, heatmap_to_coord, batch_size=20, num_workers=32):
     norm_type = cfg.LOSS.get('NORM_TYPE', None)
     hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
 
-    for inps, labels, label_masks, img_ids, bboxes in tqdm(gt_val_loader, dynamic_ncols=True):
+    for inps, labels, label_masks, img_ids, bboxes in tqdm(gt_val_loader, dynamic_ncols=True): # custom.py: get_items
         if isinstance(inps, list):
             inps = [inp.cuda() for inp in inps]
         else:
@@ -163,10 +163,10 @@ def validate_gt(m, cfg, heatmap_to_coord, batch_size=20, num_workers=32):
         assert pred.dim() == 4
         pred = pred[:, eval_joints, :, :]
 
-        for i in range(output.shape[0]):
+        for i in range(output.shape[0]): # for each 
             bbox = bboxes[i].tolist()
             pose_coords, pose_scores = heatmap_to_coord(
-                pred[i][eval_joints], bbox, hm_shape=hm_size, norm_type=norm_type)
+                pred[i][eval_joints], bbox, hm_shape=hm_size, norm_type=norm_type) # bbox needed
 
             keypoints = np.concatenate((pose_coords, pose_scores), axis=1)
             keypoints = keypoints.reshape(-1).tolist()
@@ -178,7 +178,7 @@ def validate_gt(m, cfg, heatmap_to_coord, batch_size=20, num_workers=32):
             data['category_id'] = 1
             data['keypoints'] = keypoints
 
-            kpt_json.append(data)
+            kpt_json.append(data) # result will be json format
 
     sysout = sys.stdout
     with open('./exp/json/validate_gt_kpt.json', 'w') as fid:

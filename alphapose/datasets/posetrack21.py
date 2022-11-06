@@ -10,7 +10,7 @@ from .custom import CustomDataset
 
 
 @DATASET.register_module
-class Mpii(CustomDataset):
+class PoseTrack(CustomDataset):
     """ MPII Human Pose Dataset.
 
     Parameters
