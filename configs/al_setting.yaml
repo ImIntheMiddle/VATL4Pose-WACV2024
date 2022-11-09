@@ -1,12 +1,12 @@
 DATASET:
-  EVAL:
-    TYPE: 'Halo'
-    ROOT: './data/HaloPose/' # Root directory of unlabeld videos
+  VAL:
+    TYPE: 'Posetrack21'
+    ROOT: './data/PoseTrack21/' # Root directory of unlabeld videos
     IMG_PREFIX: 'images/val/000522_mpii_test/'
-    ANN: 'val_ann/000522_test.json'
+    ANN: 'activelearning/val/000522_test.json'
 
 RESULT:
-  OUTDIR: 'examples/res/' # output-directory
+  OUTDIR: 'exp/AL_results/' # output-directory
 
 DATA_PRESET:
   TYPE: 'simple'
@@ -20,8 +20,8 @@ DATA_PRESET:
   - 48
 
 MODEL:
-  TYPE: 'SimplePose'
-  PRETRAINED: 'pretrained_models/simple_res50_256x192.pth'
+  TYPE: 'FastPose'
+  PRETRAINED: ''
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256
@@ -39,5 +39,21 @@ DETECTOR:
   NMS_THRES: 0.6
   CONFIDENCE: 0.05
 
-EVAL:
+TRAIN:
+  WORLD_SIZE: 4
+  BATCH_SIZE: 32
+  BEGIN_EPOCH: 0
+  END_EPOCH: 200
+  OPTIMIZER: 'adam'
+  LR: 0.001
+  LR_FACTOR: 0.1
+  LR_STEP:
+  - 90
+  - 120
+  DPG_MILESTONE: 140
+  DPG_STEP:
+  - 160
+  - 190
+
+VAL:
   BATCH_SIZE: 32
