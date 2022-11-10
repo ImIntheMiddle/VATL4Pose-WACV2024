@@ -15,6 +15,8 @@
 # general libraries
 import argparse
 import os
+import pdb # import python debugger
+os.environ['CUDA_VISIBLE_DEVICES'] = '5, 6'
 import platform
 import sys
 import time
@@ -22,6 +24,7 @@ import random
 
 # python general libraries
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 from tqdm import tqdm
 from skimage.feature import peak_local_max
@@ -33,9 +36,7 @@ from alipy.experiment import StoppingCriteria
 from alphapose.models import builder
 from alphapose.utils.config import update_config
 from alphapose.utils.metrics import evaluate_mAP
-from alphapose.utils.transforms import (flip, flip_heatmap,
-                                        get_func_heatmap_to_coord)
-
+from alphapose.utils.transforms import (flip, flip_heatmap, get_func_heatmap_to_coord)
 
 """---------------------------------- Functions Set ----------------------------------"""
 def parse_args():
@@ -48,8 +49,12 @@ def parse_args():
                         help='experiment configure file name')
     parser.add_argument('--gpus', type=str, dest='gpus', default="0",
                         help='choose which cuda device to use by index and input comma to use multi gpus, e.g. 0,1,2,3. (input -1 for cpu only)')
-    parser.add_argument('--debug', default=False, action='store_true',
+    parser.add_argument('--verbose', default=True, action='store_true',
                         help='print detail information')
+    parser.add_argument('--speedup', default=True, action='store_true',
+                        help='apply speeding up technique like fix random seed, fast viz, etc.')
+    parser.add_argument('--seedfix', default=False, action='store_true',
+                        help='fix random seed')
     args = parser.parse_args()
     return args
 
@@ -59,18 +64,31 @@ def setup_opt(opt):
     return: opt  updated
     """
     opt.gpus = [int(i) for i in opt.gpus.split(',')]
-    opt.device = torch.device('cuda:{}'.format(opt.gpus[0])) if opt.gpus[0] >= 0 else torch.device('cpu')
-    # default settings
-    opt.format = "coco"
+    opt.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    print('Using GPU : {}'.format(opt.gpus))
+
+    opt.format = "coco" # default settings
     opt.min_box_area = 0 # min box area to filter out
     opt.qsize = 1024 # the length of result buffer, where reducing it will lower requirement of cpu memory
 
-    if opt.debug: # for efficient debug
-        import pdb;pdb.set_trace() # import python debugger
+    if opt.verbose: # for visualization and explanation
         opt.vis = True # visualize option
         opt.profile = True
         opt.save_video = True
+    if opt.speedup: # for speed up
         opt.vis_fast = True
+        opt.vis_thre = 0.3
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+    if opt.seedfix: # fix seed for reproducibility
+        SEED = 318
+        random.seed(SEED)
+        np.random.seed(SEED)
+        torch.manual_seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
     return opt
 
 """---------------------------------- Main Class ----------------------------------"""
@@ -80,8 +98,15 @@ class ActiveLearning:
         self.opt = opt
         self.model = self.initialize_estimator()
         self.stopping_criterion = StoppingCriteria(stopping_criteria=None)
+        pdb.set_trace()
+        self.eval_dataset = builder.build_dataset(self.cfg.DATASET.EVAL, preset_cfg=self.cfg.DATA_PRESET, train=False, get_prenext=False)
+        self.eval_loader = torch.utils.data.DataLoader(self.eval_dataset, batch_size=self.cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=os.cpu_count(),
+                                                    drop_last=False, pin_memory=True)
+        if self.opt.verbose: # test dataset and dataloader
+            test_dataset(self.eval_dataset)
+            test_dataloader(self.eval_loader)
 
-        # self.eval_joints = self.unlabel_dataset.EVAL_JOINTS
+        self.eval_joints = self.eval_dataset.EVAL_JOINTS
         self.norm_type = self.cfg.LOSS.get('NORM_TYPE', None)
         self.hm_size = self.cfg.DATA_PRESET.HEATMAP_SIZE
         self.heatmap_to_coord = get_func_heatmap_to_coord(self.cfg) # function to get final prediction from heatmap
@@ -100,50 +125,31 @@ class ActiveLearning:
         model = builder.build_sppe(self.cfg.MODEL, preset_cfg=self.cfg.DATA_PRESET)
         print(f'Loading model from {self.cfg.MODEL.PRETRAINED}...') # pretrained by MSCOCO2017
         model.load_state_dict(torch.load(self.cfg.MODEL.PRETRAINED))
-        model = torch.nn.DataParallel(model, device_ids=self.opt.gpus).cuda()
+        if self.opt.device == torch.device('cuda'):
+            model = torch.nn.DataParallel(model, device_ids=self.opt.gpus).cuda()
         return model
 
-    def main(): # rough flow of active learning
-
-        # Initializaton of active learning
-        unlabel_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
-        print(len(unlabel_dataset))
-        unlabel_loader = torch.utils.data.DataLoader(unlabel_dataset, batch_size=cfg.VAL.BATCH_SIZE, shuffle=False, num_workers=os.cpu_count(), 
-                                                    drop_last=False, pin_memory=True)
-        # print(val_loader.__len__())
-
-            # for sample in unlabeled_list:
-                # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
-
-                # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
-                # local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
-                    # そのサンプルのindexをlabeledに追加。unlabeledから抜く。
-
-
-            # print('##### gt box: {} mAP #####'.format(gt_AP))
-
-
 """---------------------------------- Execution ----------------------------------"""
+
 if __name__ == '__main__': # Do active learning
+    """Execution of active learning
+    1. Setting up experiment
+    2. Initialize active learning
+    3. Evaluation of the initial pose estimator
+    4. start active learning
     """
-    1. get experiment settings.
-    2. construct ActiveLearning class instance
-    3. execute active learning.
-    """
+    # 1. Setting up experiment
     opt = parse_args() # get exp settings
     opt = setup_opt(opt) # setup option
     cfg = update_config(opt.cfg) # update config
     if not os.path.exists(cfg.RESULT.OUTDIR):
         os.makedirs(cfg.RESULT.OUTDIR)
 
-    # CUDA settings
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.enabled = True
-
+    # 2. Initialize active learning
+    # pdb.set_trace()
     al = ActiveLearning(cfg, opt) # initialize active learning state
 
-    ##　初期性能の評価
+    # 3. Evaluation of the initial pose estimator
 
     # active learning iteration continue until termination conditions have been met
     while not al.is_stop():
@@ -154,12 +160,34 @@ if __name__ == '__main__': # Do active learning
 
         ## モデルのFineTuningを行い、モデルを更新
         ## 予測対象動画への予測の評価
-        ## 能動学習の状態を更新、保存（終了判定含む）
+        ## 能動学習の状態を更新、保存
 
-        print(f'al state: {al.is_stop()} -> continue!')
+        ## Judge whether to stop active learning
+        print(f'al state: {al.is_stop()}')
+        if al.is_stop(): # The condition is met and break the loop.
+            print("Active Learning is finished!")
+            break
+        else:
+            print(f'Active Learning is not finished yet.\nContinue!')
 
-    # The condition is met and break the loop.
+    ## 最終性能の評価、実験結果のまとめ、保存
 
-    ## 実験の評価、結果の保存
 
-    print("Successfully finished!!")
+
+"""---------------------------------- Memo ----------------------------------"""
+    # for sample in unlabeled_list:
+        # 姿勢推定器によるUnlabeled dataの予測。index必ず取り出す
+
+        # 予測結果のヒートマップから局所ピークを拾う 局所ピークの座標が返ってくる
+        # local_peaks = peak_local_max(hp, min_distance=7) # min_distance: filter size
+            # そのサンプルのindexをlabeledに追加。unlabeledから抜く。
+
+"""---------------------------------- Test ----------------------------------"""
+def test_dataset(dataset):
+    print(len(dataset))
+    image, label, category = dataset[0]
+    print(image.shape, type(image), label, category, len(image_dataset))
+    plt.imshow(image.transpose(2, 1, 0).astype(np.uint8))
+
+def test_dataloader(dataloader):
+    print(len(dataloader))

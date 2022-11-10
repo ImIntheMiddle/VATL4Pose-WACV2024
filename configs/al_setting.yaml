@@ -1,0 +1,59 @@
+DATASET:
+  VAL:
+    TYPE: 'Posetrack21'
+    ROOT: './data/PoseTrack21/' # Root directory of unlabeld videos
+    IMG_PREFIX: 'images/val/000522_mpii_test/'
+    ANN: 'activelearning/val/000522_test.json'
+
+RESULT:
+  OUTDIR: 'exp/AL_results/' # output-directory
+
+DATA_PRESET:
+  TYPE: 'simple'
+  SIGMA: 2
+  NUM_JOINTS: 17
+  IMAGE_SIZE:
+  - 256
+  - 192
+  HEATMAP_SIZE:
+  - 64
+  - 48
+
+MODEL:
+  TYPE: 'FastPose'
+  PRETRAINED: ''
+  TRY_LOAD: ''
+  NUM_DECONV_FILTERS:
+  - 256
+  - 256
+  - 256
+  NUM_LAYERS: 50
+
+LOSS:
+  TYPE: 'MSELoss'
+
+DETECTOR:
+  NAME: 'yolo'
+  CONFIG: 'detector/yolo/cfg/yolov3-spp.cfg'
+  WEIGHTS: 'detector/yolo/data/yolov3-spp.weights'
+  NMS_THRES: 0.6
+  CONFIDENCE: 0.05
+
+TRAIN:
+  WORLD_SIZE: 4
+  BATCH_SIZE: 32
+  BEGIN_EPOCH: 0
+  END_EPOCH: 200
+  OPTIMIZER: 'adam'
+  LR: 0.001
+  LR_FACTOR: 0.1
+  LR_STEP:
+  - 90
+  - 120
+  DPG_MILESTONE: 140
+  DPG_STEP:
+  - 160
+  - 190
+
+VAL:
+  BATCH_SIZE: 32

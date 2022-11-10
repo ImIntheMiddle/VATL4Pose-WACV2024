@@ -12,8 +12,7 @@ import torch
 
 from ..bbox import (_box_to_center_scale, _center_scale_to_box,
                     _clip_aspect_ratio)
-from ..transforms import (addDPG, affine_transform, flip_joints_3d,
-                          get_affine_transform, im_to_torch)
+from ..transforms import (addDPG, affine_transform, flip_joints_3d, get_affine_transform, im_to_torch)
 
 # Only windows visual studio 2013 ~2017 support compile c/cuda extensions
 # If you force to compile extension on Windows and ensure appropriate visual studio
@@ -50,9 +49,7 @@ class SimpleTransform(object):
         True for training trasformation.
     """
 
-    def __init__(self, dataset, scale_factor, add_dpg,
-                 input_size, output_size, rot, sigma,
-                 train, gpu_device=None, loss_type='MSELoss'):
+    def __init__(self, dataset, scale_factor, add_dpg, input_size, output_size, rot, sigma, train, gpu_device=None, loss_type='MSELoss'):
         self._joint_pairs = dataset.joint_pairs
         self._scale_factor = scale_factor
         self._rot = rot
@@ -81,17 +78,16 @@ class SimpleTransform(object):
             if gpu_device is not None:
                 self.roi_align = self.roi_align.to(gpu_device)
 
-    def test_transform(self, src, bbox):
+    def test_transform(self, img, bbox):
         xmin, ymin, xmax, ymax = bbox
         center, scale = _box_to_center_scale(
             xmin, ymin, xmax - xmin, ymax - ymin, self._aspect_ratio)
         scale = scale * 1.0
 
-        input_size = self._input_size
-        inp_h, inp_w = input_size
+        inp_h, inp_w = self.input_size
 
         trans = get_affine_transform(center, scale, 0, [inp_w, inp_h])
-        img = cv2.warpAffine(src, trans, (int(inp_w), int(inp_h)), flags=cv2.INTER_LINEAR)
+        img = cv2.warpAffine(img, trans, (int(inp_w), int(inp_h)), flags=cv2.INTER_LINEAR)
         bbox = _center_scale_to_box(center, scale)
 
         img = im_to_torch(img)
@@ -126,8 +122,7 @@ class SimpleTransform(object):
     def _target_generator(self, joints_3d, num_joints):
         target_weight = np.ones((num_joints, 1), dtype=np.float32)
         target_weight[:, 0] = joints_3d[:, 0, 1]
-        target = np.zeros((num_joints, self._heatmap_size[0], self._heatmap_size[1]),
-                          dtype=np.float32)
+        target = np.zeros((num_joints, self._heatmap_size[0], self._heatmap_size[1]), dtype=np.float32)
         tmp_size = self._sigma * 3
 
         for i in range(num_joints):
@@ -181,32 +176,26 @@ class SimpleTransform(object):
         target_weight = target_weight.reshape((-1))
         return target, target_weight
 
-    def __call__(self, src, label):
+    def __call__(self, img, label):
         bbox = list(label['bbox'])
-        gt_joints = label['joints_3d']
-
-        imgwidth, imght = label['width'], label['height']
-        assert imgwidth == src.shape[1] and imght == src.shape[0]
-        self.num_joints = gt_joints.shape[0]
-
-        joints_vis = np.zeros((self.num_joints, 1), dtype=np.float32)
-        joints_vis[:, 0] = gt_joints[:, 0, 1]
-
-        input_size = self._input_size
-
+        xmin, ymin, xmax, ymax = bbox
+        center, scale = _box_to_center_scale(xmin, ymin, xmax - xmin, ymax - ymin, self._aspect_ratio)
+        assert imgwidth == img.shape[1] and imght == img.shape[0]
         if self._add_dpg and self._train:
             bbox = addDPG(bbox, imgwidth, imght)
 
-        xmin, ymin, xmax, ymax = bbox
-        center, scale = _box_to_center_scale(
-            xmin, ymin, xmax - xmin, ymax - ymin, self._aspect_ratio)
+        imgwidth, imght = label['width'], label['height']
+
+        gt_joints = label['joints_3d']
+        self.num_joints = gt_joints.shape[0]
+        joints_vis = np.zeros((self.num_joints, 1), dtype=np.float32)
+        joints_vis[:, 0] = gt_joints[:, 0, 1]
 
         # half body transform
         if self._train and (np.sum(joints_vis[:, 0]) > self.num_joints_half_body and np.random.rand() < self.prob_half_body):
             c_half_body, s_half_body = self.half_body_transform(
                 gt_joints[:, :, 0], joints_vis
             )
-
             if c_half_body is not None and s_half_body is not None:
                 center, scale = c_half_body, s_half_body
 
@@ -226,17 +215,17 @@ class SimpleTransform(object):
 
         joints = gt_joints
         if random.random() > 0.5 and self._train:
-            # src, fliped = random_flip_image(src, px=0.5, py=0)
+            # img, fliped = random_flip_image(img, px=0.5, py=0)
             # if fliped[0]:
-            assert src.shape[2] == 3
-            src = src[:, ::-1, :]
+            assert img.shape[2] == 3
+            img = img[:, ::-1, :]
 
             joints = flip_joints_3d(joints, imgwidth, self._joint_pairs)
             center[0] = imgwidth - center[0] - 1
 
-        inp_h, inp_w = input_size
+        inp_h, inp_w = self.input_size
         trans = get_affine_transform(center, scale, r, [inp_w, inp_h])
-        img = cv2.warpAffine(src, trans, (int(inp_w), int(inp_h)), flags=cv2.INTER_LINEAR)
+        img = cv2.warpAffine(img, trans, (int(inp_w), int(inp_h)), flags=cv2.INTER_LINEAR)
 
         # deal with joints visibility
         for i in range(self.num_joints):
@@ -248,13 +237,6 @@ class SimpleTransform(object):
             target, target_weight = self._target_generator(joints, self.num_joints)
         elif 'JointRegression' in self._loss_type:
             target, target_weight = self._integral_target_generator(joints, self.num_joints, inp_h, inp_w)
-        elif self._loss_type == 'Combined':
-            if self.num_joints == 68:
-                hand_face_num = 42
-            else:
-                hand_face_num = 110
-            target_mse, target_weight_mse = self._target_generator(joints[:-hand_face_num,:,:], self.num_joints-hand_face_num)
-            target_inter, target_weight_inter = self._integral_target_generator(joints[-hand_face_num:,:,:], hand_face_num, inp_h, inp_w)
 
         bbox = _center_scale_to_box(center, scale)
 
@@ -262,11 +244,8 @@ class SimpleTransform(object):
         img[0].add_(-0.406)
         img[1].add_(-0.457)
         img[2].add_(-0.480)
-        
-        if self._loss_type == 'Combined':
-        	return img, [torch.from_numpy(target_mse), torch.from_numpy(target_inter)], [torch.from_numpy(target_weight_mse), torch.from_numpy(target_weight_inter)], torch.Tensor(bbox)
-        else:
-            return img, torch.from_numpy(target), torch.from_numpy(target_weight), torch.Tensor(bbox)
+
+        return img, torch.from_numpy(target), torch.from_numpy(target_weight), torch.Tensor(bbox)
 
     def half_body_transform(self, joints, joints_vis):
         upper_joints = []

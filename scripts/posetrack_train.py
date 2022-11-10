@@ -116,73 +116,6 @@ def train(opt, train_loader, m, criterion, optimizer, writer):
 
     return loss_logger.avg, acc_logger.avg
 
-
-def validate(m, opt, heatmap_to_coord, batch_size=20):
-    det_dataset = builder.build_dataset(cfg.DATASET.TEST, preset_cfg=cfg.DATA_PRESET, train=False, opt=opt)
-    det_loader = torch.utils.data.DataLoader(
-        det_dataset, batch_size=batch_size, shuffle=False, num_workers=20, drop_last=False, pin_memory=True)
-    kpt_json = []
-    eval_joints = det_dataset.EVAL_JOINTS
-
-    m.eval()
-
-    norm_type = cfg.LOSS.get('NORM_TYPE', None)
-    hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
-    combined_loss = (cfg.LOSS.get('TYPE') == 'Combined')
-
-    halpe = (cfg.DATA_PRESET.NUM_JOINTS == 133) or (cfg.DATA_PRESET.NUM_JOINTS == 136)
-
-    for inps, crop_bboxes, bboxes, img_ids, scores, imghts, imgwds in tqdm(det_loader, dynamic_ncols=True):
-        if isinstance(inps, list):
-            inps = [inp.cuda() for inp in inps]
-        else:
-            inps = inps.cuda()
-        output = m(inps)
-
-        pred = output
-        assert pred.dim() == 4
-        pred = pred[:, eval_joints, :, :]
-
-        if output.size()[1] == 68:
-            face_hand_num = 42
-        else:
-            face_hand_num = 110
-
-        for i in range(output.shape[0]):
-            bbox = crop_bboxes[i].tolist()
-
-            # get keipoint coord from heatmaps
-            if combined_loss:
-                pose_coords_body_foot, pose_scores_body_foot = heatmap_to_coord[0](
-                    pred[i][det_dataset.EVAL_JOINTS[:-face_hand_num]], bbox, hm_shape=hm_size, norm_type=norm_type)
-                pose_coords_face_hand, pose_scores_face_hand = heatmap_to_coord[1](
-                    pred[i][det_dataset.EVAL_JOINTS[-face_hand_num:]], bbox, hm_shape=hm_size, norm_type=norm_type)
-                pose_coords = np.concatenate((pose_coords_body_foot, pose_coords_face_hand), axis=0)
-                pose_scores = np.concatenate((pose_scores_body_foot, pose_scores_face_hand), axis=0)
-            else:
-                pose_coords, pose_scores = heatmap_to_coord(
-                    pred[i][det_dataset.EVAL_JOINTS], bbox, hm_shape=hm_size, norm_type=norm_type)
-
-            keypoints = np.concatenate((pose_coords, pose_scores), axis=1)
-            keypoints = keypoints.reshape(-1).tolist()
-
-            data = dict()
-            data['bbox'] = bboxes[i, 0].tolist()
-            data['image_id'] = int(img_ids[i])
-            data['score'] = float(scores[i] + np.mean(pose_scores) + 1.25 * np.max(pose_scores))
-            data['category_id'] = 1
-            data['keypoints'] = keypoints
-
-            kpt_json.append(data)
-
-    sysout = sys.stdout
-    with open(os.path.join(opt.work_dir, 'test_kpt.json'), 'w') as fid:
-        json.dump(kpt_json, fid)
-    res = evaluate_mAP(os.path.join(opt.work_dir, 'test_kpt.json'), ann_type='keypoints', ann_file=os.path.join(cfg.DATASET.VAL.ROOT, cfg.DATASET.VAL.ANN))
-    sys.stdout = sysout
-    return res
-
-
 def validate_gt(m, opt, cfg, heatmap_to_coord, batch_size=20):
     gt_val_dataset = builder.build_dataset(cfg.DATASET.VAL, preset_cfg=cfg.DATA_PRESET, train=False)
     eval_joints = gt_val_dataset.EVAL_JOINTS
@@ -303,8 +236,7 @@ def main():
             # Prediction Test
             with torch.no_grad():
                 gt_AP = validate_gt(m.module, opt, cfg, heatmap_to_coord)
-                rcnn_AP = validate(m.module, opt, heatmap_to_coord)
-                logger.info(f'##### Epoch {opt.epoch} | gt mAP: {gt_AP} | rcnn mAP: {rcnn_AP} #####')
+                logger.info(f'##### Epoch {opt.epoch} | gt mAP: {gt_AP} #####')
 
         # Time to add DPG
         if i == cfg.TRAIN.DPG_MILESTONE:

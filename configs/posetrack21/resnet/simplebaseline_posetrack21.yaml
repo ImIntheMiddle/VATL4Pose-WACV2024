@@ -1,12 +1,20 @@
 DATASET:
+  TRAIN:
+    TYPE: 'Posetrack21'
+    ROOT: './data/PoseTrack21/'
+    IMG_PREFIX: 'images/train'
+    ANN: 'activelearning/train'
+    AUG:
+      FLIP: true
+      ROT_FACTOR: 40
+      SCALE_FACTOR: 0.3
+      NUM_JOINTS_HALF_BODY: 8
+      PROB_HALF_BODY: -1
   VAL:
     TYPE: 'Posetrack21'
-    ROOT: './data/HaloPose/' # Root directory of unlabeld videos
-    IMG_PREFIX: 'images/000522_mpii_test'
-    ANN: 'val_ann/000522_test.json'
-
-RESULT:
-  OUTDIR: 'examples/res/' # output-directory
+    ROOT: './data/PoseTrack21'
+    IMG_PREFIX: 'images/train'
+    ANN: 'activelearning/train_val'
 
 DATA_PRESET:
   TYPE: 'simple'
@@ -21,7 +29,7 @@ DATA_PRESET:
 
 MODEL:
   TYPE: 'SimplePose'
-  PRETRAINED: 'pretrained_models/simple_res50_256x192.pth'
+  PRETRAINED: ''
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256
@@ -37,23 +45,20 @@ DETECTOR:
   CONFIG: 'detector/yolo/cfg/yolov3-spp.cfg'
   WEIGHTS: 'detector/yolo/data/yolov3-spp.weights'
   NMS_THRES: 0.6
-  CONFIDENCE: 0.05
+  CONFIDENCE: 0.1
 
 TRAIN:
   WORLD_SIZE: 4
   BATCH_SIZE: 32
   BEGIN_EPOCH: 0
-  END_EPOCH: 270
+  END_EPOCH: 200
   OPTIMIZER: 'adam'
   LR: 0.001
   LR_FACTOR: 0.1
   LR_STEP:
-  - 170
-  - 200
-  DPG_MILESTONE: 210
+  - 90
+  - 120
+  DPG_MILESTONE: 140
   DPG_STEP:
-  - 230
-  - 250
-
-VAL:
-  BATCH_SIZE: 32
+  - 160
+  - 190
