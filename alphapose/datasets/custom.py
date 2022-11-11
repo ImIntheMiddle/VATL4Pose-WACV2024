@@ -88,11 +88,8 @@ class CustomDataset(data.Dataset):
         if self._preset_cfg['TYPE'] == 'simple':
             self.transformation = SimpleTransform(
                 self, scale_factor=self._scale_factor,
-                input_size=self._input_size,
-                output_size=self._output_size,
-                rot=self._rot, sigma=self._sigma,
-                train=self._train, add_dpg=self._dpg,
-                loss_type=self._loss_type)
+                input_size=self._input_size, output_size=self._output_size,
+                rot=self._rot, sigma=self._sigma, train=self._train, add_dpg=self._dpg, loss_type=self._loss_type)
 
         self._items, self._labels = self._lazy_load_json()
 

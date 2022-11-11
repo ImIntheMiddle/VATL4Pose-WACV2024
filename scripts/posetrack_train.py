@@ -106,7 +106,9 @@ def validate_gt(m, opt, cfg, heatmap_to_coord):
             inps = [inp.cuda() for inp in inps]
         else:
             inps = inps.cuda()
-        output = m(inps)
+
+        with torch.no_grad():
+            output = m(inps) # input inps into model
 
         pred = output
         assert pred.dim() == 4
@@ -123,6 +125,7 @@ def validate_gt(m, opt, cfg, heatmap_to_coord):
             data = dict()
             data['bbox'] = bboxes[j].tolist()
             data['image_id'] = int(img_ids[j])
+            data['ann_id'] = int(ann_ids[j])
             data['score'] = float(np.mean(pose_scores) + 1.25 * np.max(pose_scores))
             data['category_id'] = 1
             data['keypoints'] = keypoints
