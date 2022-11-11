@@ -59,10 +59,8 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1,
-                 downsample=None, reduction=False,
-                 norm_layer=nn.BatchNorm2d,
-                 dcn=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, 
+                reduction=False, norm_layer=nn.BatchNorm2d, dcn=None):
         super(Bottleneck, self).__init__()
         self.dcn = dcn
         self.with_dcn = dcn is not None
@@ -73,8 +71,7 @@ class Bottleneck(nn.Module):
             fallback_on_stride = dcn.get('FALLBACK_ON_STRIDE', False)
             self.with_modulated_dcn = dcn.get('MODULATED', False)
         if not self.with_dcn or fallback_on_stride:
-            self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                                   padding=1, bias=False)
+            self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         else:
             from .dcn import DeformConv, ModulatedDeformConv
             self.deformable_groups = dcn.get('DEFORM_GROUP', 1)
