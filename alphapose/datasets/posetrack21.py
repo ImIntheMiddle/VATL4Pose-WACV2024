@@ -2,6 +2,7 @@
 import os
 import numpy as np
 import cv2
+import copy
 from alphapose.models.builder import DATASET
 from alphapose.utils.bbox import bbox_clip_xyxy, bbox_xywh_to_xyxy
 from .custom import CustomDataset
@@ -15,24 +16,22 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
         Path to the PoseTrack21 dataset.
     """
     CLASSES = ['person']
-    EVAL_JOINTS = [0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    EVAL_JOINTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
     num_joints = 17
     joint_pairs = [[5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]]
 
-    def __init__(self, get_prenext=False):
-        super(Posetrack21, self).__init__(get_prenext)
-        self.get_prenext = get_prenext
-        self._get_item_func = self._get_temporal_img if self.get_prenext else self._get_single_img
-
     def __getitem__(self, idx):
         """Get item for the given index.
-        process depends on whether temporal is True or False.
+        process depends on whether get_prenext is True or False.
         Args:
             idx (int): Index of the item to be retrieved from the dataset.
 
         Returns: Result of the get item function corresponding to self.temporal.
         """
-        return self._get_item_func(idx)
+        if self.get_prenext:
+            return self._get_temporal_img(idx)
+        else:
+            return self._get_single_img(idx)
 
     def __len__(self):
         return len(self._items)
@@ -60,17 +59,20 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
             frame_label = self._check_load_keypoints(_posetrack, frame) # load annotation of this frame
             if not frame_label:
                 continue
-
             # num of items are relative to person, not frame
             for person_ann in frame_label:
-                items.append(abs_path)
+                item = {}
+                item['path'] = abs_path
+                item['img_id'] = frame['image_id']
+                item['ann_id'] = person_ann['ann_id']
+                items.append(item)
                 labels.append(person_ann)
 
         return items, labels
 
     def _check_load_keypoints(self, _data, frame):
         """Check and load ground-truth keypoints"""
-        ann_ids = _data.getAnnIds(imgIds=frame['id'])
+        ann_ids = _data.getAnnIds(imgIds=frame['image_id'])
         objs = _data.loadAnns(ann_ids)
 
         # check valid bboxes
@@ -98,14 +100,16 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
             if np.sum(joints_3d[:, 0, 1]) < 1: # no visible keypoint
                 continue
 
+            ann_id = obj['id']
             person = int(obj['person_id'])
 
             valid_objs.append({
                 'bbox': (xmin, ymin, xmax, ymax),
                 'width': width,
                 'height': height,
-                'joints_3d': joints_3d
-                'person': person
+                'joints_3d': joints_3d,
+                'person': person,
+                'ann_id': ann_id,
             })
 
         if not valid_objs:
@@ -115,22 +119,19 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
                     'bbox': np.array([-1, -1, 0, 0]),
                     'width': width,
                     'height': height,
-                    'joints_3d': np.zeros((self.num_joints, 2, 2), dtype=np.float32)
-                    'person': -1
+                    'joints_3d': np.zeros((self.num_joints, 2, 2), dtype=np.float32),
+                    'person': -1,
+                    'ann_id': -1,
                 })
         return valid_objs
 
     def _get_temporal_img(self, idx):
-        if type(self._items[idx]) == dict:
-            img_path = self._items[idx]['path']
-            pre_img_path = self._items[idx-1]['path']
-            next_img_path = self._items[idx+1]['path']
-            img_id = self._items[idx]['id'] # get image id
-        else:
-            img_path = self._items[idx]
-            pre_img_path = self._items[idx - 1]
-            next_img_path = self._items[idx + 1]
-            img_id = int(os.path.splitext(os.path.basename(img_path))[0])
+        assert type(self._items[idx]) == dict
+        img_path = self._items[idx]['path']
+        pre_img_path = self._items[idx-1]['path']
+        next_img_path = self._items[idx+1]['path']
+        img_id = self._items[idx]['img_id'] # get image id
+        ann_id = self._items[idx]['ann_id'] # get annotation id
 
         # load current, previous and next image
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
@@ -143,24 +144,22 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
         bbox_next = copy.deepcopy(self._labels[idx + 1]['bbox'])
 
         # transform img and gt annotation into input_img and training label
-        img, label, _, bbox = self.transformation(img, label) # no augmentation
+        img, label, label_mask, bbox = self.transformation(img, label) # no augmentation
         img_pre = self.tranformation.test_transform(img_pre, bbox_pre)
         img_next = self.tranformation.test_transform(img_next, bbox_next)
 
-        return img, label, img_id, bbox, img_pre, img_next
+        return img, label, label_mask, img_id, ann_id, bbox, img_pre, img_next
 
     def _get_single_img(self, idx):
-        if type(self._items[idx]) == dict:
-            img_path = self._items[idx]['path']
-            img_id = self._items[idx]['id'] # get image id
-        else:
-            img_path = self._items[idx]
-            img_id = int(os.path.splitext(os.path.basename(img_path))[0])
+        assert type(self._items[idx]) == dict
+        img_path = self._items[idx]['path']
+        img_id = self._items[idx]['img_id']
+        ann_id = self._items[idx]['ann_id'] # get annotation id
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
 
         # load ground truth
         label = copy.deepcopy(self._labels[idx])
 
         # transform img and gt annotation into input_img and training label
-        img, label, _, bbox = self.transformation(img, label) # no augmentation
-        return img, label, img_id, bbox
+        img, label, label_mask, bbox = self.transformation(img, label) # no augmentation
+        return img, label, label_mask, img_id, ann_id, bbox

@@ -3,7 +3,7 @@ DATASET:
     TYPE: 'Posetrack21'
     ROOT: './data/PoseTrack21/'
     IMG_PREFIX: 'images/train'
-    ANN: 'activelearning/train'
+    ANN: 'activelearning/train/000000_integrated_train.json'
     AUG:
       FLIP: true
       ROT_FACTOR: 40
@@ -14,7 +14,7 @@ DATASET:
     TYPE: 'Posetrack21'
     ROOT: './data/PoseTrack21'
     IMG_PREFIX: 'images/train'
-    ANN: 'activelearning/train_val'
+    ANN: 'activelearning/train_val/000000_integrated_train_val.json'
 
 DATA_PRESET:
   TYPE: 'simple'
@@ -28,7 +28,7 @@ DATA_PRESET:
   - 48
 
 MODEL:
-  TYPE: 'FastPose'
+  TYPE: 'SimplePose'
   PRETRAINED: ''
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
@@ -45,11 +45,11 @@ DETECTOR:
   CONFIG: 'detector/yolo/cfg/yolov3-spp.cfg'
   WEIGHTS: 'detector/yolo/data/yolov3-spp.weights'
   NMS_THRES: 0.6
-  CONFIDENCE: 0.05
+  CONFIDENCE: 0.1
 
 TRAIN:
   WORLD_SIZE: 4
-  BATCH_SIZE: 80
+  BATCH_SIZE: 90
   BEGIN_EPOCH: 0
   END_EPOCH: 200
   OPTIMIZER: 'adam'
@@ -62,3 +62,6 @@ TRAIN:
   DPG_STEP:
   - 160
   - 190
+
+VAL:
+  BATCH_SIZE: 120

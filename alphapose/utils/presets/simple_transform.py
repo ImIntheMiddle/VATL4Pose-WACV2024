@@ -88,7 +88,7 @@ class SimpleTransform(object):
 
         trans = get_affine_transform(center, scale, 0, [inp_w, inp_h])
         img = cv2.warpAffine(img, trans, (int(inp_w), int(inp_h)), flags=cv2.INTER_LINEAR)
-        bbox = _center_scale_to_box(center, scale)
+        bbox = _center_scale_to_box(center, scale) # [xmin, ymin, xmax, ymax]
 
         img = im_to_torch(img)
         img[0].add_(-0.406)
@@ -180,11 +180,12 @@ class SimpleTransform(object):
         bbox = list(label['bbox'])
         xmin, ymin, xmax, ymax = bbox
         center, scale = _box_to_center_scale(xmin, ymin, xmax - xmin, ymax - ymin, self._aspect_ratio)
-        assert imgwidth == img.shape[1] and imght == img.shape[0]
+
         if self._add_dpg and self._train:
             bbox = addDPG(bbox, imgwidth, imght)
 
         imgwidth, imght = label['width'], label['height']
+        assert imgwidth == img.shape[1] and imght == img.shape[0]
 
         gt_joints = label['joints_3d']
         self.num_joints = gt_joints.shape[0]
@@ -223,7 +224,7 @@ class SimpleTransform(object):
             joints = flip_joints_3d(joints, imgwidth, self._joint_pairs)
             center[0] = imgwidth - center[0] - 1
 
-        inp_h, inp_w = self.input_size
+        inp_h, inp_w = self._input_size
         trans = get_affine_transform(center, scale, r, [inp_w, inp_h])
         img = cv2.warpAffine(img, trans, (int(inp_w), int(inp_h)), flags=cv2.INTER_LINEAR)
 
@@ -238,7 +239,7 @@ class SimpleTransform(object):
         elif 'JointRegression' in self._loss_type:
             target, target_weight = self._integral_target_generator(joints, self.num_joints, inp_h, inp_w)
 
-        bbox = _center_scale_to_box(center, scale)
+        bbox = _center_scale_to_box(center, scale) # get xmin, ymin, xmax, ymax
 
         img = im_to_torch(img)
         img[0].add_(-0.406)

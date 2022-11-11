@@ -36,7 +36,7 @@ class CustomDataset(data.Dataset):
     """
 
     CLASSES = None
-    def __init__(self, train=True, dpg=False, skip_empty=True, lazy_import=False, **cfg):
+    def __init__(self, train=True, dpg=False, skip_empty=True, lazy_import=False, get_prenext=False, **cfg):
         self._cfg = cfg
         self._preset_cfg = cfg['PRESET']
         self._root = cfg['ROOT']
@@ -61,6 +61,7 @@ class CustomDataset(data.Dataset):
         self._skip_empty = skip_empty
         self._train = train
         self._dpg = dpg
+        self.get_prenext = get_prenext
 
         if 'AUG' in cfg.keys():
             self._scale_factor = cfg['AUG']['SCALE_FACTOR']
@@ -92,8 +93,6 @@ class CustomDataset(data.Dataset):
                 rot=self._rot, sigma=self._sigma,
                 train=self._train, add_dpg=self._dpg,
                 loss_type=self._loss_type)
-        else:
-            raise NotImplementedError
 
         self._items, self._labels = self._lazy_load_json()
 
