@@ -43,7 +43,7 @@ parser.add_argument('--detector', dest='detector',
 "----------------------------- Log options -----------------------------"
 parser.add_argument('--board', default=True, dest='board',
                     help='Logging with tensorboard', action='store_true')
-parser.add_argument('--debug', default=True, dest='debug',
+parser.add_argument('--debug', default=False, dest='debug',
                     help='Visualization debug', action='store_true')
 parser.add_argument('--map', default=True, dest='map',
                     help='Evaluate mAP per epoch', action='store_true')
