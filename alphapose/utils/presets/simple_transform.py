@@ -84,7 +84,7 @@ class SimpleTransform(object):
             xmin, ymin, xmax - xmin, ymax - ymin, self._aspect_ratio)
         scale = scale * 1.0
 
-        inp_h, inp_w = self.input_size
+        inp_h, inp_w = self._input_size
 
         trans = get_affine_transform(center, scale, 0, [inp_w, inp_h])
         img = cv2.warpAffine(img, trans, (int(inp_w), int(inp_h)), flags=cv2.INTER_LINEAR)
@@ -95,7 +95,7 @@ class SimpleTransform(object):
         img[1].add_(-0.457)
         img[2].add_(-0.480)
 
-        return img, bbox
+        return img, torch.tensor(bbox)
 
     def align_transform(self, image, boxes):
         """
@@ -176,7 +176,7 @@ class SimpleTransform(object):
         target_weight = target_weight.reshape((-1))
         return target, target_weight
 
-    def __call__(self, img, label):
+    def __call__(self, img, label): # 普通にtransformされた場合はこれになる
         bbox = list(label['bbox'])
         xmin, ymin, xmax, ymax = bbox
         center, scale = _box_to_center_scale(xmin, ymin, xmax - xmin, ymax - ymin, self._aspect_ratio)

@@ -117,8 +117,7 @@ def to_numpy(tensor):
     if torch.is_tensor(tensor):
         return tensor.cpu().numpy()
     elif type(tensor).__module__ != 'numpy':
-        raise ValueError("Cannot convert {} to numpy array"
-                         .format(type(tensor)))
+        raise ValueError("Cannot convert {} to numpy array".format(type(tensor)))
     return tensor
 
 
@@ -127,8 +126,7 @@ def to_torch(ndarray):
     if type(ndarray).__module__ == 'numpy':
         return torch.from_numpy(ndarray)
     elif not torch.is_tensor(ndarray):
-        raise ValueError("Cannot convert {} to torch tensor"
-                         .format(type(ndarray)))
+        raise ValueError("Cannot convert {} to torch tensor".format(type(ndarray)))
     return ndarray
 
 
@@ -175,8 +173,7 @@ def cv_cropBox(img, bbox, input_size):
     dst[2:, :] = get_3rd_point(dst[0, :], dst[1, :])
 
     trans = cv2.getAffineTransform(np.float32(src), np.float32(dst))
-    dst_img = cv2.warpAffine(torch_to_im(img), trans,
-                             (resW, resH), flags=cv2.INTER_LINEAR)
+    dst_img = cv2.warpAffine(torch_to_im(img), trans,(resW, resH), flags=cv2.INTER_LINEAR)
     if dst_img.ndim == 2:
         dst_img = dst_img[:, :, np.newaxis]
 
@@ -226,8 +223,7 @@ def cv_cropBox_rot(img, bbox, input_size, rot):
     dst[2:, :] = get_3rd_point(dst[0, :], dst[1, :])
 
     trans = cv2.getAffineTransform(np.float32(src), np.float32(dst))
-    dst_img = cv2.warpAffine(torch_to_im(img), trans,
-                             (resW, resH), flags=cv2.INTER_LINEAR)
+    dst_img = cv2.warpAffine(torch_to_im(img), trans,(resW, resH), flags=cv2.INTER_LINEAR)
     if dst_img.ndim == 2:
         dst_img = dst_img[:, :, np.newaxis]
 
@@ -368,8 +364,7 @@ def cv_cropBoxInverse(inp, bbox, img_size, output_size):
     dst[2:, :] = get_3rd_point(dst[0, :], dst[1, :])
 
     trans = cv2.getAffineTransform(np.float32(src), np.float32(dst))
-    dst_img = cv2.warpAffine(torch_to_im(inp), trans,
-                             (imgW, imgH), flags=cv2.INTER_LINEAR)
+    dst_img = cv2.warpAffine(torch_to_im(inp), trans,(imgW, imgH), flags=cv2.INTER_LINEAR)
     if dst_img.ndim == 3 and dst_img.shape[2] == 1:
         dst_img = dst_img[:, :, 0]
         return dst_img
@@ -706,13 +701,11 @@ def norm_heatmap(norm_type, heatmap):
     else:
         raise NotImplementedError
 
-
 def transform_preds(coords, center, scale, output_size):
     target_coords = np.zeros(coords.shape)
     trans = get_affine_transform(center, scale, 0, output_size, inv=1)
     target_coords[0:2] = affine_transform(coords[0:2], trans)
     return target_coords
-
 
 def get_max_pred(heatmaps):
     num_joints = heatmaps.shape[0] # キーポイント数分のヒートマップがあります
@@ -726,14 +719,10 @@ def get_max_pred(heatmaps):
 
     # 以下、インデックスを画像上の座標の形に直していく作業
     preds = np.tile(idx, (1, 2)).astype(np.float32)
-
     preds[:, 0] = (preds[:, 0]) % width # 
     preds[:, 1] = np.floor((preds[:, 1]) / width)
-
     pred_mask = np.tile(np.greater(maxvals, 0.0), (1, 2)) 
     pred_mask = pred_mask.astype(np.float32)
-
-
     preds *= pred_mask
     return preds, maxvals
 

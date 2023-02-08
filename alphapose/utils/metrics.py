@@ -138,7 +138,7 @@ def calc_accuracy(preds, labels):
     sum_acc = 0
     cnt = 0
     for i in range(num_joints):
-        acc = dist_acc(dists[i])
+        acc = dist_acc(dists[i], thr=0.3)
         if acc >= 0:
             sum_acc += acc
             cnt += 1
@@ -226,21 +226,20 @@ def calc_dist(preds, target, normalize):
     target = target.astype(np.float32)
     dists = np.zeros((preds.shape[1], preds.shape[0]))
 
-    for n in range(preds.shape[0]):
-        for c in range(preds.shape[1]):
-            if target[n, c, 0] > 1 and target[n, c, 1] > 1:
-                normed_preds = preds[n, c, :] / normalize[n]
-                normed_targets = target[n, c, :] / normalize[n]
-                dists[c, n] = np.linalg.norm(normed_preds - normed_targets)
+    for n in range(preds.shape[0]): # each image
+        for c in range(preds.shape[1]): # each joint
+            if target[n, c, 0] > 1 and target[n, c, 1] > 1: # if the joint is visible
+                normed_preds = preds[n, c, :] / normalize[n] # normalize the distance
+                normed_targets = target[n, c, :] / normalize[n] # normalize the distance
+                dists[c, n] = np.linalg.norm(normed_preds - normed_targets) # calculate the distance(L2 norm)
             else:
-                dists[c, n] = -1
-
+                dists[c, n] = 0 # if the joint is not visible, set the distance to -1
     return dists
 
 
 def dist_acc(dists, thr=0.5):
     """Calculate accuracy with given input distance."""
-    dist_cal = np.not_equal(dists, -1)
+    dist_cal = np.not_equal(dists, 0)
     num_dist_cal = dist_cal.sum()
     if num_dist_cal > 0:
         return np.less(dists[dist_cal], thr).sum() * 1.0 / num_dist_cal

@@ -126,7 +126,7 @@ class DataWriter():
                     self.eval_joints = [*range(0,21)]
                 pose_coords = []
                 pose_scores = []
-                for i in range(hm_data.shape[0]):
+                for i in range(hm_data.shape[0]): # for each 
                     bbox = cropped_boxes[i].tolist()
                     if isinstance(self.heatmap_to_coord, list):
                         pose_coords_body_foot, pose_scores_body_foot = self.heatmap_to_coord[0](

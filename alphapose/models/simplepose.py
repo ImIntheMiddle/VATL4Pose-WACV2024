@@ -5,10 +5,9 @@
 
 import torch
 import torch.nn as nn
-
+import pdb
 from .builder import SPPE
 from .layers.Resnet import ResNet
-
 
 @SPPE.register_module
 class SimplePose(nn.Module):
@@ -23,17 +22,17 @@ class SimplePose(nn.Module):
         # Imagenet pretrain model
         import torchvision.models as tm   # noqa: F401,F403
         assert cfg['NUM_LAYERS'] in [18, 34, 50, 101, 152]
-        x = eval(f"tm.resnet{cfg['NUM_LAYERS']}(pretrained=True)")
+        x = eval(f"tm.resnet{cfg['NUM_LAYERS']}(weights='IMAGENET1K_V2')")
 
         model_state = self.preact.state_dict()
         state = {k: v for k, v in x.state_dict().items()
                  if k in self.preact.state_dict() and v.size() == self.preact.state_dict()[k].size()}
         model_state.update(state)
         self.preact.load_state_dict(model_state)
-
         self.deconv_layers = self._make_deconv_layer()
         self.final_layer = nn.Conv2d(
             self.deconv_dim[2], self._preset_cfg['NUM_JOINTS'], kernel_size=1, stride=1, padding=0)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
     def _make_deconv_layer(self):
         deconv_layers = []
@@ -81,7 +80,12 @@ class SimplePose(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x): #make prediction
-        out = self.preact(x) # x is fed into ResNet
-        out = self.deconv_layers(out) # deconvolution and get 
+        out = self.preact(x) # x is fed into ResNet, out is feature map
+        out = self.deconv_layers(out) # deconvolution and get heatmap
         out = self.final_layer(out) # through final layer
         return out # heatmap of simplepose
+
+    def get_embedding(self, x): # get feature vector from ResNet
+        out = self.preact(x) # x is fed into ResNet, out is feature map
+        fvec = torch.flatten(self.avgpool(out), 1) # get feature vector
+        return fvec
