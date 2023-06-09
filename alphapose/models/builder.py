@@ -12,7 +12,7 @@ def build(cfg, registry, default_args=None):
         ]
         return nn.Sequential(*modules)
     else:
-        return build_from_cfg(cfg, registry, default_args) # f.g.dataloader
+        return build_from_cfg(cfg, registry, default_args) # f.g.dataset
 
 def build_sppe(cfg, preset_cfg, **kwargs):
     default_args = {

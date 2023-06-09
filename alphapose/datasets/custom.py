@@ -20,6 +20,7 @@ import cv2
 import json
 import numpy as np
 import random
+import torch
 
 class CustomDataset(data.Dataset):
     """Custom dataset.
@@ -38,6 +39,7 @@ class CustomDataset(data.Dataset):
     CLASSES = None
     def __init__(self, train=True, dpg=False, skip_empty=True, lazy_import=False, get_prenext=False, **cfg):
         self._cfg = cfg
+        self._device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self._preset_cfg = cfg['PRESET']
         self._root = cfg['ROOT']
         self._img_prefix = cfg['IMG_PREFIX']

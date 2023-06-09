@@ -29,7 +29,7 @@ DATA_PRESET:
 
 MODEL:
   TYPE: 'FastPose'
-  PRETRAINED: ''
+  PRETRAINED: 'pretrained_models/posetrack21/fastpose_256x192.pth'
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256
@@ -49,9 +49,9 @@ DETECTOR:
 
 TRAIN:
   WORLD_SIZE: 4
-  BATCH_SIZE: 90
+  BATCH_SIZE: 70 # 11000MiBのGPUで90ぐらいが限界
   BEGIN_EPOCH: 0
-  END_EPOCH: 2
+  END_EPOCH: 200
   OPTIMIZER: 'adam'
   LR: 0.001
   LR_FACTOR: 0.1

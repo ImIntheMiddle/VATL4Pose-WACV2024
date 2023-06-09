@@ -223,7 +223,7 @@ def _center_scale_to_box(center, scale):
     xmax = xmin + w
     ymax = ymin + h
     bbox = [xmin, ymin, xmax, ymax]
-    return bbox
+    return bbox # xmin, ymin, xmax, ymax
 
 
 def _clip_aspect_ratio(boxes, aspect_ratio=1.0):

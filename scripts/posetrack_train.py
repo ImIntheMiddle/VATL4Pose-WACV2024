@@ -2,7 +2,8 @@
 import json
 import os
 import sys
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+import requests
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 import numpy as np
 import torch
 import torch.nn as nn
@@ -107,8 +108,7 @@ def validate_gt(m, opt, cfg, heatmap_to_coord):
         else:
             inps = inps.cuda()
 
-        with torch.no_grad():
-            output = m(inps) # input inps into model
+        output = m(inps) # input inps into model
 
         pred = output
         assert pred.dim() == 4
@@ -176,7 +176,7 @@ def main():
     heatmap_to_coord = get_func_heatmap_to_coord(cfg)
 
     opt.trainIters = 0
-
+    best_score = 0
     for i in range(cfg.TRAIN.BEGIN_EPOCH, cfg.TRAIN.END_EPOCH):
         opt.epoch = i
         current_lr = optimizer.state_dict()['param_groups'][0]['lr']
@@ -186,6 +186,7 @@ def main():
         # Training
         loss, miou = train(opt, train_loader, m, criterion, optimizer, writer)
         logger.epochInfo('Train', opt.epoch, loss, miou)
+        line_notify(f'\n【{cfg.MODEL.TYPE}: 学習が進んだぞ!】\nEpoch: {opt.epoch}\nTrain Loss: {loss:.8f}\nTrain mIoU: {miou:.4f}\nです!')
 
         lr_scheduler.step()
 
@@ -196,6 +197,12 @@ def main():
             with torch.no_grad():
                 gt_AP = validate_gt(m.module, opt, cfg, heatmap_to_coord)
                 logger.info(f'\n##### Epoch {opt.epoch} | gt mAP: {gt_AP} #####')
+                line_notify(f'\n【{cfg.MODEL.TYPE}: 途中経過のお知らせ!!】\nEpoch: {opt.epoch}\nVal mAP: {gt_AP}\nです!')
+                if gt_AP > best_score:
+                    best_score = gt_AP
+                    torch.save(m.module.state_dict(), './exp/{}-{}/model_best.pth'.format(opt.exp_id, cfg.FILE_NAME))
+                    line_notify(f'\n【{cfg.MODEL.TYPE}: ベストスコア更新!】\n"./exp/{opt.exp_id}-{cfg.FILE_NAME}/model_best.pth" に保存したよ!',
+                                sticker_package_id=446, sticker_id=1991)
 
         # Time to add DPG
         if i == cfg.TRAIN.DPG_MILESTONE:
@@ -232,6 +239,19 @@ def preset_model(cfg):
         logger.info('=> init weights')
         model._initialize()
     return model
+
+def line_notify(notification_message, image_path=None, sticker_id=None, sticker_package_id=None):
+    line_notify_token = "mLQTMLYZs69Ff9rPl9JCSy5VsfBApfBfxf1zpxdilkz"
+    line_notify_api = 'https://notify-api.line.me/api/notify'
+    print(f'message: {notification_message}')
+    headers = {'Authorization': f'Bearer {line_notify_token}'}
+    data = {'message': f'message: {notification_message}'}
+    if image_path is not None:
+        files = {"imageFile": open(image_path, "rb")}
+    if (sticker_id is not None) and (sticker_package_id is not None):
+        data['stickerId'] = sticker_id
+        data['stickerPackageId'] = sticker_package_id
+    requests.post(line_notify_api, headers = headers, data = data)
 
 if __name__ == "__main__":
     main()

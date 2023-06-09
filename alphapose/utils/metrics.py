@@ -100,8 +100,7 @@ def evaluate_mAP(res_file, ann_type='bbox', ann_file='./data/coco/annotations/pe
     cocoEval.summarize()
 
     if isinstance(cocoEval.stats[0], dict):
-        stats_names = ['AP', 'Ap .5', 'AP .75', 'AP (M)', 'AP (L)',
-                       'AR', 'AR .5', 'AR .75', 'AR (M)', 'AR (L)']
+        stats_names = ['AP', 'AP .5', 'AP .6', 'AP .7', 'AP .75', 'AP .8', 'AP .95', 'AP (M)', 'AP (L)','AR']
         parts = ['body', 'foot', 'face', 'hand', 'fullbody']
 
         info = {}
@@ -109,36 +108,35 @@ def evaluate_mAP(res_file, ann_type='bbox', ann_file='./data/coco/annotations/pe
             info[part] = cocoEval.stats[i][part][0]
         return info
     else:
-        stats_names = ['AP', 'Ap .5', 'AP .75', 'AP (M)', 'AP (L)',
-                       'AR', 'AR .5', 'AR .75', 'AR (M)', 'AR (L)']
+        stats_names = ['AP', 'AP .5', 'AP .6', 'AP .7', 'AP .75', 'AP .8', 'AP .95', 'AP (M)', 'AP (L)','AR']
         info_str = {}
         for ind, name in enumerate(stats_names):
             info_str[name] = cocoEval.stats[ind]
-        return info_str['AP']
+        return info_str
 
 
-def calc_accuracy(preds, labels):
+def calc_accuracy(preds, labels, thr=0.5):
     """Calculate heatmap accuracy."""
-    preds = preds.cpu().data.numpy()
-    labels = labels.cpu().data.numpy()
+    preds = preds.cpu().data.numpy() # preds.shape = (batch_size, 17, 64, 48)
+    labels = labels.cpu().data.numpy() # labels.shape = (batch_size, 17, 64, 48)
 
-    num_joints = preds.shape[1]
+    num_joints = preds.shape[1] # preds.shape[1] = 17
 
     norm = 1.0
     hm_h = preds.shape[2]
     hm_w = preds.shape[3]
 
-    preds, _ = get_max_pred_batch(preds)
+    preds, _ = get_max_pred_batch(preds) # preds.shape = (batch_size, 17, 2) (x, y)
     labels, _ = get_max_pred_batch(labels)
-    norm = np.ones((preds.shape[0], 2)) * np.array([hm_w, hm_h]) / 10
+    norm = np.ones((preds.shape[0], 2)) * np.array([hm_w, hm_h]) / 10 # norm.shape = (batch_size, 2), norm = [6.4, 4.8]
 
-    dists = calc_dist(preds, labels, norm)
+    dists = calc_dist(preds, labels, norm) # calc_dist: calculate normalized distances
 
     acc = 0
     sum_acc = 0
     cnt = 0
     for i in range(num_joints):
-        acc = dist_acc(dists[i])
+        acc = dist_acc(dists[i], thr=thr) # dist_acc: calculate accuracy with given input distance
         if acc >= 0:
             sum_acc += acc
             cnt += 1
@@ -221,28 +219,27 @@ def calc_integral_accuracy(preds, labels, label_masks, output_3d=False, norm_typ
 
 
 def calc_dist(preds, target, normalize):
-    """Calculate normalized distances"""
+    """Calculate normalized distances of coordinates between preds and target."""
     preds = preds.astype(np.float32)
     target = target.astype(np.float32)
     dists = np.zeros((preds.shape[1], preds.shape[0]))
 
-    for n in range(preds.shape[0]):
-        for c in range(preds.shape[1]):
-            if target[n, c, 0] > 1 and target[n, c, 1] > 1:
-                normed_preds = preds[n, c, :] / normalize[n]
-                normed_targets = target[n, c, :] / normalize[n]
-                dists[c, n] = np.linalg.norm(normed_preds - normed_targets)
+    for n in range(preds.shape[0]): # each image
+        for c in range(preds.shape[1]): # each joint
+            if target[n, c, 0] > 1 and target[n, c, 1] > 1: # if the joint is visible
+                normed_preds = preds[n, c, :] / normalize[n] # normalize the distance
+                normed_targets = target[n, c, :] / normalize[n] # normalize the distance
+                dists[c, n] = np.linalg.norm(normed_preds - normed_targets) # calculate the distance(L2 norm). dists[c, n] has 0~1 value
             else:
-                dists[c, n] = -1
-
-    return dists
+                dists[c, n] = 0 # if the joint is not visible, set the distance to -1
+    return dists # dists.shape = (17, batch_size)
 
 
 def dist_acc(dists, thr=0.5):
     """Calculate accuracy with given input distance."""
-    dist_cal = np.not_equal(dists, -1)
-    num_dist_cal = dist_cal.sum()
-    if num_dist_cal > 0:
-        return np.less(dists[dist_cal], thr).sum() * 1.0 / num_dist_cal
-    else:
+    dist_cal = np.not_equal(dists, 0) # not_equal: return True if two arrays are element-wise not equal
+    num_dist_cal = dist_cal.sum() # the number of joints that are visible
+    if num_dist_cal > 0: # if at least one joint is visible: valid
+        return np.less(dists[dist_cal], thr).sum() * 1.0 / num_dist_cal # return the accuracy. np.less: return True if x1 < x2 element-wise
+    else: # if all joints are not visible, return -1 as the accuracy: invalid
         return -1

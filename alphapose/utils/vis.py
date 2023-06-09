@@ -58,7 +58,7 @@ def get_smpl_color(idx):
 def vis_frame_fast(frame, im_res, opt, vis_thres, format='coco'):
     '''
     frame: frame image
-    im_res: im_res of predictions
+    im_res: im_res of predictions. keypoints, scores, bboxes(format: xywh)
     format: coco or mpii
 
     return rendered image
@@ -232,7 +232,7 @@ def vis_frame_fast(frame, im_res, opt, vis_thres, format='coco'):
         if opt.showbox:
             if 'box' in human.keys():
                 bbox = human['box']
-                bbox = [bbox[0], bbox[0]+bbox[2], bbox[1], bbox[1]+bbox[3]]#xmin,xmax,ymin,ymax
+                bbox = [bbox[0], bbox[0]+bbox[2], bbox[1], bbox[1]+bbox[3]] # convert to [xmin, xmax, ymin, ymax]
             else:
                 from trackers.PoseFlow.poseflow_infer import get_box
                 keypoints = []

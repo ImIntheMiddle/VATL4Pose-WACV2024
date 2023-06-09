@@ -32,7 +32,7 @@ class FastPose(nn.Module):
         # Imagenet pretrain model
         import torchvision.models as tm   # noqa: F401,F403
         assert cfg['NUM_LAYERS'] in [18, 34, 50, 101, 152]
-        x = eval(f"tm.resnet{cfg['NUM_LAYERS']}(pretrained=True)")
+        x = eval(f"tm.resnet{cfg['NUM_LAYERS']}(weights='IMAGENET1K_V2')")
 
         model_state = self.preact.state_dict()
         state = {k: v for k, v in x.state_dict().items() if k in self.preact.state_dict() and v.size() == self.preact.state_dict()[k].size()}

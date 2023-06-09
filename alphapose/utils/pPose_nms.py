@@ -242,7 +242,7 @@ def pose_nms(bboxes, bbox_scores, bbox_ids, pose_preds, pose_scores, areaThres=0
 def pose_nms_body(bboxes, bbox_scores, bbox_ids, pose_preds, pose_scores, areaThres=0):
     '''
     Parametric Pose NMS algorithm
-    bboxes:         bbox locations list (n, 4)
+    bboxes:         bbox locations list (n, 4) in [x1, y1, x2, y2] format
     bbox_scores:    bbox scores list (n, 1)
     bbox_ids:       bbox tracking ids list (n, 1)
     pose_preds:     pose locations list (n, kp_num, 2)
@@ -264,7 +264,7 @@ def pose_nms_body(bboxes, bbox_scores, bbox_ids, pose_preds, pose_scores, areaTh
     xmin = bboxes[:, 0]
     ymax = bboxes[:, 3]
     ymin = bboxes[:, 1]
-
+    # width and height obtained from bbox
     widths = xmax - xmin
     heights = ymax - ymin
     ref_dists = alpha * np.maximum(widths, heights)
@@ -304,7 +304,7 @@ def pose_nms_body(bboxes, bbox_scores, bbox_ids, pose_preds, pose_scores, areaTh
     preds_pick = ori_pose_preds[pick]
     scores_pick = ori_pose_scores[pick]
     bbox_scores_pick = ori_bbox_scores[pick]
-    bboxes_pick = ori_bboxes[pick]
+    bboxes_pick = ori_bboxes[pick] # bboxes, which bbox_scores > scoreThreds
     bbox_ids_pick = ori_bbox_ids[pick]
     #final_result = pool.map(filter_result, zip(scores_pick, merge_ids, preds_pick, pick, bbox_scores_pick))
     #final_result = [item for item in final_result if item is not None]
@@ -336,7 +336,7 @@ def pose_nms_body(bboxes, bbox_scores, bbox_ids, pose_preds, pose_scores, areaTh
             continue
 
 
-        res_bboxes.append(bbox)
+        res_bboxes.append(bbox) # bboxes, which bbox_scores > scoreThreds. format [x1, y1, x2, y2]
         res_bbox_scores.append(bbox_score)
         res_bbox_ids.append(ori_bbox_ids[merge_id].tolist())
         res_pose_preds.append(merge_pose)

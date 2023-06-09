@@ -155,7 +155,7 @@ class DetectionLoader():
             if isinstance(dets, np.ndarray):
                 dets = torch.from_numpy(dets)
             dets = dets.cpu()
-            boxes = dets[:, 1:5]
+            boxes = dets[:, 1:5] # x1, y1, x2, y2
             scores = dets[:, 5:6]
             ids = torch.zeros(scores.shape)
 
@@ -180,7 +180,7 @@ class DetectionLoader():
 
             for i, box in enumerate(boxes):
                 inps[i], cropped_box = self.transformation.test_transform(orig_img, box)
-                cropped_boxes[i] = torch.FloatTensor(cropped_box)
+                cropped_boxes[i] = torch.FloatTensor(cropped_box) # x1, y1, x2, y2
 
             self.pose = (inps, orig_img, im_name, boxes, scores, ids, cropped_boxes)
 
@@ -213,7 +213,7 @@ class DataWriter():
         self.use_heatmap_loss = (self.cfg.DATA_PRESET.get('LOSS_TYPE', 'MSELoss') == 'MSELoss')
 
     def start(self):
-        # start to read pose estimation results
+        # start to read pose estimation results.
         return self.update()
 
     def update(self):
@@ -242,7 +242,7 @@ class DataWriter():
             pose_scores = []
 
             for i in range(hm_data.shape[0]):
-                bbox = cropped_boxes[i].tolist()
+                bbox = cropped_boxes[i].tolist() # [x1, y1, x2, y2], cropped from original image
                 if isinstance(self.heatmap_to_coord, list):
                     pose_coords_body_foot, pose_scores_body_foot = self.heatmap_to_coord[0](
                         hm_data[i][self.eval_joints[:-110]], bbox, hm_shape=hm_size, norm_type=norm_type)
@@ -251,14 +251,14 @@ class DataWriter():
                     pose_coord = np.concatenate((pose_coords_body_foot, pose_coords_face_hand), axis=0)
                     pose_score = np.concatenate((pose_scores_body_foot, pose_scores_face_hand), axis=0)
                 else:
-                    pose_coord, pose_score = self.heatmap_to_coord(hm_data[i][self.eval_joints], bbox, hm_shape=hm_size, norm_type=norm_type)
+                    pose_coord, pose_score = self.heatmap_to_coord(hm_data[i][self.eval_joints], bbox, hm_shape=hm_size, norm_type=norm_type) # (kp, 2) | (kp, 1) get 2D pose coordinates
                 pose_coords.append(torch.from_numpy(pose_coord).unsqueeze(0))
                 pose_scores.append(torch.from_numpy(pose_score).unsqueeze(0))
             preds_img = torch.cat(pose_coords)
             preds_scores = torch.cat(pose_scores)
 
             boxes, scores, ids, preds_img, preds_scores, pick_ids = \
-                pose_nms(boxes, scores, ids, preds_img, preds_scores, self.opt.min_box_area, use_heatmap_loss=self.use_heatmap_loss)
+                pose_nms(boxes, scores, ids, preds_img, preds_scores, self.opt.min_box_area, use_heatmap_loss=self.use_heatmap_loss) # (n, 4) | (n) | (n) | (n, kp, 2) | (n, kp, 1). nms for pose results
 
             _result = []
             for k in range(len(scores)):
@@ -268,8 +268,8 @@ class DataWriter():
                         'kp_score':preds_scores[k],
                         'proposal_score': torch.mean(preds_scores[k]) + scores[k] + 1.25 * max(preds_scores[k]),
                         'idx':ids[k],
-                        'bbox':[boxes[k][0], boxes[k][1], boxes[k][2]-boxes[k][0],boxes[k][3]-boxes[k][1]] 
-                    }
+                        'bbox':[boxes[k][0], boxes[k][1], boxes[k][2]-boxes[k][0],boxes[k][3]-boxes[k][1]]
+                    } # *bbox format: [x1, y1, w, h]*
                 )
 
             result = {
@@ -307,7 +307,7 @@ class SingleImageAlphaPose():
         
         self.det_loader = DetectionLoader(get_detector(self.args), self.cfg, self.args)
 
-    def process(self, im_name, image):
+    def process(self, im_name, image): # get pose estimation results for a single image
         # Init data writer
         self.writer = DataWriter(self.cfg, self.args)
 
@@ -343,7 +343,7 @@ class SingleImageAlphaPose():
                     inps = inps.to(self.args.device)
                     if self.args.flip:
                         inps = torch.cat((inps, flip(inps)))
-                    hm = self.pose_model(inps)
+                    hm = self.pose_model(inps) # forward pass. hm is the heatmap
                     if self.args.flip:
                         hm_flip = flip_heatmap(hm[int(len(hm) / 2):], self.pose_dataset.joint_pairs, shift=True)
                         hm = (hm[0:int(len(hm) / 2)] + hm_flip) / 2
@@ -352,7 +352,7 @@ class SingleImageAlphaPose():
                         runtime_profile['pt'].append(pose_time)
                     hm = hm.cpu()
                     self.writer.save(boxes, scores, ids, hm, cropped_boxes, orig_img, im_name)
-                    pose = self.writer.start()
+                    pose = self.writer.start() # get the pose estimation results. (imgname, result(keypoints, kp_score, proposal_score, idx, bbox)
                     if self.args.profile:
                         ckpt_time, post_time = getTime(ckpt_time)
                         runtime_profile['pn'].append(post_time)
@@ -378,7 +378,7 @@ class SingleImageAlphaPose():
     def vis(self, image, pose):
         if pose is not None:
             image = self.writer.vis_frame(image, pose, self.writer.opt, self.writer.vis_thres)
-        return image
+        return image # image with pose estimation results
 
     def writeJson(self, final_result, outputpath, form='coco', for_eval=False):
         from alphapose.utils.pPose_nms import write_json
@@ -395,9 +395,9 @@ def example():
     image = cv2.cvtColor(cv2.imread(im_name), cv2.COLOR_BGR2RGB)
     pose = demo.process(im_name, image)
     img = demo.getImg()     # or you can just use: img = cv2.imread(image)
-    img = demo.vis(img, pose)   # visulize the pose result
+    img = demo.vis(img, pose)   # visulize the pose result using original image and pose result
     cv2.imwrite(os.path.join(outputpath, 'vis', os.path.basename(im_name)), img)
-    
+
     # if you want to vis the img:
     # cv2.imshow("AlphaPose Demo", img)
     # cv2.waitKey(30)
