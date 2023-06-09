@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from .hybrid_feature import compute_hybrid
+from active_learning.Whole_body_AE.hybrid_feature import compute_hybrid
 
 class WholeBodyAE(nn.Module):
     def __init__(self, z_dim=2, kp_direct=False):
@@ -68,7 +68,7 @@ if __name__=="__main__":
                            250,150,1,300,250,1,300,260,1,300,350,1,300,170,0,0,0,0,0,0,0] # size: 17*3 = 51
 
     input = compute_hybrid(bbox_1, valid_keypoints_1)
-    output = model_hybrid(input)
+    output = model_hybrid(torch.Tensor(input))
     WPU = criterion(output, input)
     print("\nWPU_valid: ", WPU.item())
 

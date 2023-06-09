@@ -1,16 +1,18 @@
 #!/bin/bash
 set -x
+export CUDA_VISIBLE_DEVICES=$1 # set GPU device
 
-# set GPU device
-export CUDA_VISIBLE_DEVICES="$1"
 CONFIG="configs/al_simple.yaml" # config file
-UNCERTAINY="None" # Option: None HP TPC THC_L1 THC_L2 WPU_hybrid WPU_raw
-REPRESENTATIVENESS="Random" # Option: None Random Influence
-FILTER="None" # Option: None Random Diversity K-Means
-MEMO="Scratch" # memo for the experiment
-VIDEO_ID_LIST="configs/val_video_list_$2.txt" # list of video ids (e.g. 000342, 000522,...)
+UNCERTAINY="$2" # Option: None HP TPC THC_L1 THC_L2 WPU MPE Margin Entropy
+REPRESENTATIVENESS="$3" # Option: None Random Influence
+FILTER="$4" # Option: None Random Diversity K-Means weighted Coreset
+MEMO="WACV" # memo for the experiment
+# VIDEO_ID_LIST="configs/PCIT_video_exlist.txt" # list of video ids (e.g. 000342, 000522,...)
+VIDEO_ID_LIST="configs/val_video_list_full.txt" # PCIT video ids (e.g. 004, 007,...)
+VIDEO_LIST=$(cat ${VIDEO_ID_LIST}) # read the video id list
 
-for VIDEO_ID in $(cat ${VIDEO_ID_LIST}); do
+
+for VIDEO_ID in ${VIDEO_LIST}; do # loop over the video id list
     echo "Video ID: ${VIDEO_ID}"
     python scripts/Run_active_learning.py \
         --cfg ${CONFIG} \
@@ -19,11 +21,10 @@ for VIDEO_ID in $(cat ${VIDEO_ID_LIST}); do
         --filter ${FILTER} \
         --video_id ${VIDEO_ID} \
         --memo ${MEMO} \
-        --seedfix \
-        --vis
-        # --onebyone
-        # --verbose
-        # --speedup
-done
+        --seedfix
+        # --PCIT
+        # --optimize
+done # end of for loop
+echo "All the scripts are finished!"
 
 # Path: scripts/run_active_learning.sh

@@ -1,7 +1,7 @@
 DATASET:
   TRAIN:
     TYPE: 'Posetrack21'
-    ROOT: 'data/PoseTrack21/' # Root directory of unlabeld videos
+    ROOT: 'data/PoseTrack21/' # Root directory of unlabeld videos misc: 'data/PoseTrack21/'
     IMG_PREFIX: ''
     ANN: ''
     AUG:
@@ -29,43 +29,14 @@ DATA_PRESET:
 
 MODEL:
   TYPE: 'SimplePose' # 'SimplePose' or 'FastPose' or 'PoseHighResolutionNet'
-  # PRETRAINED: 'pretrained_models/posetrack21/simplebaseline_256x192.pth'
-  PRETRAINED: ''
+  PRETRAINED: 'pretrained_models/posetrack21/simplebaseline_256x192.pth'
+  # PRETRAINED: ''
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256
   - 256
   - 256
   NUM_LAYERS: 50
-
-# MODEL:
-#   TYPE: 'PoseHighResolutionNet'
-#   PRETRAINED: 'pretrained_models/posetrack21/hrnet_256x192.pth'
-#   TRY_LOAD: ''
-#   NUM_LAYERS: 50
-#   FINAL_CONV_KERNEL: 1
-#   PRETRAINED_LAYERS: ['*']
-#   STAGE2:
-#     NUM_MODULES: 1
-#     NUM_BRANCHES: 2
-#     NUM_BLOCKS: [4, 4]
-#     NUM_CHANNELS: [32, 64]
-#     BLOCK: 'BASIC'
-#     FUSE_METHOD: 'SUM'
-#   STAGE3:
-#     NUM_MODULES: 4
-#     NUM_BRANCHES: 3
-#     NUM_BLOCKS: [4, 4, 4]
-#     NUM_CHANNELS: [32, 64, 128]
-#     BLOCK: 'BASIC'
-#     FUSE_METHOD: 'SUM'
-#   STAGE4:
-#     NUM_MODULES: 3
-#     NUM_BRANCHES: 4
-#     NUM_BLOCKS: [4, 4, 4, 4]
-#     NUM_CHANNELS: [32, 64, 128, 256]
-#     BLOCK: 'BASIC'
-#     FUSE_METHOD: 'SUM'
 
 LOSS:
   TYPE: 'MSELoss'
@@ -83,18 +54,19 @@ AE:
   EPOCH: 25
 
 RETRAIN:
-  WORLD_SIZE: 4
-  BATCH_SIZE: 50 # default: 50
-  EPOCH: 15 # default: 15
+  BATCH_SIZE: 24 # default: 24
+  EPOCH: 10 # default: 10
   ACCURACY_THRES: 1
-  OPTIMIZER: 'Adam' #SGD or Adam
-  LR: 0.0005 #0.001 or 0.0001
-  LR_FACTOR: 0.1
-  LR_STEP:
-  - 90
-  - 120
+  OPTIMIZER: 'AdamW' #SGD or Adam or AdamW
+  LR: 0.00025 # 0.0002
+  ALPHA: 0.5
 
 VAL:
-  BATCH_SIZE: 80 # default: 70
-  QUERY_RATIO: 0.05 # defaunlt: 0.05
+  FINISH_ACC: 0.99
+  BATCH_SIZE: 256 # default: 256
+  W_UNC: 200
+  UNC_LAMBDA: 0 # unc weight for coreset sampling
+  QUERY_RATIO: [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0] # list of query ratio for evaluation
+  # QUERY_RATIO: [0.02, 0.04, 0.06, 0.08, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1.0] # for PCIT
+  # QUERY_RATIO: [0.05, 0.4, 0.7, 1.0] # for debug
   VIS: True

@@ -31,7 +31,7 @@ parser.add_argument('--dist-url', default='tcp://192.168.1.214:23345', type=str,
                     help='url used to set up distributed training')
 parser.add_argument('--dist-backend', default='nccl', type=str,
                     help='distributed backend')
-parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none',
+parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='pytorch',
                     help='job launcher')
 
 "----------------------------- Training options -----------------------------"
@@ -59,6 +59,7 @@ opt.world_size = cfg.TRAIN.WORLD_SIZE
 opt.work_dir = './exp/{}-{}/'.format(opt.exp_id, cfg_file_name)
 opt.gpus = [i for i in range(torch.cuda.device_count())]
 opt.device = torch.device("cuda:" + str(opt.gpus[0]) if opt.gpus[0] >= 0 else "cpu")
+assert opt.device.type == 'cuda', 'Only support GPU training!'
 opt.nThreads = os.cpu_count()
 
 if not os.path.exists("./exp/{}-{}".format(opt.exp_id, cfg_file_name)):

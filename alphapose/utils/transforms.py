@@ -743,10 +743,10 @@ def get_max_pred_batch(batch_heatmaps):
     preds[:, :, 0] = (preds[:, :, 0]) % width
     preds[:, :, 1] = np.floor((preds[:, :, 1]) / width)
 
-    pred_mask = np.tile(np.greater(maxvals, 0.0), (1, 1, 2))
+    pred_mask = np.tile(np.greater(maxvals, 0.0), (1, 1, 2)) # 0.0より大きい値をTrueとする行列を作成
     pred_mask = pred_mask.astype(np.float32)
 
-    preds *= pred_mask
+    preds *= pred_mask # predsの値が0.0より大きいときはそのまま、0.0以下のときは0になる
     return preds, maxvals
 
 

@@ -15,6 +15,7 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
     Parameters
     ----------
     root: str, default './data/PoseTrack21'
+    for home-local: '/home-local/halo/PoseTrack21'
         Path to the PoseTrack21 dataset.
     """
     CLASSES = ['person']
@@ -63,6 +64,7 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
                 item['ann_id'] = person_label['ann_id']
                 item['id'] = person_label['id']
                 item['track_id'] = person_label['track_id']
+                item['keypoint'] = person_label['keypoint']
                 items.append(item)
                 labels.append(person_label)
 
@@ -105,6 +107,7 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
                 'width': width,
                 'height': height,
                 'joints_3d': joints_3d,
+                'keypoint': obj['keypoints'],
                 'id': id,
                 'ann_id': ann_id,
                 'track_id': obj['track_id']
@@ -117,6 +120,7 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
                     'width': width,
                     'height': height,
                     'joints_3d': np.zeros((self.num_joints, 2, 2), dtype=np.float32),
+                    'keypoint': np.zeros((self.num_joints * 3), dtype=np.float32),
                     'id': -1,
                     'ann_id': -1,
                     'track_id': -1
@@ -129,13 +133,15 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
         img_id = self._items[idx]['img_id'] # get image id
         track_id = self._items[idx]['track_id'] # get annotation id, unique for each body
         ann_id = self._items[idx]['ann_id'] # get annotation id, unique for each body
+        GTkpt = self._items[idx]['keypoint'] # get ground truth of current frame
+
         # load current, previous and next image
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
         # load ground truth of current frame, bbox of previous and next frame
         label = copy.deepcopy(self._labels[idx])
+        bbox_ann = torch.Tensor(copy.deepcopy(self._labels[idx]['bbox']))
         # transform img and gt annotation into input_img and training label
-        # torch.from_numpy(img).to(self._device)
-        img, label, label_mask, bbox = self.transformation(img, label) # no augmentation
+        img, label, label_mask, bbox_crop = self.transformation(img, label) # no augmentation
 
         # load previous and next image, then transform them
         if idx == 0: # if first frame
@@ -170,18 +176,41 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
                 img_next, _ = self.transformation.test_transform(img_next, bbox_next)
                 isNext = True
         stacked_inp = torch.stack([img, img_pre, img_next], dim=0)
-        return idx, stacked_inp, label, label_mask, img_id, ann_id, bbox, isPrev, isNext # for temporal model
+        GTkpt = torch.tensor(GTkpt)
+        return idx, stacked_inp, label, label_mask, GTkpt, img_id, ann_id, bbox_crop, bbox_ann, isPrev, isNext # for temporal model
 
     def _get_single_img(self, idx):
         assert type(self._items[idx]) == dict
         img_path = self._items[idx]['path']
         img_id = self._items[idx]['img_id']
         ann_id = self._items[idx]['ann_id']
+        GTkpt = self._items[idx]['keypoint']
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
         label = copy.deepcopy(self._labels[idx]) # load ground truth
+        bbox_ann = torch.Tensor(copy.deepcopy(self._labels[idx]['bbox']))
 
         # transform img and gt annotation into input_img and training label
         # torch.from_numpy(img).to(self._device) # move to device
-        input, label, label_mask, bbox = self.transformation(img, label) # no augmentation. bbox format: (xmin, ymin, xmax, ymax)
+        input, label, label_mask, bbox_crop = self.transformation(img, label) # no augmentation. bbox format: (xmin, ymin, xmax, ymax)
         stacked_inp = torch.stack([input, torch.zeros_like(input), torch.zeros_like(input)], dim=0) # only use current image
-        return idx, stacked_inp, label, label_mask, img_id, ann_id, bbox, False, False # isPrev and isNext are always False
+        GTkpt = torch.tensor(GTkpt)
+        return idx, stacked_inp, label, label_mask, GTkpt, img_id, ann_id, bbox_crop, bbox_ann, False, False # isPrev and isNext are always False
+
+    def my_collate_fn(self, batch):
+        # batch is a list of tuple
+        # each tuple is (idx, stacked_inp, label, label_mask, GTkpt, img_id, ann_id, bbox, isPrev, isNext)
+        # stacked_inp: (3, 3, 256, 256)
+        # label: (1, 17, 2)
+        # label_mask: (1, 17, 1)
+        # GTkpt: (51)
+        # bbox: (4)
+        idx, stacked_inp, label, label_mask, GTkpt, img_id, ann_id, bbox_crop, bbox_ann, isPrev, isNext = zip(*batch)
+        stacked_inp = torch.stack(stacked_inp, dim=0)
+        label = torch.stack(label, dim=0)
+        label_mask = torch.stack(label_mask, dim=0)
+        GTkpt = torch.stack(GTkpt, dim=0)
+        bbox_crop = torch.stack(bbox_crop, dim=0)
+        bbox_ann = torch.stack(bbox_ann, dim=0)
+        isPrev = torch.tensor(isPrev, dtype=torch.bool)
+        isNext = torch.tensor(isNext, dtype=torch.bool)
+        return idx, stacked_inp, label, label_mask, GTkpt, img_id, ann_id, bbox_crop, bbox_ann, isPrev, isNext
