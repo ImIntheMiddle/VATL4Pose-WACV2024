@@ -49,24 +49,28 @@ DETECTOR:
   CONFIDENCE: 0.05
 
 AE:
-  Z_DIM: 3
+  Z_DIM: 2
   PRETRAINED_ROOT: 'pretrained_models/wholebodyAE'
   EPOCH: 25
+  LR: 0.004
 
 RETRAIN:
   BATCH_SIZE: 24 # default: 24
-  EPOCH: 10 # default: 10
-  ACCURACY_THRES: 1
+  BASE: 25 # default: continual: 25
+  RETRAIN_THRES: 1 # default: 0.98
   OPTIMIZER: 'AdamW' #SGD or Adam or AdamW
-  LR: 0.00025 # 0.0002
-  ALPHA: 0.5
+  LR: 0.00025 # continual: 0.00025
+  ALPHA: 250 # continual: 250
+  WEIGHT_DECAY: 0.7 # continual: 0.7
+  LR_GAMMA: 0.99 # continual:0.99
 
 VAL:
-  FINISH_ACC: 0.99
+  FINISH_ACC: 0.75 # default: 0.75
   BATCH_SIZE: 256 # default: 256
   W_UNC: 200
   UNC_LAMBDA: 0 # unc weight for coreset sampling
   QUERY_RATIO: [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0] # list of query ratio for evaluation
+  # QUERY_RATIO: [0.2, 0.4, 0.7, 1.0] # list of query ratio for evaluation
   # QUERY_RATIO: [0.02, 0.04, 0.06, 0.08, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1.0] # for PCIT
-  # QUERY_RATIO: [0.05, 0.4, 0.7, 1.0] # for debug
+  # QUERY_RATIO: [0.05, 0.1, 0.2, 0.4, 0.6, 1.0] # for debug
   VIS: True

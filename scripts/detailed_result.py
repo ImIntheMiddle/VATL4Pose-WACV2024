@@ -40,11 +40,11 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
     empty_dict = {}
     empty_cnt = {}
     empty_union = []
+    num_valid = 0
     for strategy in strategy_list:
         empty_dict[strategy] = []
         empty_cnt[strategy] = 0
         result_dict[strategy] = {"Percentage": {}, "mean_uncertainty": {}, "combine_weight": {}, "spearmanr": {}}
-        num_valid = 0
         for video_id in video_id_list:
             result_files = glob.glob(f"{result_dir}/{strategy}/{video_id}/*/result.json")
             # print(len(result_files))
@@ -64,7 +64,7 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
               result_dict[strategy]["Percentage"][video_id] = percent1000
               performance_dict = result["performances"]
               performance_dict_ann = result["performances_ann"]
-              for metric in METRIC:
+              for m, metric in enumerate(METRIC):
                 if not str(metric) in result_dict[strategy].keys():
                   result_dict[strategy][str(metric)] = {}
                   result_dict[strategy][str(metric)+"_ann"] = {}
@@ -80,7 +80,7 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
                 performance_ann = np.array(list(round_res[metric] for round_res in performance_dict_ann))*100
                 if -1 in performance or -1 in performance_ann:
                     continue
-                elif performance_ann[-1] != 100 and metric == "AP .5":
+                elif performance_ann[-1] != 100 and m==0:
                     print(f"{strategy} {video_id} is not 100%!")
                     print(performance_ann[-1])
                 else:
@@ -105,9 +105,6 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
         ALC_dict = result_dict[strategy][str("AP .75") + "_ALC_ann"]
         sorted_ALC = sorted(ALC_dict.items(), key=lambda x:x[1])
         print(sorted_ALC[:10])
-
-        # print("encoded")
-
         # calculate the mean performance of each strategy
         result_dict[strategy]["mean_Percentage"] = percent1000
         for metric in METRIC:
@@ -120,7 +117,7 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
             result_dict[strategy][str(metric)+"_ALC_mean"] = np.mean(np.array(list(result_dict[strategy][str(metric)+"_ALC"].values())))
             result_dict[strategy][str(metric)+"_ALC_mean_ann"] = np.mean(np.array(list(result_dict[strategy][str(metric)+"_ALC_ann"].values())))
 
-        # result_dict[strategy]["mean_mean_uncertainty"] = np.mean(np.array(list(result_dict[strategy]["mean_uncertainty"].values())), axis=0)
+        result_dict[strategy]["mean_mean_uncertainty"] = np.mean(np.array(list(result_dict[strategy]["mean_uncertainty"].values())), axis=0)
         # result_dict[strategy]["mean_combine_weight"] = np.mean(np.array(list(result_dict[strategy]["combine_weight"].values())), axis=0)
         # print(f"{strategy}: {result_dict[strategy]['mean_ALC']}")
         # print(f"{strategy}: {result_dict[strategy]['mean_Percentage'][::50]}")
@@ -130,7 +127,7 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
     empty_dict["union"] = empty_union
     print(f"In total:\nThere are {sum(empty_cnt.values())}/{len(video_id_list)*len(strategy_list)} empty ids!")
     print(f"There are {len(empty_union)}/{len(video_id_list)} empty ids in union!")
-    print(f"--> There are {int(num_valid/len(METRIC))} valid ids!")
+    print(f"--> There are {int(num_valid/len(METRIC)/len(strategy_list))} valid ids in average!")
     return result_dict, empty_dict
 
 def summarize_result(save_dir, result_dict, metric, ANN=False):
@@ -152,8 +149,6 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   prefix = "_ann" if ANN else ""
   ymin = 100 # initial value
   for i, strategy in enumerate(result_dict.keys()):
-    # initial_performance = result_dict[strategy][prefix][0]
-    # final_performance = result_dict[strategy][prefix][-1]
     c = plt.get_cmap("tab10")(i)
     if "THC" in strategy or "WPU" in strategy:
         line_style = "-"
@@ -196,18 +191,20 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
     ax[0].plot(x, y, label=label, linewidth=linewidth, linestyle=line_style, color=c, marker="o", markersize=5)
 
     # plot the mean uncertainty of each strategy
-    # y = np.array(result_dict[strategy]["mean_mean_uncertainty"]) * 100
-    # c = plt.get_cmap("tab10")(i+1)
-    # ax2.plot(x, y, label=label, linewidth=linewidth, linestyle=line_style, color=c, marker="o", markersize=5)
-    # plt.figure()
-    # plt.plot(x, y, label=label, linewidth=linewidth, marker="o")
-    # plt.xlabel("Labeled Samples (%)")
-    # plt.ylabel("Average Uncertainty (%)")
-    # plt.xticks(np.arange(0, 101, 5))
-    # plt.grid()
-    # plt.legend()
-    # plt.savefig(os.path.join(save_dir, strategy, f"{strategy}_uncertainty.png"))
-    # plt.close()
+    y = np.array(result_dict[strategy]["mean_mean_uncertainty"]) * 100
+    # if uncertainty is always 100, skip it
+    if np.all(y==100):
+        continue
+    c = plt.get_cmap("tab10")(i+1)
+    ax2.plot(x, y, label=label, linewidth=linewidth, linestyle=line_style, color=c, marker="o", markersize=5)
+    plt.figure()
+    plt.plot(x, y, label=label, linewidth=linewidth, marker="o")
+    plt.ylabel("Average Uncertainty (%)")
+    plt.xticks(np.arange(0, 101, 5))
+    plt.grid()   # plt.xlabel("Labeled Samples (%)")
+    plt.legend()
+    plt.savefig(os.path.join(save_dir, strategy, f"{strategy}_uncertainty.png"))
+    plt.close()
 
   # plot the mean performance of each strategy in the same figure
   ax[0].set_ylim(5*int(ymin/5)-3, 100)
@@ -239,8 +236,8 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   ax[1].add_patch(line1)
   ax[1].add_patch(line2)
 
-  fig1.savefig(os.path.join(save_dir, f"{strategy}_{str(metric)+prefix}.png"))
-  fig1.savefig(os.path.join(save_dir, f"{strategy}_{str(metric)+prefix}.pdf"))
+  fig1.savefig(os.path.join(save_dir, f"{str(metric)+prefix}.png"))
+  fig1.savefig(os.path.join(save_dir, f"{str(metric)+prefix}.pdf"))
   plt.close(fig1)
 
   # save ax2
@@ -249,8 +246,8 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   ax2.tick_params(labelsize=12)
   ax2.legend(fontsize=12)
   ax2.grid()
-  fig2.savefig(os.path.join(save_dir, f"{strategy}_uncertainty.png"))
-  fig2.savefig(os.path.join(save_dir, f"{strategy}_uncertainty.pdf"))
+  fig2.savefig(os.path.join(save_dir, f"uncertainty.png"))
+  fig2.savefig(os.path.join(save_dir, f"uncertainty.pdf"))
   plt.close(fig2)
 
   metric_dict = {}
@@ -265,7 +262,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
       metric_dict[strategy][str(metric)+prefix] = converted_performance[QUERY_RATIO].tolist()
       metric_dict[strategy][str(metric)+"_ALC"] = converted_alc
       print(f"{strategy} ALC: {converted_alc}")
-      # metric_dict[strategy]["mean_mean_uncertainty"] = result_dict[strategy]["mean_mean_uncertainty"].tolist()
+      metric_dict[strategy]["mean_mean_uncertainty"] = result_dict[strategy]["mean_mean_uncertainty"].tolist()
       # metric_dict[strategy]["mean_combine_weight"] = result_dict[strategy]["mean_combine_weight"].tolist()
   # save the result in a json file
   if ANN:
@@ -341,10 +338,9 @@ if __name__ == "__main__":
     else:
       video_id_list_path = "configs/PCIT_video_list.txt"
 
-    # strategy_list = {"MVA5": ["Random", "HP", "MPE+Influence", "TPC", "THC+WPU_weightedfilter"]}
-    strategy_list = {"WACV": ["Random", "HP", "MPE", "TPC", "THC", "WPU", "_K-Meansfilter", "_Coresetfilter"]}
+    strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "THC", "_K-Meansfilter", "_Coresetfilter"]}
     # strategy_list = {"MVA5": ["Random", "TPC", "THC+WPU_weightedfilter"]}
     # strategy_list = {"PCIT2": ["Random", "HP", "TPC", "MPE+Influence", "THC_weightedfilter", "WPU_weightedfilter", "THC+WPU_weightedfilter", "_K-Meansfilter"]}
-    # strategy_list = {"PCIT2": ["THC_weightedfilter"]}
+    # strategy_list = {"WACV_opt": ["Random"]}
 
     main(video_id_list_path, strategy_list, RAW=False, ANN=True)

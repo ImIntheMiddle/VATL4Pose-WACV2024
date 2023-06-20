@@ -3,4 +3,4 @@ cd AlphaPose
 pyenv activate Alphapose
 bash scripts/run_active_learning.sh 
 
-CUDA_VISIBLE_DEVICES=0 python scripts/Run_active_learning.py --filter K-Means --memo debug --video_id 005833
+CUDA_VISIBLE_DEVICES=4 python scripts/Run_active_learning.py --uncertainty THC --filter Coreset --memo optimize --video_id 005833 --optimize --speedup --continual

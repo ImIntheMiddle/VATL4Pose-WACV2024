@@ -38,7 +38,6 @@ def compute_alc(percentages, performances):
 OKS_sigmas = np.array([.26, .25, .25, .35, .35, .79, .79, .72, .72, .62,.62, 1.07, 1.07, .87, .87, .89, .89])/10.0
 OKS_vars = (OKS_sigmas * 2)**2
 OKS_k = len(OKS_sigmas)
-OKS_epsilon = 1e-9 # to avoid division by zero
 
 def compute_OKS(bb, predkpts, GTkpts):
     """Calculate OKS between predicted keypoints and GT keypoints.
@@ -46,11 +45,8 @@ def compute_OKS(bb, predkpts, GTkpts):
     """
     # print(f'bbox_ann: {bb}')
     d, g = np.array(predkpts), np.array(GTkpts)
-    if isinstance(d, torch.Tensor):
-        d = d.cpu().data.numpy()
-    if isinstance(g, torch.Tensor):
-        g = g.cpu().data.numpy()
-
+    # if np.allclose(d, g): # predicted keypoints are the same as the GT keypoints
+    #     oks = 1
     xg = g[0::3]; yg = g[1::3]; vg = g[2::3] # check the coordinates and visibility of the keypoints
     k1 = np.count_nonzero(vg > 0) # count the number of keypoints that are visible in the gt
     x0 = bb[0] - bb[2]; x1 = bb[0] + bb[2] * 2 # x0 and x1 are the x coordinates of the left and right boundaries of the ignore region
@@ -84,4 +80,21 @@ def compute_Spearmanr(unc_dict, oks_dict):
 
     # compute Spearmanr correlation coefficient
     corr, pval = spearmanr(unc_list, oks_list)
+    return corr
+
+def compute_corr(unc_dict, oks_dict):
+    """compute correlation coefficient between uncertainty and OKS"""
+    # sort the uncertainty and OKS in ascending order based on key
+    unc_list = []
+    oks_list = []
+    for key in unc_dict.keys(): # unc_dict[key] = uncertainty
+        unc_list.append(unc_dict[key])
+        oks_list.append(oks_dict[key]) # oks_dict[key] = OKS
+    unc_list = np.array(unc_list)
+    oks_list = np.array(oks_list)
+    # print(f'unc_list: {unc_list}')
+    # print(f'oks_list: {oks_list}')
+    # pdb.set_trace()
+    # compute correlation coefficient
+    corr = np.corrcoef(unc_list, oks_list)[0,1]
     return corr

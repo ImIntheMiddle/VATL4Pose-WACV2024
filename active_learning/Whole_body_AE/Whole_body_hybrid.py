@@ -16,7 +16,10 @@ class Wholebody(Dataset):
         self.retrain_video_id = retrain_video_id
         root = Path(f"data/PoseTrack21/activelearning/{self.mode}")
         if retrain_video_id is not None:
-            self.file = os.path.join(root, f"{retrain_video_id}_mpii_test.json")
+            if self.mode == "val":
+                self.file = os.path.join(root, f"{retrain_video_id}_mpii_test.json")
+            elif self.mode == "train_val":
+                self.file = os.path.join(root, f"{retrain_video_id}_bonn_train.json")
         else:
             self.file = os.path.join(root, f"000000_integrated_{self.mode}.json") # json file
         # self.ann = {'bbox':[], 'keypoints':[]} # bbox, keypoints

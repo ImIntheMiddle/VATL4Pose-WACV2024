@@ -70,6 +70,7 @@ def parse_args():
     parser.add_argument('--memo', type=str, default="test",
                         help='memo for this experiment')
     parser.add_argument("--onebyone", action="store_true", help="one by one annotation")
+    parser.add_argument("--continual", action="store_true", help="continual fine-tuning")
     parser.add_argument("--optimize", action="store_true", help="optimize hyperparameters by optuna")
     parser.add_argument("--PCIT", action="store_true", help="use PCIT dataset")
     parser.add_argument("--vis_thc", action="store_true", help="visualize THC")
@@ -150,7 +151,10 @@ def set_dir(cfg, opt):
 
     # Set up experiment directory
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S') # get current date and time
-    opt.work_dir = 'exp/AL_{}/{}/{}/{}/{}'.format(opt.memo, cfg.MODEL.TYPE, opt.strategy, opt.video_id, timestamp)
+    if opt.optimize: # optimize hyperparameters
+        opt.work_dir = 'exp/AL_{}/{}/{}/{}/{}'.format(opt.memo, cfg.MODEL.TYPE, opt.strategy, "optimize", timestamp)
+    else:
+        opt.work_dir = 'exp/AL_{}/{}/{}/{}/{}'.format(opt.memo, cfg.MODEL.TYPE, opt.strategy, opt.video_id, timestamp)
     os.makedirs(opt.work_dir, exist_ok=False) # create unique experiment directory
     os.system('cp {} {}/'.format(opt.cfg, opt.work_dir)) # copy config file to experiment directory
     print(f'Result will be saved to: {opt.work_dir}!\n')
@@ -168,17 +172,32 @@ def do_al(cfg, opt):
 
 def hyper_objective(cfg, opt):
     def objective(trial):
-        cfg.VAL.W_UNC = trial.suggest_float('w_unc', 0.0, 100.0)
-        print('w_unc: {}'.format(cfg.VAL.W_UNC))
+        # randamize the video_id
+        opt.video_id = random.choice(opt.video_id_list)
+        # cfg.RETRAIN.BASE = trial.suggest_int('base', 20, 60)
+        # cfg.RETRAIN.ALPHA = trial.suggest_int('alpha', 200, 500)
+        # cfg.RETRAIN.LR_GAMMA = trial.suggest_float('lr_gamma', 0.95, 0.99)
+        # cfg.RETRAIN.WEOGHT_DECAY = trial.suggest_float('weight_decay', 0.1, 1)
+        # cfg.RETRAIN.LR = trial.suggest_float('lr', 0.00002, 0.0005)
+        cfg.VAL.UNC_LAMBDA = trial.suggest_float('unc_lambda', 0, 5000)
+        # AE setting
+        # cfg.AE.EPOCH = trial.suggest_int('epoch', 1, 50)
+        # cfg.AE.Z_DIM = trial.suggest_int('z_dim', 2, 5)
+        # cfg.AE.LR = trial.suggest_float('lr', 0.00002, 0.004)
+        print('video_id: {}'.format(opt.video_id))
         result = do_al(cfg, opt)
-        plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[1])
-        return compute_alc(result[0], result[1]) # area under learning curve with annotation
+        # plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[1])
+        # ap95 = np.array(list(round_res["AP .95"] for round_res in result[2])[-5:-1])*100
+        # alc = compute_alc(result[0][-5:-1], ap95) # area under learning curve with annotation
+        ap95 = np.array(list(round_res["AP .95"] for round_res in result[2]))*100
+        alc = compute_alc(result[0], ap95) # area under learning curve with annotation
+        # corr_mean = np.array(result[9]).mean()
+        return alc
     return objective
 
 def optimize_alc(cfg, opt):
-    search_space = {"w_unc": [0.0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0 ,5.0, 10.0, 50.0, 100.0, 500.0, 1000.0]}
-    study = optuna.create_study(direction='maximize', sampler=optuna.samplers.GridSampler(search_space))
-    study.optimize(hyper_objective(cfg,opt), n_trials=14)
+    study = optuna.create_study(direction='minimize')
+    study.optimize(hyper_objective(cfg,opt), n_trials=60)
     print("Best ALC: {}".format(study.best_value), "Best params: {}".format(study.best_params))
     fig = optuna.visualization.plot_optimization_history(study)
     fig.write_image(os.path.join(opt.work_dir, 'optuna_history.png'))
@@ -202,6 +221,12 @@ def save_result(cfg, opt, result):
     result_json['combine_weight'] = result[7] # combine weight
     result_json['mean_uncertaity'] = result[5] # mean uncertainty
     result_json['spearmanr'] = result[8] # spearmanr_list
+    result_json['corrcoef'] = result[9] # corrcoef_list
+    result_json['finished_time'] = result[10] # finished time
+    result_json['true_labeled'] = result[11] # true_labeled
+    result_json['true_unlabeled'] = result[12] # true_unlabeled
+    result_json['false_labeled'] = result[13] # false_labeled
+    result_json['false_unlabeled'] = result[14] # false_unlabeled
     # result_json['learning_curve_path'] = plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[1]) # plot learning curve
     # result_json['learning_curve_path_ann'] = plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[2], ann=True) # plot learning curve with annotation
 
@@ -210,7 +235,9 @@ def save_result(cfg, opt, result):
     print('Result saved to: {}!'.format(os.path.join(opt.work_dir, 'result.json')))
 
 def main(cfg, opt):
+    opt = set_dir(cfg, opt)
     if opt.optimize: # optimize hyperparameters
+        opt.video_id_list = open("configs/trainval_video_list.txt").read().splitlines() # get video id list
         optimize_alc(cfg, opt)
     else: # standard setting
         result = do_al(cfg, opt)
@@ -229,5 +256,4 @@ if __name__ == '__main__':
     opt = parse_args() # get exp settings
     opt = setup_opt(opt) # setup option
     cfg = update_config(opt.cfg) # update config
-    opt = set_dir(cfg, opt)
     main(cfg, opt) # run active learning
