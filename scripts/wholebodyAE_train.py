@@ -5,7 +5,7 @@ Using the whole body autoencoder, we compute the whole body hand-crrafted featur
 import argparse
 import os
 # CUDA setting
-# os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
 import pdb # import python debugger
 import sys
 import time
@@ -23,9 +23,9 @@ from tqdm import tqdm
 from cachetools import cached
 
 # import original libraries
-from AutoEncoder import WholeBodyAE
-from Whole_body_hybrid import Wholebody
-from hybrid_feature import compute_hybrid
+from active_learning.Whole_body_AE import WholeBodyAE
+from active_learning.Whole_body_AE import Wholebody
+from active_learning.Whole_body_AE.hybrid_feature import compute_hybrid
 
 def parse_args():
     """
@@ -33,8 +33,8 @@ def parse_args():
     return: args parsed by parser
     """
     parser = argparse.ArgumentParser(description='Active Learning Script')
-    parser.add_argument('--z', type=int, default="2", help='dimension of latent space')
-    parser.add_argument('--epoch', type=int, default="300", help='number of epochs')
+    parser.add_argument('--z', type=int, default="5", help='dimension of latent space')
+    parser.add_argument('--epoch', type=int, default="80", help='number of epochs')
     parser.add_argument('--pretrained', action='store_true', help='whether to use pretrained model')
     parser.add_argument('--kp_direct', action='store_true', help='whether to use keypoints as input of AE directly')
     args = parser.parse_args()
@@ -44,7 +44,7 @@ def plot(log_train, log_valid, save_root):
     # plot train and valid loss
     plt.figure()
     x_train = np.arange(0, len(log_train))
-    x_valid = np.arange(0, len(log_valid)) * 2
+    x_valid = np.arange(0, len(log_valid))
     plt.plot(x_train, log_train, label="Train_loss")
     plt.plot(x_valid, log_valid, label="Valid_loss")
     plt.xlabel("Epoch")
@@ -54,6 +54,37 @@ def plot(log_train, log_valid, save_root):
     plt.savefig(f'{save_root}/plot.png')
     plt.close()
     print("plot saved!")
+
+class early_stopping():
+    def __init__(self, patience=5):
+        """
+        Args:
+            patience (int): How long to wait after last time validation loss improved.
+                            Default: 5
+        """
+        self.patience = patience
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, valid_loss):
+        """
+        Args:
+            valid_loss (float): validation loss
+        Return:
+            early_stop (bool): whether to stop training or not
+        """
+        if self.best_loss is None:
+            self.best_loss = valid_loss
+        elif self.best_loss - valid_loss > 0:
+            self.best_loss = valid_loss
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        return self.early_stop
+
 
 if __name__ == '__main__':
     # setting
@@ -81,13 +112,14 @@ if __name__ == '__main__':
         # load pretrained model
         model.load_state_dict(torch.load(pretrained_path))
     print("model: ", model)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     criterion = nn.MSELoss() # MSE loss
+    early_stopping = early_stopping(patience=30)
 
     # define dataset and dataloader
     print("Loading dataset...")
     train_dataset = Wholebody(mode="train", kp_direct=opt.kp_direct)
-    train_loader = DataLoader(train_dataset, batch_size=80000, shuffle=True, num_workers=os.cpu_count(), pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=10000, shuffle=True, num_workers=os.cpu_count(), pin_memory=True)
     print("train dataset: ", len(train_dataset))
 
     valid_dataset= Wholebody(mode="train_val", kp_direct=opt.kp_direct)
@@ -98,17 +130,17 @@ if __name__ == '__main__':
     best_loss = 0
     for epoch in range(opt.epoch):
         # learning rate decay
-        if epoch == 100:
-          optimizer.param_groups[0]['lr'] = 0.005
-        if epoch == 200:
-          optimizer.param_groups[0]['lr'] = 0.001
+        if epoch == 12:
+          optimizer.param_groups[0]['lr'] = 0.0002
+        if epoch == 40:
+          optimizer.param_groups[0]['lr'] = 0.00005
 
         # training
         model.train()
         train_loss = 0
         for i, feature in tqdm(enumerate(train_loader)):
-            input = feature.to(device) # input: (batch_size, 42) vector
-            output = model(input) # output: (batch_size, 42) vector. output is reconstructed feature
+            input = feature.to(device) # input: (batch_size, 38) vector
+            output = model(input) # output: (batch_size, 38) vector. output is reconstructed feature
             loss = criterion(output, input) # loss: reconstruction error
             train_loss += loss.item()
             optimizer.zero_grad()
@@ -118,7 +150,7 @@ if __name__ == '__main__':
         log["Train_loss"].append(train_loss/len(train_loader))
 
         # validation
-        if epoch % 2 == 0: # validation every 5 epochs
+        if epoch % 1 == 0: # validation every epoch
             valid_loss = 0
             model.eval()
             with torch.no_grad():
@@ -128,6 +160,9 @@ if __name__ == '__main__':
                     loss = criterion(output, input) # loss: reconstruction error
                     valid_loss += loss.item()
             log["Valid_loss"].append(valid_loss/len(valid_loader))
+            if early_stopping(valid_loss):
+                print("Early Stopping!")
+                break
             # save model if valid loss is the best
             if valid_loss < best_loss or epoch == 0:
                 best_loss = valid_loss
@@ -135,7 +170,7 @@ if __name__ == '__main__':
                 print("\nbest model updated!")
                 log['best_epoch'] = epoch
                 log['best_loss'] = best_loss/len(valid_loader)
-            print(f'Epoch: {epoch+1}, val_loss: {valid_loss/len(valid_loader): 0.4f}\n')
+            print(f'Epoch: {epoch+1}, val_loss: {valid_loss/len(valid_loader): 0.4f}')
             if epoch % 100 == 0:
                 plot(log["Train_loss"], log["Valid_loss"], save_root)
     with open(f'{save_root}/log.json', 'w') as f:

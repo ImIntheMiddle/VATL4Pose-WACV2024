@@ -13,35 +13,53 @@ class Wholebody(Dataset):
     def __init__(self, mode: str, kp_direct=False, retrain_video_id=None) -> None:
         super().__init__()
         self.mode = mode # train or train_val
+        self.eval_joints = [0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
         self.retrain_video_id = retrain_video_id
-        root = Path(f"data/PoseTrack21/activelearning/{self.mode}")
+        root = Path(f"data/PoseTrack21/activelearning/")
         if retrain_video_id is not None:
             if self.mode == "val":
-                self.file = os.path.join(root, f"{retrain_video_id}_mpii_test.json")
+                json_name = f"{retrain_video_id}_mpii_test.json"
+                self.file = os.path.join(root, self.mode, json_name)
             elif self.mode == "train_val":
-                self.file = os.path.join(root, f"{retrain_video_id}_bonn_train.json")
+                json_name = f"{retrain_video_id}_bonn_train.json"
+                self.file = os.path.join(root, self.mode, json_name)
         else:
-            self.file = os.path.join(root, f"000000_integrated_{self.mode}.json") # json file
+            json_name = f"000000_integrated_{self.mode}.json"
+            self.file = os.path.join(root, self.mode, json_name)
         # self.ann = {'bbox':[], 'keypoints':[]} # bbox, keypoints
-        self.num = 0 # number of human body in this json file
-        self.items = []
-        with open(self.file, "r") as f:
-            data = json.load(f)
-            item = {}
-            for annotation in data["annotations"]:
-                if sum(annotation['keypoints'][2::3]) == 0: # annotation must include at least one visible keypoint
-                    continue
-                self.num += 1 # count the number of visible human body
-                id = int(annotation['id'])
-                ann_id = int(str(id)[-2:] + str(annotation['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする
-                item["ann_id"] = ann_id # append ann_id
-                if kp_direct: # if True, use keypoints as input of AE directly
-                    item["feature"] = annotation['keypoints'] # append keypoints. size: 17*3 = 51
-                else: # if False, use hand-crafted feature as input of AE. size: 17*2 + 8 = 42
-                    item["feature"] = compute_hybrid(annotation['bbox'], annotation['keypoints']) # append hybrid feature
-                self.items.append(item)
-        self.items = sorted(self.items, key=lambda x:x["ann_id"]) # sort by ann_id, ascending order
-        print(f"loaded {self.num} human body from {self.file}")
+        try: # read precomputed hybrid feature
+            raise Exception("precomputed hybrid feature is not available")
+            self.items = np.load(f"data/PoseTrack21/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", allow_pickle=True)
+            self.num = len(self.items)
+            print(f"loaded {self.num} human body from {self.file}")
+        except: # compute hybrid feature from scratch
+            self.num = 0 # number of human body in this json file
+            self.items = []
+            with open(self.file, "r") as f:
+                data = json.load(f)
+                item = {}
+                for annotation in data["annotations"]:
+                    if sum(annotation['keypoints'][2::3]) == 0: # annotation must include at least one visible keypoint
+                        continue
+                    self.num += 1 # count the number of visible human body
+                    id = int(annotation['id'])
+                    ann_id = int(str(id)[-2:] + str(annotation['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする
+                    item["ann_id"] = ann_id # append ann_id
+                    if kp_direct: # if True, use keypoints as input of AE directly
+                        item["feature"] = annotation['keypoints'] # append keypoints. size: 17*3 = 51
+                    else: # if False, use hand-crafted feature as input of AE. size: 15*2 + 8 = 38
+                        # print("annotation['keypoints']: ", annotation['keypoints'])
+                        # keypoints = np.array(annotation['keypoints'][:3*3]+annotation['keypoints'][5*3:]) # select 15 keypoints
+                        keypoints = np.array(annotation['keypoints']) # select 15 keypoints
+                        # print("keypoints: ", keypoints)
+                        # [self.eval_joints] # select 15 keypoints
+                        item["feature"] = compute_hybrid(annotation['bbox'], keypoints) # append hybrid feature
+                    self.items.append(item)
+                self.items = sorted(self.items, key=lambda x:x["ann_id"]) # sort by ann_id, ascending order
+                # save hybrid feature
+                os.makedirs(f"data/PoseTrack21/activelearning/hybrid_feature/{self.mode}/", exist_ok=True)
+                np.save(f"data/PoseTrack21/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", self.items)
+            print(f"saved {self.num} human body from {self.file}")
 
     # ここで取り出すデータを指定
     def __getitem__(self, index: int) -> torch.Tensor:

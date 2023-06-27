@@ -28,7 +28,7 @@ class WholeBodyAE(nn.Module):
             nn.Linear(12, 24),
             nn.ReLU(True),
             nn.Linear(24, self.input_dim),
-            nn.Tanh()
+            nn.Sigmoid()
         )
         print(f"WholeBodyAE: z_dim: {self.z_dim}, input_dim: {self.input_dim}")
         print("Total parameters: ", sum(p.numel() for p in self.parameters() if p.requires_grad))

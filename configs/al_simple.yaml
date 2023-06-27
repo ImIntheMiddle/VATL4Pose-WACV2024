@@ -49,10 +49,10 @@ DETECTOR:
   CONFIDENCE: 0.05
 
 AE:
-  Z_DIM: 2
+  Z_DIM: 4
   PRETRAINED_ROOT: 'pretrained_models/wholebodyAE'
-  EPOCH: 25
-  LR: 0.004
+  EPOCH: 20
+  LR: 0.00008
 
 RETRAIN:
   BATCH_SIZE: 24 # default: 24
@@ -67,8 +67,8 @@ RETRAIN:
 VAL:
   FINISH_ACC: 0.75 # default: 0.75
   BATCH_SIZE: 256 # default: 256
-  W_UNC: 200
-  UNC_LAMBDA: 0 # unc weight for coreset sampling
+  W_UNC: 1
+  UNC_LAMBDA: 8 # unc weight for coreset sampling
   QUERY_RATIO: [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0] # list of query ratio for evaluation
   # QUERY_RATIO: [0.2, 0.4, 0.7, 1.0] # list of query ratio for evaluation
   # QUERY_RATIO: [0.02, 0.04, 0.06, 0.08, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1.0] # for PCIT

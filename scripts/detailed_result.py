@@ -21,7 +21,7 @@ QUERY_RATIO = [0, 50, 100, 150, 200, 300, 400, 600, 800, 1000]
 # QUERY_RATIO = [0, 20, 40, 60, 80, 100, 150, 200]
 # QUERY_RATIO = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 300, 400, 600, 800, 1000]
 # METRIC = ["AP", "AP .5", "AP .6", "AP .75", "AP .9", "AP (M)", "AP (L)", "AR", "AR .5", "AR .75"]
-METRIC = ["AP", "AP .5", "AP .6", "AP .75", "AP .8", "AP .95"]
+METRIC = ["AP", "AP .5", "AP .6", "AP .75"]
 def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
     """load result json file.
     Args:
@@ -83,8 +83,7 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
                 elif performance_ann[-1] != 100 and m==0:
                     print(f"{strategy} {video_id} is not 100%!")
                     print(performance_ann[-1])
-                else:
-                  num_valid += 1
+                num_valid += 1
                 performance1000 = interpolate.interp1d(result["percentages"], performance)
                 performance1000_ann = interpolate.interp1d(result["percentages"], performance_ann)
                 result_dict[strategy][str(metric)][video_id] = performance1000(percent1000)
@@ -136,14 +135,14 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   fig1, ax = plt.subplots(nrows=2, sharex='col', gridspec_kw={'height_ratios': (11,1)} )
   # ax[0].set_xlabel("Labeled Samples (%)", fontsize=20)
   metlabel = metric.replace(" .", "@ .")
-  ax[1].set_xlabel("教師付け割合 (%)", fontsize=20)
+  ax[1].set_xlabel("Labeled Percentage (%)", fontsize=20)
   ax[0].set_ylabel(metlabel+" (%)", fontsize=20)
   fig1.subplots_adjust(hspace=0.0, left=0.15, bottom=0.15)
 
   fig2, ax2 = plt.subplots() # graph for mean uncertainty
   ax2.set_ylabel("Average Uncertainty (%)", fontsize=14)
-  ax2.set_xlabel("Labeled Samples (%)", fontsize=14)
-  ax2.set_xlim(0, 100)
+  ax2.set_xlabel("AP@.6 (%)", fontsize=14)
+  ax2.set_xlim(75, 100)
   print(f"{metric}", list(result_dict.keys()))
 
   prefix = "_ann" if ANN else ""
@@ -190,6 +189,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
     # ax.fill_between(x, y - result_dict[strategy][str(metric)+"_std"+prefix][QUERY_RATIO], y + result_dict[strategy][str(metric)+"_std"+prefix][QUERY_RATIO], alpha=0.3)
     ax[0].plot(x, y, label=label, linewidth=linewidth, linestyle=line_style, color=c, marker="o", markersize=5)
 
+    x = np.array(result_dict[strategy]["AP .6"+"_mean"+prefix])[QUERY_RATIO]
     # plot the mean uncertainty of each strategy
     y = np.array(result_dict[strategy]["mean_mean_uncertainty"]) * 100
     # if uncertainty is always 100, skip it
@@ -200,7 +200,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
     plt.figure()
     plt.plot(x, y, label=label, linewidth=linewidth, marker="o")
     plt.ylabel("Average Uncertainty (%)")
-    plt.xticks(np.arange(0, 101, 5))
+    plt.xticks(np.arange(60, 101, 2))
     plt.grid()   # plt.xlabel("Labeled Samples (%)")
     plt.legend()
     plt.savefig(os.path.join(save_dir, strategy, f"{strategy}_uncertainty.png"))
@@ -241,8 +241,8 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   plt.close(fig1)
 
   # save ax2
-  ax2.set_xticks(np.array(QUERY_RATIO)/10)
-  ax2.set_yticks(np.arange(70, 125, 5))
+  ax2.set_xticks(np.arange(75, 101, 5))
+  ax2.set_yticks(np.arange(70, 185, 5))
   ax2.tick_params(labelsize=12)
   ax2.legend(fontsize=12)
   ax2.grid()
@@ -264,20 +264,15 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
       print(f"{strategy} ALC: {converted_alc}")
       metric_dict[strategy]["mean_mean_uncertainty"] = result_dict[strategy]["mean_mean_uncertainty"].tolist()
       # metric_dict[strategy]["mean_combine_weight"] = result_dict[strategy]["mean_combine_weight"].tolist()
-  # save the result in a json file
-  if ANN:
-    with open(os.path.join(save_dir, f"{metric}_ann.json"), "w") as f:
-      json.dump(metric_dict, f, indent=4)
-  else:
-    with open(os.path.join(save_dir, f"{metric}.json"), "w") as f:
-        json.dump(metric_dict, f, indent=4)
   print("Done!\n")
+  return metric_dict
 
 def plot_spearman(save_dir, result_dict):
   """compute the mean spearmanr of each strategy, and plot the result."""
   plt.figure()
   percentage = np.array(QUERY_RATIO)/10
   for i, strategy in enumerate(result_dict.keys()):
+    x = np.array(result_dict[strategy]["AP .75"+"_mean"])[QUERY_RATIO]
     spearmanr = np.array(list(result_dict[strategy]["spearmanr"].values())).mean(axis=0)
     if len(spearmanr) == 0:
       continue
@@ -285,7 +280,7 @@ def plot_spearman(save_dir, result_dict):
     plt.plot(percentage, spearmanr, label=strategy, linewidth=2, marker="o")
   plt.xlabel("Labeled Samples (%)")
   plt.ylabel("Spearmanr")
-  plt.xticks(np.arange(0, 101, 5))
+  plt.xticks(np.arange(60, 101, 5))
   plt.grid()
   plt.legend()
   plt.savefig(os.path.join(save_dir, "spearmanr.png"))
@@ -300,8 +295,8 @@ def main(video_id_list_path, strategy_list, RAW=False, ANN=True):
       video_id_list = f.read().splitlines()
   # load result json file
   print("loading result json file...")
+  result_dict = None
   for exp_name in strategy_list.keys():
-    result_dict = None
     print(f"loading {exp_name}...")
     result_dir = os.path.join(root_dir, f"AL_{exp_name}", "SimplePose")
     result_dict, empty_dict = load_result_json(result_dir, strategy_list[exp_name], video_id_list, result_dict)
@@ -312,23 +307,28 @@ def main(video_id_list_path, strategy_list, RAW=False, ANN=True):
         json.dump(empty_dict, f, indent=4)
     print("done\n")
 
-    # summarize the result
-    if RAW:
-        print("summarizing the result w/o annotation...")
-        if not os.path.exists(os.path.join(save_dir, "RAW")):
-            os.makedirs(os.path.join(save_dir, "RAW"))
-        for metric in METRIC:
-            summarize_result(os.path.join(save_dir, "RAW"), result_dict, metric, ANN=False)
-    if ANN:
-        print("\nsummarizing the result with annotation...")
-        if not os.path.exists(os.path.join(save_dir, "ANN")):
-          os.makedirs(os.path.join(save_dir, "ANN"))
-        for metric in METRIC:
-            summarize_result(os.path.join(save_dir, "ANN"), result_dict, metric, ANN=True)
-    plot_spearman(save_dir, result_dict)
-    print("Done!\n")
-
-
+  # summarize the result
+  if RAW:
+      print("summarizing the result w/o annotation...")
+      if not os.path.exists(os.path.join(save_dir, "RAW")):
+          os.makedirs(os.path.join(save_dir, "RAW"))
+      for metric in METRIC:
+          summarize_result(os.path.join(save_dir, "RAW"), result_dict, metric, ANN=False)
+      with open(os.path.join(save_dir, f"{metric}.json"), "w") as f:
+          json.dump(metric_dict, f, indent=4)
+  if ANN:
+      result_ann_dict = {}
+      print("\nsummarizing the result with annotation...")
+      if not os.path.exists(os.path.join(save_dir, "ANN")):
+        os.makedirs(os.path.join(save_dir, "ANN"))
+      for metric in METRIC:
+          metric_dict = summarize_result(os.path.join(save_dir, "ANN"), result_dict, metric, ANN=True)
+          result_ann_dict[metric] = metric_dict
+      # save the result in a json file
+      with open(os.path.join(save_dir, f"result_ann.json"), "w") as f:
+        json.dump(result_ann_dict, f, indent=4)
+  # plot_spearman(save_dir, result_dict)
+  print("Done!\n")
 
 if __name__ == "__main__":
     is_PoseTrack = True
@@ -338,9 +338,12 @@ if __name__ == "__main__":
     else:
       video_id_list_path = "configs/PCIT_video_list.txt"
 
-    strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "THC", "_K-Meansfilter", "_Coresetfilter"]}
+    # strategy_list = {"WACV_DUW": ["THC+WPU_Coresetfilter"]}
     # strategy_list = {"MVA5": ["Random", "TPC", "THC+WPU_weightedfilter"]}
     # strategy_list = {"PCIT2": ["Random", "HP", "TPC", "MPE+Influence", "THC_weightedfilter", "WPU_weightedfilter", "THC+WPU_weightedfilter", "_K-Meansfilter"]}
-    # strategy_list = {"WACV_opt": ["Random"]}
+    # strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "_K-Meansfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_ACFT": ["THC", "WPU", "THC+WPU", "_Coresetfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
+    strategy_list = {"WACV_DUW1": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_ACFT": ["HP", "MPE", "TPC", "THC", "WPU"]}
 
     main(video_id_list_path, strategy_list, RAW=False, ANN=True)

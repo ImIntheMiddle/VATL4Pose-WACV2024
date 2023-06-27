@@ -1,6 +1,14 @@
-ssh dl41
+ssh dl11
 cd AlphaPose
 pyenv activate Alphapose
 bash scripts/run_active_learning.sh 
 
-CUDA_VISIBLE_DEVICES=4 python scripts/Run_active_learning.py --uncertainty THC --filter Coreset --memo optimize --video_id 005833 --optimize --speedup --continual
+
+CUDA_VISIBLE_DEVICES=0 python scripts/Run_active_learning.py --uncertainty THC --representativeness --filter Coreset --memo WACV_ACFT --seedfix --continual --video_id 005833
+
+
+
+CUDA_VISIBLE_DEVICES=4 python scripts/Run_active_learning.py --uncertainty WPU --memo optimize --video_id 005833 --optimize --speedup --continual
+bash scripts/run_active_learning.sh 
+
+CUDA_VISIBLE_DEVICES=0 python scripts/Run_active_learning.py --uncertainty THC --memo visualize --video_id 005068 --speedup --continual --vis_thc

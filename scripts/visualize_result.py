@@ -83,12 +83,12 @@ def save_batch_image_with_joints(batch_image, batch_heatmaps, batch_joints, batc
     joints_vis = batch_joints_vis[0].cpu().numpy()
 
     for joint_pair in joint_pairs:
-    #     continue
+        # continue
         if joints_vis[joint_pair[0]] and joints_vis[joint_pair[1]]:
             cv2.line(img=img, pt1=(int(preds[0][joint_pair[0]][0]), int(preds[0][joint_pair[0]][1])), pt2=(int(preds[0][joint_pair[1]][0]), int(preds[0][joint_pair[1]][1])), color=[0, 0, 255], thickness=2)
 
     for j in range(num_joints):
-    #     continue
+        # continue
         if joints_vis[j]:
             # print(int(preds[0][j][0]), int(preds[0][j][1])) # x, y
             cv2.circle(img=img, center=(int(preds[0][j][0]), int(preds[0][j][1])), radius=2, color=[0, 0, 255], thickness=3)
@@ -151,7 +151,6 @@ def save_batch_heatmaps(batch_image, batch_heatmaps, file_name,
     cv2.imwrite(file_name, masked_image)
     # print("save image to {}".format(file_name))
 
-
 def vis_item(root_dir, item_path, i, save_video=False):
     #parse path
     ann_id = item_path.split('/')[-1].split('.')[0]
@@ -181,7 +180,7 @@ def vis_item(root_dir, item_path, i, save_video=False):
 
     # save images with joints
     os.makedirs(os.path.join(rootdir, "estimation_result"), exist_ok=True)
-    save_batch_image_with_joints(batch_image, heatmaps, batch_joints, batch_joints_vis, joint_pairs, os.path.join(rootdir, "estimation_result", f'{i}.jpg'))
+    save_batch_image_with_joints(batch_image, heatmaps, batch_joints, batch_joints_vis, joint_pairs, os.path.join(rootdir, "estimation_result", f'{ann_id}.jpg'))
     # save heatmaps
     # os.makedirs(os.path.join(rootdir, "heatmap"), exist_ok=True)
     # save_batch_heatmaps(batch_image, heatmaps, os.path.join(rootdir, "heatmap", f'{image_id}.jpg'))
@@ -243,20 +242,23 @@ if __name__ == '__main__':
     model = "SimplePose"
     # strategy_list = ["Random", "HP", "TPC", "THC_L1", "WPU_hybrid"] # strategies
     # strategy_list = ["Random","THC_L1_weightedfilter","MPE+Influence","HP"] # strategies
-    strategy_list = ["THC_weightedfilter"]
-    round_list = ["Round0", "Round2"]
-    # root_dir = "exp/AL_MVA4/SimplePose"
-    root_dir = "exp/AL_PCIT3/SimplePose"
+    # strategy_list = ["THC_weightedfilter"]
+    strategy_list = ["Random"]
+    round_list = ["Round0", "Round8"]
+    root_dir = "exp/AL_MVA4/SimplePose"
+    # root_dir = "exp/AL_PCIT3/SimplePose"
     # video_id_list = read_video_list("configs/val_video_list.txt")
-    # video_id_list = ["016239"]
-    video_id_list = ["030"]
+    video_id_list = ["000812"]
+    # video_id_list = ["030"]
 
     for strategy in strategy_list:
         for video_id in video_id_list: # load each video's result from 'result.json' in each directory
             result_dir = os.path.join(root_dir, strategy, video_id) # exp/AL_Glory/SimplePose/HP/000000
             video_paths = []
+            result_dict = glob.glob(f"{result_dir}/*")[-1] # get the latest result
+            print(result_dict)
             for round in round_list:
-                results = glob.glob(f"{result_dir}/*/heatmap/{round}/*.npy")
+                results = glob.glob(f"{result_dict}/heatmap/{round}/*.npy")
                 print(f"strategy: {strategy}, video_id: {video_id}, round: {round}")
                 print(f"len: {len(results)}")
                 rootdir = os.path.join('exp/vis', model, strategy, video_id, round)
@@ -264,8 +266,9 @@ if __name__ == '__main__':
                     # print(item_path)
                     vis_item(rootdir, item_path, i)
                     pass
-                if True:
+                if False:
                     savepath = make_animation(rootdir, save_id="00")
                     video_paths.append(savepath)
-            compv_path = os.path.join('exp/vis', model, strategy, video_id, 'compare.mp4')
-            compare_video(video_paths, compv_path)
+            if len(video_paths) == 2:
+                compv_path = os.path.join('exp/vis', model, strategy, video_id, 'compare.mp4')
+                compare_video(video_paths, compv_path)

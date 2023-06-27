@@ -58,7 +58,7 @@ def parse_args():
     parser.add_argument('--representativeness', type=str, default="None", help='representativeness type') # Influence, Random
     parser.add_argument('--filter', type=str, default="None", help='filter type') # None, Random, Diversity, weighted
     parser.add_argument('--video_id', type=str, required=True, help = 'id of the video for test')
-    parser.add_argument('--wunc', type=float, default=200, help='weight of uncertainty')
+    parser.add_argument('--wunc', type=float, default=0, help='weight of uncertainty')
     parser.add_argument('--verbose', action='store_true',
                         help='print detail information')
     parser.add_argument('--speedup', action='store_true',
@@ -174,30 +174,29 @@ def hyper_objective(cfg, opt):
     def objective(trial):
         # randamize the video_id
         opt.video_id = random.choice(opt.video_id_list)
-        # cfg.RETRAIN.BASE = trial.suggest_int('base', 20, 60)
-        # cfg.RETRAIN.ALPHA = trial.suggest_int('alpha', 200, 500)
-        # cfg.RETRAIN.LR_GAMMA = trial.suggest_float('lr_gamma', 0.95, 0.99)
-        # cfg.RETRAIN.WEOGHT_DECAY = trial.suggest_float('weight_decay', 0.1, 1)
-        # cfg.RETRAIN.LR = trial.suggest_float('lr', 0.00002, 0.0005)
-        cfg.VAL.UNC_LAMBDA = trial.suggest_float('unc_lambda', 0, 5000)
+        # opt.video_id = trial.suggest_categorical('video_id', opt.video_id_list)
+        cfg.VAL.UNC_LAMBDA = trial.suggest_float('unc_lambda', 0.01, 10)
         # AE setting
-        # cfg.AE.EPOCH = trial.suggest_int('epoch', 1, 50)
-        # cfg.AE.Z_DIM = trial.suggest_int('z_dim', 2, 5)
-        # cfg.AE.LR = trial.suggest_float('lr', 0.00002, 0.004)
-        print('video_id: {}'.format(opt.video_id))
+        # cfg.AE.EPOCH = trial.suggest_int('epoch', 1, 25)
+        # cfg.AE.LR = trial.suggest_float('lr', 0.00001, 0.0001)
+        # print('video_id: {}'.format(opt.video_id), "unc_lambda: {}".format(cfg.VAL.UNC_LAMBDA))
         result = do_al(cfg, opt)
-        # plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[1])
-        # ap95 = np.array(list(round_res["AP .95"] for round_res in result[2])[-5:-1])*100
-        # alc = compute_alc(result[0][-5:-1], ap95) # area under learning curve with annotation
+
         ap95 = np.array(list(round_res["AP .95"] for round_res in result[2]))*100
         alc = compute_alc(result[0], ap95) # area under learning curve with annotation
-        # corr_mean = np.array(result[9]).mean()
+        unc_mean = np.array(result[5]) # corrcoef_list
+        unc_norm = unc_mean/unc_mean[0]
+        unc_sum = np.sum(unc_norm)
         return alc
+        # return unc_sum
     return objective
 
 def optimize_alc(cfg, opt):
-    study = optuna.create_study(direction='minimize')
-    study.optimize(hyper_objective(cfg,opt), n_trials=60)
+    # cfg.VAL.UNC_LAMBDA = opt.wunc
+    # search_space = {"video_id": opt.video_id_list, "unc_lambda": [cfg.VAL.UNC_LAMBDA]}
+    # study = optuna.create_study(direction='maximize', sampler=optuna.samplers.GridSampler(search_space))
+    study = optuna.create_study(direction='maximize')
+    study.optimize(hyper_objective(cfg,opt), n_trials=20)
     print("Best ALC: {}".format(study.best_value), "Best params: {}".format(study.best_params))
     fig = optuna.visualization.plot_optimization_history(study)
     fig.write_image(os.path.join(opt.work_dir, 'optuna_history.png'))
@@ -240,9 +239,9 @@ def main(cfg, opt):
         opt.video_id_list = open("configs/trainval_video_list.txt").read().splitlines() # get video id list
         optimize_alc(cfg, opt)
     else: # standard setting
+        cfg.VAL.UNC_LAMBDA = opt.wunc
         result = do_al(cfg, opt)
         save_result(cfg, opt, result) # save results
-    # cfg.VAL.W_UNC = opt.wunc
     # result = do_al(cfg, opt)
     # save_result(cfg, opt, result) # save results
 """---------------------------------- Execution ----------------------------------"""
