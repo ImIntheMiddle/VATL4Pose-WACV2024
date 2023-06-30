@@ -69,12 +69,13 @@ RETRAIN:
   LR_GAMMA: 0.99 # continual:0.99
 
 VAL:
-  FINISH_ACC: 0.75 # default: 0.75
+  FINISH_ACC: 1 # default: 0.75
   BATCH_SIZE: 256 # default: 256
-  W_UNC: 0.01
+  W_UNC: 0.001
   UNC_LAMBDA: 0.01 # unc weight for coreset sampling
   # QUERY_RATIO: [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0] # list of query ratio for evaluation
-  QUERY_RATIO: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] # for stopping criterion test
+  QUERY_RATIO: [0.05, 1.0]
+  # QUERY_RATIO: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] # for stopping criterion test
   # QUERY_RATIO: [0.02, 0.04, 0.06, 0.08, 0.1, 0.15, 0.2, 0.3, 0.5, 0.75, 1.0] # for PCIT
   # QUERY_RATIO: [0.05, 0.1, 0.2, 0.4, 0.6, 1.0] # for debug
   VIS: True

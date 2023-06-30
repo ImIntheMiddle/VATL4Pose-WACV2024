@@ -180,7 +180,7 @@ def vis_item(root_dir, item_path, i, save_video=False):
 
     # save images with joints
     os.makedirs(os.path.join(rootdir, "estimation_result"), exist_ok=True)
-    save_batch_image_with_joints(batch_image, heatmaps, batch_joints, batch_joints_vis, joint_pairs, os.path.join(rootdir, "estimation_result", f'{ann_id}.jpg'))
+    save_batch_image_with_joints(batch_image, heatmaps, batch_joints, batch_joints_vis, joint_pairs, os.path.join(rootdir, "estimation_result", f'{i}_{ann_id}.jpg'))
     # save heatmaps
     # os.makedirs(os.path.join(rootdir, "heatmap"), exist_ok=True)
     # save_batch_heatmaps(batch_image, heatmaps, os.path.join(rootdir, "heatmap", f'{image_id}.jpg'))
@@ -239,16 +239,18 @@ def compare_video(video_paths, compv_path):
 
 if __name__ == '__main__':
     cfg = update_config("configs/al_simple.yaml") # load config
+    cfg = update_config("configs/al_simple_duw.yaml") # load config
     model = "SimplePose"
     # strategy_list = ["Random", "HP", "TPC", "THC_L1", "WPU_hybrid"] # strategies
     # strategy_list = ["Random","THC_L1_weightedfilter","MPE+Influence","HP"] # strategies
     # strategy_list = ["THC_weightedfilter"]
-    strategy_list = ["Random"]
-    round_list = ["Round0", "Round8"]
-    root_dir = "exp/AL_MVA4/SimplePose"
+    strategy_list = ["MPE", "_Coresetfilter", "THC+WPU_Coresetfilter"]
+    round_list = ["Round0"]
+    # root_dir = "exp/AL_MVA4/SimplePose"
+    root_dir = "exp/AL_WACV_vis/SimplePose"
     # root_dir = "exp/AL_PCIT3/SimplePose"
     # video_id_list = read_video_list("configs/val_video_list.txt")
-    video_id_list = ["000812"]
+    video_id_list = ["002374"]
     # video_id_list = ["030"]
 
     for strategy in strategy_list:

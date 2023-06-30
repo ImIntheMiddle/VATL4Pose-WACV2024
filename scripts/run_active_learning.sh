@@ -2,16 +2,17 @@
 set -x
 export CUDA_VISIBLE_DEVICES=$1 # set GPU device
 
-CONFIG="configs/al_simple.yaml" # config file
+CONFIG="configs/al_simple_duw.yaml" # config file
 UNCERTAINY="THC+WPU" # Option: None HP TPC THC_L1 THC_L2 WPU MPE Margin Entropy
 REPRESENTATIVENESS="None" # Option: None Random Influence
 FILTER="Coreset" # Option: None Random Diversity K-Means weighted Coreset
-MEMO="WACV_DUW$3" # memo for the experiment
+MEMO="WACV_DUW0.001" # memo for the experiment
 # VIDEO_ID_LIST="configs/PCIT_video_exlist.txt" # list of video ids (e.g. 000342, 000522,...)
-# VIDEO_ID_LIST="configs/posetrack_8split/val_video_list_full$2.txt" # PCIT video ids (e.g. 004, 007,...)
+# VIDEO_ID_LIST="configs/posetrack_8split/val_video_list_$2.txt" # PCIT video ids (e.g. 004, 007,...)
 VIDEO_ID_LIST="configs/val_video_list_full$2.txt" # PCIT video ids (e.g. 004, 007,...)
 VIDEO_LIST=$(cat ${VIDEO_ID_LIST}) # read the video id list
-WUNC=$3
+WUNC=0.001
+# THRESH=0.8
 
 for VIDEO_ID in ${VIDEO_LIST}; do # loop over the video id list
     echo "Video ID: ${VIDEO_ID}"
@@ -25,6 +26,8 @@ for VIDEO_ID in ${VIDEO_LIST}; do # loop over the video id list
         --seedfix \
         --continual \
         --wunc ${WUNC}
+        # --stopping \
+        # --retrain_thresh ${THRESH}
         # --PCIT
         # --optimize
 done # end of for loop

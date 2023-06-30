@@ -6,6 +6,7 @@ import os
 import json
 from matplotlib import pyplot as plt
 from matplotlib import patches as mpatches
+from matplotlib.patches import FancyArrowPatch
 from matplotlib.path import Path
 import seaborn as sns
 import numpy as np
@@ -17,12 +18,12 @@ import japanize_matplotlib
 
 AP_HR = 0.62
 QUERY_RATIO = [0, 50, 100, 150, 200, 300, 400, 600, 800, 1000]
-# QUERY_RATIO = [0, 50, 100, 150, 200, 300]
-# QUERY_RATIO = [0, 20, 40, 60, 80, 100, 150, 200]
-# QUERY_RATIO = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 300, 400, 600, 800, 1000]
-# METRIC = ["AP", "AP .5", "AP .6", "AP .75", "AP .9", "AP (M)", "AP (L)", "AR", "AR .5", "AR .75"]
-METRIC = ["AP", "AP .5", "AP .6", "AP .75"]
-def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
+# QUERY_RATIO = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+
+# METRIC = ["AP", "AP .5", "AP .6", "AP .7", "AP .75", "AP .8"]
+METRIC = ["AP .6", "AP .75"]
+
+def load_result_json(result_dir, strategy_list, video_id_list, result_dict, sc_thresh):
     """load result json file.
     Args:
         root_dir: root directory of the result.
@@ -44,7 +45,7 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
     for strategy in strategy_list:
         empty_dict[strategy] = []
         empty_cnt[strategy] = 0
-        result_dict[strategy] = {"Percentage": {}, "mean_uncertainty": {}, "combine_weight": {}, "spearmanr": {}}
+        result_dict[strategy] = {"Percentage": {}, "mean_uncertainty": {}, "combine_weight": {}, "spearmanr": {}, "actual_finish": {}, "finished_minerror": {}, "finished_oursc": {}, "stopped_AP_min": {}, "stopped_AP_oursc": {}}
         for video_id in video_id_list:
             result_files = glob.glob(f"{result_dir}/{strategy}/{video_id}/*/result.json")
             # print(len(result_files))
@@ -80,9 +81,8 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
                 performance_ann = np.array(list(round_res[metric] for round_res in performance_dict_ann))*100
                 if -1 in performance or -1 in performance_ann:
                     continue
-                elif performance_ann[-1] != 100 and m==0:
-                    print(f"{strategy} {video_id} is not 100%!")
-                    print(performance_ann[-1])
+                # elif performance_ann[-1] != 100 and m==0:
+                    # print(f"{strategy} {video_id} is not 100%! final AP: performance_ann[-1])
                 num_valid += 1
                 performance1000 = interpolate.interp1d(result["percentages"], performance)
                 performance1000_ann = interpolate.interp1d(result["percentages"], performance_ann)
@@ -98,12 +98,33 @@ def load_result_json(result_dir, strategy_list, video_id_list, result_dict):
               result_dict[strategy]["mean_uncertainty"][video_id] = normed_unc
               if "spearmanr" in result.keys():
                 result_dict[strategy]["spearmanr"][video_id] = result["spearmanr"]
-
+              if sc_thresh != None:
+                result_dict[strategy]["actual_finish"][video_id] = result["actual_finish"]
+                result_dict[strategy]["finished_minerror"][video_id] = result["finished_minerror"]
+                result_dict[strategy]["finished_oursc"][video_id] = result["finished_oursc"]
+                stopped_min = find_nearest(result["percentages"], result["finished_minerror"])
+                stopped_oursc = find_nearest(result["percentages"], result["finished_oursc"])
+                result_dict[strategy]["stopped_AP_min"][video_id] = performance_dict_ann[stopped_min][sc_thresh]
+                result_dict[strategy]["stopped_AP_oursc"][video_id] = performance_dict_ann[stopped_oursc][sc_thresh]
         # sort the ALC of each video id
         # print(result_dict[strategy].keys())
         ALC_dict = result_dict[strategy][str("AP .75") + "_ALC_ann"]
         sorted_ALC = sorted(ALC_dict.items(), key=lambda x:x[1])
         print(sorted_ALC[:10])
+
+        # evaluate stopping criterion
+        if sc_thresh != None:
+            mean_actual_finish = np.mean(np.array(list(result_dict[strategy]["actual_finish"].values())))
+            mean_finished_minerror = np.mean(np.array(list(result_dict[strategy]["finished_minerror"].values())))
+            mean_finished_oursc = np.mean(np.array(list(result_dict[strategy]["finished_oursc"].values())))
+            mean_stopped_AP_min = np.mean(np.array(list(result_dict[strategy]["stopped_AP_min"].values())))
+            mean_stopped_AP_oursc = np.mean(np.array(list(result_dict[strategy]["stopped_AP_oursc"].values())))
+            print(f"{strategy} actual_finish: {mean_actual_finish}")
+            print(f"{strategy} finished_minerror: {mean_finished_minerror}")
+            print(f"{strategy} finished_oursc: {mean_finished_oursc}")
+            print(f"{strategy} stopped_AP_min: {mean_stopped_AP_min}")
+            print(f"{strategy} stopped_AP_oursc: {mean_stopped_AP_oursc}")
+
         # calculate the mean performance of each strategy
         result_dict[strategy]["mean_Percentage"] = percent1000
         for metric in METRIC:
@@ -152,7 +173,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
     if "THC" in strategy or "WPU" in strategy:
         line_style = "-"
         linewidth = 3
-        label = (strategy + " (Ours)").replace("_weightedfilter", "+DWC")
+        label = (strategy + " (Ours)").replace("_", "+").replace("filter", "").replace("weighted", "DWC").replace("Coreset", "DUW")
         # c = plt.get_cmap("tab10")(i-1)
     else:
         line_style = "--"
@@ -166,6 +187,8 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
             # c = plt.get_cmap("tab10")(i+1)
         elif "filter" in strategy:
             label = strategy.replace("filter", "").replace("_", "")
+            label = label.replace("K-Means", "k-means")
+            label = label.replace("Coreset", "Core-Set")
 
     # plot the mean performance of each strategy
     x = result_dict[strategy]["mean_Percentage"][QUERY_RATIO]
@@ -197,6 +220,13 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
         continue
     c = plt.get_cmap("tab10")(i+1)
     ax2.plot(x, y, label=label, linewidth=linewidth, linestyle=line_style, color=c, marker="o", markersize=5)
+    # 矢印を追加
+    for i in range(len(x) - 1):
+      dx = x[i+1] - x[i]  # xの差分
+      dy = y[i+1] - y[i]  # yの差分
+      # ax2.arrow(x[i], y[i], dx / 2, dy / 2, color=c, head_width=1.2)
+      arrow = FancyArrowPatch((x[i], y[i]), (x[i]+dx/2, y[i]+dy/2), arrowstyle='-|>', mutation_scale=20, color=c)
+      ax2.add_patch(arrow)
     plt.figure()
     plt.plot(x, y, label=label, linewidth=linewidth, marker="o")
     plt.ylabel("Average Uncertainty (%)")
@@ -242,7 +272,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
 
   # save ax2
   ax2.set_xticks(np.arange(75, 101, 5))
-  ax2.set_yticks(np.arange(70, 185, 5))
+  ax2.set_yticks(np.arange(70, 185, 10))
   ax2.tick_params(labelsize=12)
   ax2.legend(fontsize=12)
   ax2.grid()
@@ -286,7 +316,12 @@ def plot_spearman(save_dir, result_dict):
   plt.savefig(os.path.join(save_dir, "spearmanr.png"))
   plt.close()
 
-def main(video_id_list_path, strategy_list, RAW=False, ANN=True):
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
+
+def main(video_id_list_path, strategy_list, sc_thresh, RAW=False, ANN=True):
   root_dir = "exp"
   # video_id_list_path = "configs/trainval_video_list.txt"
 
@@ -299,7 +334,7 @@ def main(video_id_list_path, strategy_list, RAW=False, ANN=True):
   for exp_name in strategy_list.keys():
     print(f"loading {exp_name}...")
     result_dir = os.path.join(root_dir, f"AL_{exp_name}", "SimplePose")
-    result_dict, empty_dict = load_result_json(result_dir, strategy_list[exp_name], video_id_list, result_dict)
+    result_dict, empty_dict = load_result_json(result_dir, strategy_list[exp_name], video_id_list, result_dict, sc_thresh)
     save_dir = os.path.join(root_dir, "results", f"{exp_name}") #exp
     if not os.path.exists(save_dir):
       os.makedirs(save_dir)
@@ -338,12 +373,17 @@ if __name__ == "__main__":
     else:
       video_id_list_path = "configs/PCIT_video_list.txt"
 
-    # strategy_list = {"WACV_DUW": ["THC+WPU_Coresetfilter"]}
     # strategy_list = {"MVA5": ["Random", "TPC", "THC+WPU_weightedfilter"]}
     # strategy_list = {"PCIT2": ["Random", "HP", "TPC", "MPE+Influence", "THC_weightedfilter", "WPU_weightedfilter", "THC+WPU_weightedfilter", "_K-Meansfilter"]}
-    # strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "_K-Meansfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_ACFT": ["THC", "WPU", "THC+WPU", "_Coresetfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
-    strategy_list = {"WACV_DUW1": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_ACFT": ["HP", "MPE", "TPC", "THC", "WPU"]}
 
-    main(video_id_list_path, strategy_list, RAW=False, ANN=True)
+    strategy_list = {"WACV_DUW10": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_ACFT": ["THC", "WPU", "THC+WPU", "_Coresetfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_SC0.5": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_SC0.6": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_SC0.7": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_SC0.8": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "_K-Meansfilter", "_Coresetfilter"], "WACV_DUW0.001": ["THC+WPU_Coresetfilter"]}
+    # strategy_list = {"WACV_ACFT": ["THC", "WPU", "THC+WPU", "THC_Coresetfilter", "WPU_Coresetfilter"]}
+
+    main(video_id_list_path, strategy_list, sc_thresh=None, RAW=False, ANN=True)
+    # main(video_id_list_path, strategy_list, sc_thresh="AP .8", RAW=False, ANN=False)

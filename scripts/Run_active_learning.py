@@ -59,6 +59,7 @@ def parse_args():
     parser.add_argument('--filter', type=str, default="None", help='filter type') # None, Random, Diversity, weighted
     parser.add_argument('--video_id', type=str, required=True, help = 'id of the video for test')
     parser.add_argument('--wunc', type=float, default=0, help='weight of uncertainty')
+    parser.add_argument('--retrain_thresh', type=float, default=1, help='retrain threshold')
     parser.add_argument('--verbose', action='store_true',
                         help='print detail information')
     parser.add_argument('--speedup', action='store_true',
@@ -70,6 +71,7 @@ def parse_args():
     parser.add_argument('--memo', type=str, default="test",
                         help='memo for this experiment')
     parser.add_argument("--onebyone", action="store_true", help="one by one annotation")
+    parser.add_argument("--stopping", action="store_true", help="turn on stopping criteria")
     parser.add_argument("--continual", action="store_true", help="continual fine-tuning")
     parser.add_argument("--optimize", action="store_true", help="optimize hyperparameters by optuna")
     parser.add_argument("--PCIT", action="store_true", help="use PCIT dataset")
@@ -221,11 +223,13 @@ def save_result(cfg, opt, result):
     result_json['mean_uncertaity'] = result[5] # mean uncertainty
     result_json['spearmanr'] = result[8] # spearmanr_list
     result_json['corrcoef'] = result[9] # corrcoef_list
-    result_json['finished_time'] = result[10] # finished time
-    result_json['true_labeled'] = result[11] # true_labeled
-    result_json['true_unlabeled'] = result[12] # true_unlabeled
-    result_json['false_labeled'] = result[13] # false_labeled
-    result_json['false_unlabeled'] = result[14] # false_unlabeled
+    result_json['true_labeled'] = result[10] # true_labeled
+    result_json['true_unlabeled'] = result[11] # true_unlabeled
+    result_json['false_labeled'] = result[12] # false_labeled
+    result_json['false_unlabeled'] = result[13] # false_unlabeled
+    result_json['actual_finish'] = result[14] # finished time
+    result_json['finished_minerror'] = result[15] # finished time
+    result_json['finished_oursc'] = result[16] # finished time
     # result_json['learning_curve_path'] = plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[1]) # plot learning curve
     # result_json['learning_curve_path_ann'] = plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[2], ann=True) # plot learning curve with annotation
 
@@ -234,12 +238,13 @@ def save_result(cfg, opt, result):
     print('Result saved to: {}!'.format(os.path.join(opt.work_dir, 'result.json')))
 
 def main(cfg, opt):
+    cfg.VAL.UNC_LAMBDA = opt.wunc
     opt = set_dir(cfg, opt)
     if opt.optimize: # optimize hyperparameters
         opt.video_id_list = open("configs/trainval_video_list.txt").read().splitlines() # get video id list
         optimize_alc(cfg, opt)
     else: # standard setting
-        cfg.VAL.UNC_LAMBDA = opt.wunc
+        # cfg.VAL.UNC_LAMBDA = opt.wunc
         result = do_al(cfg, opt)
         save_result(cfg, opt, result) # save results
     # result = do_al(cfg, opt)
