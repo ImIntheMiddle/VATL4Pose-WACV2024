@@ -45,4 +45,4 @@ This implementation is based on AlphaPose, ALiPy, and VL4Pose.
 We deeply appreciate the authors for their open-source codes.
 
 ## License
-The use of code under this repository follows the MIT License. Please see the LICENSE.txt file for details
+The use of code under this repository follows the MIT License. Please see the LICENSE.txt file for details.
