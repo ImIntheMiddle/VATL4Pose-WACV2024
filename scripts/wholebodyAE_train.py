@@ -5,7 +5,7 @@ Using the whole body autoencoder, we compute the whole body hand-crrafted featur
 import argparse
 import os
 # CUDA setting
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
 import pdb # import python debugger
 import sys
 import time
@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--epoch', type=int, default="80", help='number of epochs')
     parser.add_argument('--pretrained', action='store_true', help='whether to use pretrained model')
     parser.add_argument('--kp_direct', action='store_true', help='whether to use keypoints as input of AE directly')
+    parser.add_argument('--dataset_type', type=str, help='which dataset to use')
     args = parser.parse_args()
     return args
 
@@ -100,7 +101,9 @@ if __name__ == '__main__':
     # save log as json file
     type = "direct" if opt.kp_direct else "hybrid"
     # make directory if not exist
-    save_root = f"exp/Whole_body_AE/{type}/zdim_{Z_DIM}/{now}"
+    dataset_type = opt.dataset_type
+    assert dataset_type in ["Posetrack21", "JRDB2022"], "dataset_type must be Posetrack21 or JRDB2022"
+    save_root = f"exp/Whole_body_AE/{dataset_type}/{type}/zdim_{Z_DIM}/{now}"
     if not os.path.exists(save_root):
         os.makedirs(save_root)
 
@@ -108,7 +111,7 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = WholeBodyAE(z_dim=Z_DIM, kp_direct=opt.kp_direct).to(device)
     if opt.pretrained:
-        pretrained_path = f"pretrained_models/Whole_body_AE/zdim_{Z_DIM}.pth"
+        pretrained_path = f"pretrained_models/Whole_body_AE/{dataset_type}/zdim_{Z_DIM}.pth"
         # load pretrained model
         model.load_state_dict(torch.load(pretrained_path))
     print("model: ", model)
@@ -118,11 +121,12 @@ if __name__ == '__main__':
 
     # define dataset and dataloader
     print("Loading dataset...")
-    train_dataset = Wholebody(mode="train", kp_direct=opt.kp_direct)
+    train_dataset = Wholebody(mode="train", kp_direct=opt.kp_direct, dataset_type=dataset_type)
     train_loader = DataLoader(train_dataset, batch_size=10000, shuffle=True, num_workers=os.cpu_count(), pin_memory=True)
     print("train dataset: ", len(train_dataset))
 
-    valid_dataset= Wholebody(mode="train_val", kp_direct=opt.kp_direct)
+    mode = "train_val" if dataset_type == "Posetrack21" else "val"
+    valid_dataset= Wholebody(mode=mode, kp_direct=opt.kp_direct, dataset_type=dataset_type)
     valid_loader = DataLoader(valid_dataset, batch_size=8000, shuffle=False, num_workers=os.cpu_count(), pin_memory=True)
     print(f"valid dataset: {len(valid_dataset)}\n")
 

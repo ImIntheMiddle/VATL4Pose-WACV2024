@@ -10,26 +10,35 @@ from .hybrid_feature import compute_hybrid
 
 
 class Wholebody(Dataset):
-    def __init__(self, mode: str, kp_direct=False, retrain_video_id=None) -> None:
+    def __init__(self, mode: str, kp_direct=False, retrain_video_id=None, dataset_type="Posetrack21") -> None:
         super().__init__()
         self.mode = mode # train or train_val
         self.eval_joints = [0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
         self.retrain_video_id = retrain_video_id
-        root = Path(f"data/PoseTrack21/activelearning/")
-        if retrain_video_id is not None:
-            if self.mode == "val":
-                json_name = f"{retrain_video_id}_mpii_test.json"
+        if dataset_type == "Posetrack21":
+            root = Path(f"data/PoseTrack21/activelearning/")
+            if retrain_video_id is not None:
+                if self.mode == "val":
+                    json_name = f"{retrain_video_id}_mpii_test.json"
+                    self.file = os.path.join(root, self.mode, json_name)
+                elif self.mode == "train_val":
+                    json_name = f"{retrain_video_id}_bonn_train.json"
+                    self.file = os.path.join(root, self.mode, json_name)
+            else:
+                json_name = f"000000_integrated_{self.mode}.json"
                 self.file = os.path.join(root, self.mode, json_name)
-            elif self.mode == "train_val":
-                json_name = f"{retrain_video_id}_bonn_train.json"
+            # self.ann = {'bbox':[], 'keypoints':[]} # bbox, keypoints
+        elif dataset_type == "JRDB2022":
+            root = Path(f"data/jrdb-pose/activelearning/")
+            if retrain_video_id is not None:
+                json_name = f"{retrain_video_id}_jrdb-pose.json"
                 self.file = os.path.join(root, self.mode, json_name)
-        else:
-            json_name = f"000000_integrated_{self.mode}.json"
-            self.file = os.path.join(root, self.mode, json_name)
-        # self.ann = {'bbox':[], 'keypoints':[]} # bbox, keypoints
+            else:
+                json_name = f"integrated_{self.mode}.json"
+                self.file = os.path.join(root, self.mode, json_name)
+
         try: # read precomputed hybrid feature
-            raise Exception("precomputed hybrid feature is not available")
-            self.items = np.load(f"data/PoseTrack21/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", allow_pickle=True)
+            self.items = np.load(f"data/{dataset_type}/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", allow_pickle=True)
             self.num = len(self.items)
             print(f"loaded {self.num} human body from {self.file}")
         except: # compute hybrid feature from scratch
@@ -43,7 +52,10 @@ class Wholebody(Dataset):
                         continue
                     self.num += 1 # count the number of visible human body
                     id = int(annotation['id'])
-                    ann_id = int(str(id)[-2:] + str(annotation['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする
+                    if dataset_type == "Posetrack21":
+                        ann_id = int(str(id)[-2:] + str(annotation['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする
+                    elif dataset_type == "JRDB2022":
+                        ann_id = int(str(id)[-3:] + str(annotation['image_id'])) # idの下三桁を取り出し，img_idと結合したものをann_idとする
                     item["ann_id"] = ann_id # append ann_id
                     if kp_direct: # if True, use keypoints as input of AE directly
                         item["feature"] = annotation['keypoints'] # append keypoints. size: 17*3 = 51
@@ -57,8 +69,8 @@ class Wholebody(Dataset):
                     self.items.append(item)
                 self.items = sorted(self.items, key=lambda x:x["ann_id"]) # sort by ann_id, ascending order
                 # save hybrid feature
-                os.makedirs(f"data/PoseTrack21/activelearning/hybrid_feature/{self.mode}/", exist_ok=True)
-                np.save(f"data/PoseTrack21/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", self.items)
+                os.makedirs(f"data/{dataset_type}/activelearning/hybrid_feature/{self.mode}/", exist_ok=True)
+                np.save(f"data/{dataset_type}/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", self.items)
             print(f"saved {self.num} human body from {self.file}")
 
     # ここで取り出すデータを指定

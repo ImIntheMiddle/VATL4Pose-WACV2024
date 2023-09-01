@@ -11,7 +11,7 @@ def compute_angle(x0: float, y0: float, x1: float, y1: float, x2: float, y2: flo
     # print("tan_abs: ", tan_abs)
     return np.arctan(tan_abs) # compute angle of each joint triangle using arctan of slopes
 
-def compute_hybrid(bbox: list[float], keypoints: list[float]) -> torch.Tensor:
+def compute_hybrid(bbox: list, keypoints: list) -> torch.Tensor:
   """Compute hybrid feature of a human body. include 38 values (x, y, vis, angle, center of gravity)
 
   Args:

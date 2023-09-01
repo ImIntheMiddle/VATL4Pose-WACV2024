@@ -123,8 +123,8 @@ def summarize_result(save_dir, result_dict, ANN=False):
     prefix_pfm = "Performance_all"
     save_path = "all"
   for i, strategy in enumerate(result_dict.keys()):
-    initial_performance = result_dict[strategy][prefix][0]
-    final_performance = result_dict[strategy][prefix][-1]
+    # initial_performance = result_dict[strategy][prefix][0]
+    # final_performance = result_dict[strategy][prefix][-1]
     if "THC_L1" in strategy:
         if strategy=="THC_L1_weightedfilter":
             label = "THC_L1+DWC (Ours)"
@@ -163,8 +163,9 @@ def summarize_result(save_dir, result_dict, ANN=False):
     y= result_dict[strategy][prefix][QUERY_RATIO]
     plt.figure()
     plt.ylim(0, 100)
-    # plt.fill_between(x, y - result_dict[strategy][prefix_std][QUERY_RATIO], y + result_dict[strategy][prefix_std][QUERY_RATIO], alpha=0.4)
-    plt.plot(x, y, label=label, linewidth=linewidth, marker="o")
+    plt.fill_between(x, 0, y, alpha=0.5)
+    # plt.plot(x, y, label=label, linewidth=linewidth, marker="o")
+    plt.plot(x, y, linewidth=linewidth, marker="o")
     plt.xlabel("Labeled Samples (%)")
     plt.ylabel("Average Precision (%)")
     plt.xticks(np.arange(0, 101, 5))
@@ -237,8 +238,8 @@ def main(name):
   root_dir = "exp"
   if "MVA" in name:
     video_id_list_path = "configs/val_video_list_full.txt"
-    strategy_list = {name: ["Random", "HP", "MPE+Influence", "TPC", "THC_L1_weightedfilter", "WPU_hybrid_weightedfilter", "THC+WPU_weightedfilter"]}
-    # strategy_list = {name: ["HP", "MPE+Influence", "TPC", "THC_L1_weightedfilter", "WPU_hybrid_weightedfilter"]}
+    # strategy_list = {name: ["_K-Meansfilter", "THC", "WPU", "THC+WPU_weightedfilter"]}
+    strategy_list = {name: ["Random", "LC", "MPE+Influence", "TPC", "THC_L1_weightedfilter", "WPU_hybrid_weightedfilter"]}
   elif "PCIT" in name:
     video_id_list_path = "configs/PCIT_video_list.txt"
     strategy_list = {name: ["Random", "HP", "TPC", "MPE+Influence", "THC_L1_weightedfilter", "WPU_hybrid_weightedfilter"]}
@@ -276,4 +277,4 @@ def main(name):
     print("Done!\n")
 
 if __name__ == "__main__":
-    main(name="PCIT2")
+    main(name="MVA4")

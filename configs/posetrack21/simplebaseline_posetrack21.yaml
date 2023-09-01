@@ -15,6 +15,11 @@ DATASET:
     ROOT: './data/PoseTrack21'
     IMG_PREFIX: 'images/train'
     ANN: 'activelearning/train_val/000000_integrated_train_val.json'
+  TEST:
+    TYPE: 'Posetrack21'
+    ROOT: './data/PoseTrack21'
+    IMG_PREFIX: 'images/val'
+    ANN: 'activelearning/val/000000_mpii_test.json'
 
 DATA_PRESET:
   TYPE: 'simple'
@@ -29,7 +34,7 @@ DATA_PRESET:
 
 MODEL:
   TYPE: 'SimplePose'
-  PRETRAINED: ''
+  PRETRAINED: 'pretrained_models/posetrack21/simplebaseline_256x192.pth'
   TRY_LOAD: ''
   NUM_DECONV_FILTERS:
   - 256
@@ -64,4 +69,4 @@ TRAIN:
   - 190
 
 VAL:
-  BATCH_SIZE: 270
+  BATCH_SIZE: 320

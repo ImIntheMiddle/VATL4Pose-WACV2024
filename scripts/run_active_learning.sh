@@ -2,17 +2,18 @@
 set -x
 export CUDA_VISIBLE_DEVICES=$1 # set GPU device
 
-CONFIG="configs/al_simple_duw.yaml" # config file
+# CONFIG="configs/posetrack21/al_simple_posetrack.yaml" # config file
+CONFIG="configs/jrdb-pose/al_simple_jrdb.yaml" # config file
 UNCERTAINY="THC+WPU" # Option: None HP TPC THC_L1 THC_L2 WPU MPE Margin Entropy
 REPRESENTATIVENESS="None" # Option: None Random Influence
 FILTER="Coreset" # Option: None Random Diversity K-Means weighted Coreset
-MEMO="WACV_DUW0.001" # memo for the experiment
+MEMO="WACV_JRDB_lambda$3" # memo for the experiment
 # VIDEO_ID_LIST="configs/PCIT_video_exlist.txt" # list of video ids (e.g. 000342, 000522,...)
 # VIDEO_ID_LIST="configs/posetrack_8split/val_video_list_$2.txt" # PCIT video ids (e.g. 004, 007,...)
-VIDEO_ID_LIST="configs/val_video_list_full$2.txt" # PCIT video ids (e.g. 004, 007,...)
+# VIDEO_ID_LIST="configs/val_video_list_ex1.txt" # PoseTrack21 video ids (e.g. 000342, 000522,...)
+VIDEO_ID_LIST="configs/jrdb-pose/test_ids.txt" # JRDB-Pose video ids (e.g. 00, 01,...)
+# VIDEO_ID_LIST="configs/jrdb-pose/ex_ids.txt" # JRDB-Pose video ids (e.g. 00, 01,...)
 VIDEO_LIST=$(cat ${VIDEO_ID_LIST}) # read the video id list
-WUNC=0.001
-# THRESH=0.8
 
 for VIDEO_ID in ${VIDEO_LIST}; do # loop over the video id list
     echo "Video ID: ${VIDEO_ID}"
@@ -21,15 +22,19 @@ for VIDEO_ID in ${VIDEO_LIST}; do # loop over the video id list
         --uncertainty ${UNCERTAINY} \
         --representativeness ${REPRESENTATIVENESS} \
         --filter ${FILTER} \
-        --video_id ${VIDEO_ID} \
+        --video_id $2 \
         --memo ${MEMO} \
         --seedfix \
         --continual \
-        --wunc ${WUNC}
+        --wunc $3 # lambda value
+        # --optimize
+        # --vis \
+        # --onebyone
+        # --THCvsWPU ${2}
+        # --fixed_lambda \
         # --stopping \
         # --retrain_thresh ${THRESH}
         # --PCIT
-        # --optimize
 done # end of for loop
 echo "All the scripts are finished!"
 

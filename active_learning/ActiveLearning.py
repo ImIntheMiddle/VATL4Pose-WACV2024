@@ -37,6 +37,7 @@ from alphapose.utils.metrics import evaluate_mAP, calc_accuracy, DataLogger
 from alphapose.utils.transforms import (flip, flip_heatmap, get_func_heatmap_to_coord, norm_heatmap)
 from alphapose.utils.bbox import bbox_xyxy_to_xywh
 from alphapose.utils.vis import vis_frame_fast, vis_frame
+from pose_eval.pose_eval import ospa_for_loc
 
 # original modules
 from active_learning.local_peak import localpeak_mean
@@ -51,6 +52,7 @@ class ActiveLearning:
     def __init__(self, cfg, opt):
         self.round_cnt = 0
         self.cfg = cfg
+        self.dataset = cfg.DATASET.EVAL.TYPE
         self.opt = opt
         self.one_by_one = self.opt.onebyone # if True, then only one image is selected per round
         self.is_early_stop = False
@@ -62,15 +64,25 @@ class ActiveLearning:
         self.filter = self.opt.filter # type of filter
         self.video_id = self.opt.video_id
         self.get_prenext = self.opt.get_prenext
-        if self.opt.optimize:
-            IMG_PREFIX = f'images/train/{self.video_id}_bonn_train/'
-            ANN = f'activelearning/train_val/{self.video_id}_bonn_train.json'
+        if self.dataset == "Posetrack21":
+            if self.opt.optimize:
+                IMG_PREFIX = f'images/train/{self.video_id}_bonn_train/'
+                ANN = f'activelearning/train_val/{self.video_id}_bonn_train.json'
+            else:
+                IMG_PREFIX = f'images/val/{self.video_id}_mpii_test/'
+                ANN = f'activelearning/val/{self.video_id}_mpii_test.json'
         elif self.opt.PCIT:
             IMG_PREFIX = f'images/{self.video_id}_PCIT_eval/'
             ANN = f'annotations/eval/{self.video_id}.json'
-        else:
-            IMG_PREFIX = f'images/val/{self.video_id}_mpii_test/'
-            ANN = f'activelearning/val/{self.video_id}_mpii_test.json'
+        elif self.dataset == "JRDB2022":
+            # line number is corresponding to the video_id
+            with open("configs/jrdb-pose/jrdb_test.txt", "r") as f:
+            # with open("configs/jrdb-pose/jrdb_val.txt", "r") as f:
+                lines = f.readlines()
+                scene_name = lines[int(self.video_id)]
+            IMG_PREFIX = f'images/image_stitched/{scene_name}/'
+            ANN = f'activelearning/test/{self.video_id}_jrdb-pose.json'
+            # ANN = f'activelearning/val/{self.video_id}_jrdb-pose.json'
         self.cfg.DATASET.EVAL.IMG_PREFIX = IMG_PREFIX
         self.cfg.DATASET.EVAL.ANN = ANN
         self.cfg.DATASET.TRAIN.IMG_PREFIX = IMG_PREFIX
@@ -79,7 +91,7 @@ class ActiveLearning:
         # Evaluation settings
         self.eval_dataset = builder.build_dataset(self.cfg.DATASET.EVAL, preset_cfg=self.cfg.DATA_PRESET, train=False, get_prenext=self.opt.get_prenext)
         self.collate_fn = self.eval_dataset.my_collate_fn
-        self.eval_loader = torch.utils.data.DataLoader(self.eval_dataset, batch_size=self.cfg.VAL.BATCH_SIZE*self.opt.num_gpu, shuffle=False, num_workers=2, drop_last=False, pin_memory=True, collate_fn=self.collate_fn)
+        self.eval_loader = torch.utils.data.DataLoader(self.eval_dataset, batch_size=self.cfg.VAL.BATCH_SIZE*self.opt.num_gpu, shuffle=False, num_workers=8, drop_last=False, pin_memory=True, collate_fn=self.collate_fn)
         self.cnt_early_stop = 0
         self.finish_acc = self.opt.retrain_thresh # finishing accuracy
         self.finish_margin = 0.05 # margin of finished accuracy
@@ -97,13 +109,15 @@ class ActiveLearning:
         self.query_size = self.query_sizes[0] # number of query for first round
         self.expected_performance = 0 # expected performance. It controls the balance between uncertainty and representativeness
         if self.one_by_one:
-            self.query_size = 1 # query one by one
+            self.query_size = 3 # query one by one
         self.plot_cluster = False # plot cluster
         self.unlabeled_id = IndexCollection(list(range(self.eval_len)))
         self.labeled_id = IndexCollection()
         self.percentage = [] # number of query for each round
         self.performance = [] # list of mAP for each round
         self.performance_ann = [] # list of mAP for each round (with annotation)
+        self.ospa_list = [] # list of OSPA for each round
+        self.ospa_list_ann = [] # list of OSPA for each round (with annotation)
         self.combine_weight = [] # list of combine weight for each round
         self.query_list_list = {} # list of query for each round
         self.uncertainty_dict = {} # dict of uncertainty and idx for each round
@@ -115,6 +129,7 @@ class ActiveLearning:
         self.false_labeled_dict = {} # dict of false labeled data for each round
         self.true_unlabeled_dict = {} # dict of true unlabeled data for each round
         self.false_unlabeled_dict = {} # dict of false unlabeled data for each round
+        self.moksQ_list = [] # list of mean OKS for each round
 
         # Training settings
         self.train_dataset = builder.build_dataset(self.cfg.DATASET.TRAIN, preset_cfg=self.cfg.DATA_PRESET, train=True, get_prenext=False) # get_prenext=False for training
@@ -144,15 +159,18 @@ class ActiveLearning:
         self.show_info() # show information of active learning
 
     def outcome(self): # Check if the active learning is stopped
-        self.is_early_stop = True
-        if self.is_early_stop:
+        # self.is_early_stop = True
+        if self.is_early_stop or self.one_by_one:
             while len(self.performance) <= len(self.query_ratio): # fill the rest of performance (early stopping)
                 self.round_cnt += 1
                 self.performance.append(self.performance[-1])
                 self.performance_ann.append(self.performance_ann[-1])
+                self.ospa_list.append(self.ospa_list[-1])
+                self.ospa_list_ann.append(self.ospa_list_ann[-1])
                 self.uncertainty_mean.append(self.uncertainty_mean[-1])
                 self.percentage.append(self.query_ratio[self.round_cnt-1]*100)
                 self.combine_weight.append(self.combine_weight[-1])
+                self.moksQ_list.append(self.moksQ_list[-1])
             finish = True
         else:
             if not self.continual:
@@ -177,7 +195,7 @@ class ActiveLearning:
                     self.query_size = self.query_sizes[self.round_cnt]-len(self.labeled_id.index) # number of query for next round
                 finish = False
         if finish:
-            return self.percentage, self.performance, self.performance_ann, self.query_list_list, self.uncertainty_dict, self.uncertainty_mean, self.influence_dict, self.combine_weight, self.spearmanr_list, self.corr_list, self.true_labeled_dict, self.true_unlabeled_dict, self.false_labeled_dict, self.false_unlabeled_dict, self.actual_finish, self.finished_minerror, self.finished_oursc
+            return self.percentage, self.performance, self.performance_ann, self.query_list_list, self.uncertainty_dict, self.uncertainty_mean, self.influence_dict, self.combine_weight, self.spearmanr_list, self.corr_list, self.true_labeled_dict, self.true_unlabeled_dict, self.false_labeled_dict, self.false_unlabeled_dict, self.actual_finish, self.finished_minerror, self.finished_oursc, self.ospa_list, self.ospa_list_ann, self.moksQ_list
         else:
             return None
 
@@ -195,7 +213,10 @@ class ActiveLearning:
         elif self.cfg.RETRAIN.OPTIMIZER == 'Adam':
             optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
         elif self.cfg.RETRAIN.OPTIMIZER == 'AdamW':
-            optimizer = torch.optim.AdamW(params = [{"params": model.final_layer.parameters(), "lr": self.lr*10}, {"params": model.preact.parameters(), "lr": self.lr}, {"params": model.deconv_layers.parameters(), "lr": self.lr*5}], weight_decay=self.cfg.RETRAIN.WEIGHT_DECAY)
+            if self.cfg.MODEL.TYPE == 'SimplePose':
+                optimizer = torch.optim.AdamW(params = [{"params": model.final_layer.parameters(), "lr": self.lr*10}, {"params": model.preact.parameters(), "lr": self.lr}, {"params": model.deconv_layers.parameters(), "lr": self.lr*5}], weight_decay=self.cfg.RETRAIN.WEIGHT_DECAY)
+            elif self.cfg.MODEL.TYPE == 'FastPose':
+                optimizer = torch.optim.AdamW(params = [{"params": model.conv_out.parameters(), "lr": self.lr*10}, {"params": model.preact.parameters(), "lr": self.lr}, {"params": model.suffle1.parameters(), "lr": self.lr*5}, {"params": model.duc1.parameters(), "lr": self.lr*5}, {"params": model.duc2.parameters(), "lr": self.lr*5}], weight_decay=self.cfg.RETRAIN.WEIGHT_DECAY)
         else:
             raise ValueError('Optimizer not supported!')
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=self.cfg.RETRAIN.LR_GAMMA) # decay learning rate by 0.95 every epoch
@@ -410,9 +431,11 @@ class ActiveLearning:
         with open(os.path.join(self.opt.work_dir, 'predicted_kpt.json'), 'w') as fid:
             json.dump(kpt_json, fid)
         res = evaluate_mAP(os.path.join(self.opt.work_dir, 'predicted_kpt.json'), ann_type='keypoints', ann_file=GT_dict_path)
+        ospa = ospa_for_loc(ann_json_path=GT_dict_path, pr_json_path=os.path.join(self.opt.work_dir, 'predicted_kpt.json'))
         with open(os.path.join(self.opt.work_dir, 'predicted_kpt_ann.json'), 'w') as fid_ann:
             json.dump(kpt_json_ann, fid_ann)
         res_ann = evaluate_mAP(os.path.join(self.opt.work_dir, 'predicted_kpt_ann.json'), ann_type='keypoints', ann_file=GT_dict_path)
+        ospa_ann = ospa_for_loc(ann_json_path=GT_dict_path, pr_json_path=os.path.join(self.opt.work_dir, 'predicted_kpt_ann.json'))
         if self.opt.vis:
             pred_save_dir = os.path.join(self.opt.work_dir, 'prediction', f'Round{self.round_cnt}')
             if not os.path.exists(pred_save_dir):
@@ -424,7 +447,10 @@ class ActiveLearning:
         self.percentage.append((len(self.labeled_id.index)/self.eval_len)*100) # label percentage: 0~100
         self.performance.append(res) # mAP performance: 0~100
         self.performance_ann.append(res_ann) # mAP performance: 0~100
+        self.ospa_list.append(ospa)
+        self.ospa_list_ann.append(ospa_ann)
         print(f'[Evaluation] Percentage:{self.percentage[-1]:.1f}, mAP:{res["AP"]:.3f} (ANN:{res_ann["AP"]:.3f}), AP@0.5:{res["AP .5"]:.3f} (ANN:{res_ann["AP .5"]:.3f}), AP@0.6:{res["AP .6"]:.3f} (ANN:{res_ann["AP .6"]:.3f}), AP@0.75:{res["AP .75"]:.3f} (ANN:{res_ann["AP .75"]:.3f}), AP@0.95:{res["AP .95"]:.3f} (ANN:{res_ann["AP .95"]:.3f})')
+        print(f'[Evaluation] OSPA:{ospa:.3f} (ANN:{ospa_ann:.3f})')
 
         # compute influence score for all unlabeled data
         self.uncertainty_mean.append(total_uncertainty/len(self.eval_dataset)) # mean uncertainty
@@ -462,7 +488,14 @@ class ActiveLearning:
                 uncertainty_thc = (uncertainty_thc - np.min(uncertainty_thc)) / (np.max(uncertainty_thc) - np.min(uncertainty_thc))
                 uncertainty_wpu = (uncertainty_wpu - np.min(uncertainty_wpu)) / (np.max(uncertainty_wpu) - np.min(uncertainty_wpu))
                 # integrate uncertainty score
-                uncertainty_ = uncertainty_thc + uncertainty_wpu
+                if self.opt.THCvsWPU == "const":
+                    uncertainty_ = uncertainty_thc + uncertainty_wpu
+                else:
+                    labeled_ratio = len(self.labeled_id.index)/len(self.eval_dataset)
+                    if self.opt.THCvsWPU == "increase":
+                        uncertainty_ = labeled_ratio * uncertainty_thc + (1-labeled_ratio) * uncertainty_wpu
+                    elif self.opt.THCvsWPU == "decrease":
+                        uncertainty_ = (1-labeled_ratio) * uncertainty_thc + labeled_ratio * uncertainty_wpu
                 uncertainty_score = (uncertainty_ - np.min(uncertainty_)) / (np.max(uncertainty_) - np.min(uncertainty_)) # normalize uncertainty score to [0,1] again
                 self.uncertainty_dict['Round'+str(self.round_cnt)] = UNC_dict # add to uncertainty dictionary
                 # print("uncertainty_score:", uncertainty_score)
@@ -586,6 +619,7 @@ class ActiveLearning:
         if len(self.unlabeled_id.index) != 0: # if there is unlabeled data
             self.retrain_id = IndexCollection() # initialize retrain data
             retrain_id, self.moks_queried = self.get_retrain_id(query_list, OKS_dict) # get retrain data
+            self.moksQ_list.append(self.moks_queried)
             self.retrain_id.update(retrain_id) # add to retrain data
             # print(f"[Retrain/Labeled]: {len(self.retrain_id.index)-len(query_list)}/{len(self.labeled_id.index)}")
             self.labeled_id.update(query_list) # add to labeled data
@@ -775,14 +809,22 @@ class ActiveLearning:
             else:
                 ind = np.argmax(((1-self.moks_queried)*min_distances.reshape(-1)) + (self.unc_lambda*self.moks_queried*uncertainty))
             return ind
+        def _query_fixed_lambda(min_distances, uncertainty):
+            if len(labeled_idx) == 0:
+                ind = np.argmax(uncertainty)
+            else:
+                ind = np.argmax(min_distances.reshape(-1)+self.unc_lambda*uncertainty)
+            return ind
         def _query(min_distances, _):
             if len(labeled_idx) == 0:
                 ind = np.random.choice(np.arange(embeddings.shape[0]))
             else:
                 ind = np.argmax(min_distances.reshape(-1))
             return ind
-        if self.uncertainty == "None":
+        if self.uncertainty == "None" or self.cfg.VAL.UNC_LAMBDA == 0:
             func_query = _query
+        elif self.opt.fixed_lambda:
+            func_query = _query_fixed_lambda
         else:
             func_query = _query_w_unc
 
@@ -835,9 +877,11 @@ class ActiveLearning:
         if True:
             AE = WholeBodyAE(z_dim=self.cfg.AE.Z_DIM)
             if self.opt.optimize:
-                AE_dataset = Wholebody(mode='train_val', retrain_video_id=self.video_id)
+                mode = 'train_val' if self.dataset == "Posetrack21" else 'val'
+                AE_dataset = Wholebody(mode=mode, retrain_video_id=self.video_id, dataset_type=self.dataset)
             else:
-                AE_dataset = Wholebody(mode='val', retrain_video_id=self.video_id)
+                mode = 'val' if self.dataset == "Posetrack21" else 'test'
+                AE_dataset = Wholebody(mode=mode, retrain_video_id=self.video_id, dataset_type=self.dataset)
             pretrained_path = os.path.join(self.cfg.AE.PRETRAINED_ROOT, 'Hybrid', f'WholeBodyAE_zdim{self.cfg.AE.Z_DIM}.pth')
         else: # use raw keypoint as feature
             AE = WholeBodyAE(z_dim=self.cfg.AE.Z_DIM, kp_direct=True)
@@ -914,9 +958,9 @@ class ActiveLearning:
                 grid_image[:, width_begin:width_end, :] = masked_image
                 # original image with estimated joint position
                 # convert color
-                joint = preds[t][j]
+                joint = preds[t][0][j]
                 img = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
-                cv2.circle(img=img, center=(int(joint[0]), int(joint[1])), radius=1, color=[0, 0, 255], thickness=1)
+                cv2.circle(img=img, center=(int(joint[0]), int(joint[1])), radius=1, color=[0, 255, 0], thickness=2)
                 grid_original_image[:, width_begin:width_end, :] = img
 
             # save image (add colorbar)
@@ -1040,9 +1084,9 @@ class ActiveLearning:
         for sample in range(embeddings.shape[0]): # for every sample in candidate_list
             marker = 'o' if sample in query_list else 'x'
             size = 120 if sample in query_list else 40
-            plt.scatter(densmap_emb[sample, 0], densmap_emb[sample, 1], s=size, marker=marker, c=(unc_list[sample]), cmap="viridis", alpha=0.8, norm=norm) # change color according to uncertainty
-            # if sample in query_list:
-                # plt.annotate("query", (densmap_emb[sample, 0], densmap_emb[sample, 1]+0.2), fontsize=10)
+            plt.scatter(densmap_emb[sample, 0], densmap_emb[sample, 1], s=size, marker=marker, c=(unc_list[sample]), cmap="jet", alpha=0.8, norm=norm) # change color according to uncertainty
+            if sample in query_list:
+                plt.annotate("query", (densmap_emb[sample, 0], densmap_emb[sample, 1]+0.2), fontsize=10)
         plt.colorbar(label='uncertainty', norm=norm)
         save_dict = os.path.join(self.opt.work_dir, 'coreset_result')
         if not os.path.exists(save_dict):

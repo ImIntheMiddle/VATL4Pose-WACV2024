@@ -241,7 +241,7 @@ def preset_model(cfg):
     return model
 
 def line_notify(notification_message, image_path=None, sticker_id=None, sticker_package_id=None):
-    line_notify_token = "mLQTMLYZs69Ff9rPl9JCSy5VsfBApfBfxf1zpxdilkz"
+    line_notify_token = "" # LINE Notifyのトークン
     line_notify_api = 'https://notify-api.line.me/api/notify'
     print(f'message: {notification_message}')
     headers = {'Authorization': f'Bearer {line_notify_token}'}

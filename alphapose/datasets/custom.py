@@ -43,7 +43,7 @@ class CustomDataset(data.Dataset):
         self._preset_cfg = cfg['PRESET']
         self._root = cfg['ROOT']
         self._img_prefix = cfg['IMG_PREFIX']
-        self._ann_file = cfg['ANN'] 
+        self._ann_file = cfg['ANN']
         self._num_datasets = 1
 
         if isinstance(self._ann_file, list):
@@ -94,6 +94,7 @@ class CustomDataset(data.Dataset):
                 rot=self._rot, sigma=self._sigma, train=self._train, add_dpg=self._dpg, loss_type=self._loss_type)
 
         self._items, self._labels = self._lazy_load_json()
+        print(f"Dataset loaded with {len(self._items)} items!")
 
     def __getitem__(self, idx):
         # get image id
@@ -121,7 +122,7 @@ class CustomDataset(data.Dataset):
             with open(self._ann_file + '.pkl', 'rb') as fid:
                 return pk.load(fid)
         else: # for coco formated json file
-            _database = COCO(self._ann_file)
+            _database = COCO(self._ann_file) # define by COCO class
             if os.access(self._ann_file + '.pkl', os.W_OK):
                 with open(self._ann_file + '.pkl', 'wb') as fid:
                     pk.dump(_database, fid, pk.HIGHEST_PROTOCOL)
@@ -138,7 +139,6 @@ class CustomDataset(data.Dataset):
             if os.access(self._ann_file + postfix, os.W_OK):
                 with open(self._ann_file + postfix, 'wb') as fid:
                     pk.dump((items, labels), fid, pk.HIGHEST_PROTOCOL)
-
         return items, labels
 
     @abstractmethod

@@ -8,7 +8,7 @@ class WholeBodyAE(nn.Module):
         self.z_dim = z_dim
         if kp_direct: # if True, use keypoints as input of AE directly. size: 15*3 = 45
             self.input_dim = 51
-        else: # if False, use hand-crafted feature as input of AE. size: 15*2 + 8 = 38
+        else: # if False, use hand-crafted feature as input of AE. size: 17*2 + 8 = 42
             self.input_dim = 42
         self.encoder = nn.Sequential(
             nn.Linear(self.input_dim, 24),

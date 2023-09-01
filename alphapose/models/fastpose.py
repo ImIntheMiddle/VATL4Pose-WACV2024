@@ -47,6 +47,7 @@ class FastPose(nn.Module):
             self.duc2 = DUC(256, 512, upscale_factor=2, norm_layer=norm_layer)
         self.conv_out = nn.Conv2d(
             self.conv_dim, self._preset_cfg['NUM_JOINTS'], kernel_size=3, stride=1, padding=1)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
     def forward(self, x):
         out = self.preact(x)
@@ -65,3 +66,8 @@ class FastPose(nn.Module):
                 # logger.info('=> init {}.bias as 0'.format(name))
                 nn.init.normal_(m.weight, std=0.001)
                 nn.init.constant_(m.bias, 0)
+
+    def get_embedding(self, x):
+        out = self.preact(x)
+        fvec = torch.flatten(self.avgpool(out), 1)
+        return fvec
