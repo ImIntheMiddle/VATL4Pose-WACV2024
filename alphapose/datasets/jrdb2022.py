@@ -1,4 +1,4 @@
-"""PoseTrack21 Dataset"""
+"""JRDB-Pose Dataset"""
 import os
 import numpy as np
 import torch

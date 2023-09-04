@@ -170,28 +170,39 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   prefix = "_ann" if ANN else ""
   ymin = 100 # initial value
   for i, strategy in enumerate(result_dict.keys()):
-    c = plt.get_cmap("tab10")(i)
     if "THC" in strategy or "WPU" in strategy:
         line_style = "-"
-        linewidth = 3
+        linewidth = 2
         label = (strategy + " (Ours)").replace("_", "+").replace("filter", "").replace("weighted", "DWC").replace("Coreset", "DUW")
-        # c = plt.get_cmap("tab10")(i-1)
+        c = plt.get_cmap("Set1")(0)
+        if strategy=="THC":
+          c = plt.get_cmap("Set1")
+        elif strategy=="WPU":
+          c = plt.get_cmap("Set1")
     else:
         line_style = "--"
         linewidth = 2
         label = strategy
         if strategy=="Random":
             label = "Random"
+            c = "black"
         elif strategy=="HP":
             label = "LC"
+            c = plt.get_cmap("Set1")(2)
         elif strategy=="MPE+Influence":
             label = "DC"
-        # elif strategy=="TPC":
-            # c = plt.get_cmap("tab10")(i+1)
+        elif strategy=="MPE":
+            c = "chocolate"
+        elif strategy=="TPC":
+            c = plt.get_cmap("Set1")(3)
         elif "filter" in strategy:
             label = strategy.replace("filter", "").replace("_", "")
             label = label.replace("K-Means", "k-means")
             label = label.replace("Coreset", "Core-Set")
+            if strategy=="_K-Meansfilter":
+              c = plt.get_cmap("Set1")(1)
+            elif strategy=="_Coresetfilter":
+              c = "gold"
 
     # plot the mean performance of each strategy
     x = result_dict[strategy]["mean_Percentage"][QUERY_RATIO]
@@ -221,7 +232,6 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
     # if uncertainty is always 100, skip it
     if np.all(y==100):
         continue
-    c = plt.get_cmap("tab10")(i+1)
     ax2.plot(x, y, label=label, linewidth=linewidth, linestyle=line_style, color=c, marker="o", markersize=5)
     # 矢印を追加
     for i in range(len(x) - 1):
@@ -369,9 +379,9 @@ def main(video_id_list_path, strategy_list, sc_thresh, RAW=False, ANN=True):
   print("Done!\n")
 
 if __name__ == "__main__":
-    is_PoseTrack = False
-    is_JRDB = True
-    
+    is_PoseTrack = True
+    is_JRDB = False
+
     if is_PoseTrack:
       video_id_list_path = "configs/val_video_list_full.txt"
     elif is_JRDB:
@@ -379,23 +389,5 @@ if __name__ == "__main__":
     else:
       video_id_list_path = "configs/PCIT_video_list.txt"
 
-    # strategy_list = {"MVA4": ["Random", "LC", "MPE+Influence", "TPC", "THC", "WPU", "THC_weightedfilter", "WPU_weightedfilter", "THC+WPU_weightedfilter"]}
-    # strategy_list = {"PCIT2": ["Random", "HP", "TPC", "MPE+Influence", "THC_weightedfilter", "WPU_weightedfilter", "THC+WPU_weightedfilter", "_K-Meansfilter"]}
-
-    # strategy_list = {"WACV_DUW10": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_ACFT": ["THC", "WPU", "THC+WPU", "_Coresetfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.5": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.6": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.7": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.8": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_ACFT": ["HP", "MPE", "TPC", "THC", "WPU"]}
-    # strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "_K-Meansfilter", "_Coresetfilter"], "WACV_DUW0.001": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_increase": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_decrease": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_const": ["THC+WPU_Coresetfilter"]}
-    # main(video_id_list_path, strategy_list, sc_thresh="AP .8", RAW=False, ANN=False)
-    # strategy_list = {"WACV_FIXED": ["THC+WPU_Coresetfilter"]}
-
-    for lam in [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100]:
-      strategy_list = {f"WACV_JRDBopt_lambda{lam}": ["THC+WPU_Coresetfilter"]}
-      main(video_id_list_path, strategy_list, sc_thresh=None, RAW=False, ANN=True)
+    strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "_K-Meansfilter", "_Coresetfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
+    main(video_id_list_path, strategy_list, sc_thresh=None, RAW=False, ANN=True)

@@ -109,7 +109,7 @@ def setup_opt(opt):
         torch.backends.cudnn.deterministic = False
         print('Speed up technique applied. (Not reproducible)')
     if opt.seedfix: # fix seed for reproducibility
-        SEED = 42 # 318
+        SEED = 166 # 318/42
         random.seed(SEED)
         np.random.seed(SEED)
         torch.manual_seed(SEED)
@@ -146,13 +146,6 @@ def set_dir(cfg, opt):
     # set get_pre_next flag if uncertainty contains TPC or THC_L1
     opt.get_prenext = True if 'TPC' in opt.uncertainty or 'THC' in opt.uncertainty else False
 
-    if os.uname()[1] in ["dl30"]: # set dataset root directory
-        if cfg.DATASET.TRAIN.TYPE == "JRDB2022":
-            cfg.DATASET.TRAIN.ROOT = '/home-local/halo/jrdb-pose/'
-            cfg.DATASET.EVAL.ROOT = '/home-local/halo/jrdb-pose/'
-        elif cfg.DATASET.TRAIN.TYPE == "Posetrack21":
-            cfg.DATASET.TRAIN.ROOT = '/home-local/halo/PoseTrack21/' # set dataset root directory
-            cfg.DATASET.EVAL.ROOT = '/home-local/halo/PoseTrack21/'
     if opt.PCIT: # set dataset root directory
         cfg.DATASET.TRAIN.ROOT = 'data/PCIT/' # set dataset root directory
         cfg.DATASET.EVAL.ROOT = 'data/PCIT/'
@@ -270,7 +263,7 @@ if __name__ == '__main__':
     opt = parse_args() # get exp settings
     opt = setup_opt(opt) # setup option
     cfg = update_config(opt.cfg) # update config
-    cfg.VAL.UNC_LAMBDA = opt.wunc # set weight of uncertainty
+    # cfg.VAL.UNC_LAMBDA = opt.wunc # set weight of uncertainty
     if opt.vis:
         cfg.RETRAIN.BASE = 0
         cfg.RETRAIN.ALPHA = 0

@@ -15,7 +15,6 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
     Parameters
     ----------
     root: str, default './data/PoseTrack21'
-    for home-local: '/home-local/halo/PoseTrack21'
         Path to the PoseTrack21 dataset.
     """
     CLASSES = ['person']

@@ -12,6 +12,14 @@ build/
 develop-eggs/
 dist/
 downloads/
+.dist
+.build/
+.history/
+.model_files/
+detector/
+docs/
+examples/
+
 eggs/
 .eggs/
 lib/
@@ -118,3 +126,5 @@ examples/res*/
 data/
 exp/
 data
+tensorboard/
+trackers/

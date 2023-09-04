@@ -24,7 +24,7 @@ QUERY_RATIO = [0, 50, 100, 150, 200, 300, 400, 600, 800, 1000]
 
 # METRIC = ["AP", "AP .5", "AP .6", "AP .7", "AP .75", "AP .8"]
 # METRIC = ["AP"]
-METRIC = ["AP .5", "AP .6", "AP .75"]
+METRIC = ["AP .6"]
 
 def load_result_json(result_dir, strategy_list, video_id_list, result_dict, sc_thresh):
     """load result json file.
@@ -179,7 +179,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   fig2, ax2 = plt.subplots() # graph for mean uncertainty
   ax2.set_ylabel("Average Uncertainty (%)", fontsize=14)
   ax2.set_xlabel("AP@.6 (%)", fontsize=14)
-  ax2.set_xlim(75, 100)
+  ax2.set_xlim(55, 100)
   print(f"{metric}", list(result_dict.keys()))
 
   prefix = "_ann" if ANN else ""
@@ -188,7 +188,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
 
     if "THC" in strategy or "WPU" in strategy:
         line_style = "-"
-        linewidth = 3
+        linewidth = 2
         label = (strategy + " (Ours)").replace("_", "+").replace("filter", "").replace("weighted", "DWC").replace("Coreset", "DUW")
         c = plt.get_cmap("Set1")(0)
         if strategy=="THC":
@@ -204,7 +204,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
             c = "black"
         elif strategy=="HP":
             label = "LC"
-            c = "gold"
+            c = plt.get_cmap("Set1")(2)
         elif strategy=="MPE+Influence":
             label = "DC"
         elif strategy=="MPE":
@@ -218,7 +218,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
             if strategy=="_K-Meansfilter":
               c = plt.get_cmap("Set1")(1)
             elif strategy=="_Coresetfilter":
-              c = plt.get_cmap("Set1")(2)
+              c = "gold"
     # plot the mean performance of each strategy
     x = result_dict[strategy]["mean_Percentage"][QUERY_RATIO]
     y= np.array(result_dict[strategy][str(metric)+"_mean"+prefix])[QUERY_RATIO]
@@ -247,7 +247,6 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
     # if uncertainty is always 100, skip it
     if np.all(y==100):
         continue
-    c = plt.get_cmap("tab10")(i+1)
     ax2.plot(x, y, label=label, linewidth=linewidth, linestyle=line_style, color=c, marker="o", markersize=5)
     # 矢印を追加
     for i in range(len(x) - 1):
@@ -300,7 +299,7 @@ def summarize_result(save_dir, result_dict, metric, ANN=False):
   plt.close(fig1)
 
   # save ax2
-  ax2.set_xticks(np.arange(75, 101, 5))
+  ax2.set_xticks(np.arange(55, 101, 5))
   ax2.set_yticks(np.arange(70, 185, 10))
   ax2.tick_params(labelsize=12)
   ax2.legend(fontsize=12)
@@ -335,7 +334,7 @@ def plot_spearman(save_dir, result_dict):
   plt.figure()
   percentage = np.array(QUERY_RATIO)/10
   for i, strategy in enumerate(result_dict.keys()):
-    x = np.array(result_dict[strategy]["AP .75"+"_mean"])[QUERY_RATIO]
+    x = np.array(result_dict[strategy]["AP .6"+"_mean"])[QUERY_RATIO]
     spearmanr = np.array(list(result_dict[strategy]["spearmanr"].values())).mean(axis=0)
     if len(spearmanr) == 0:
       continue
@@ -407,25 +406,6 @@ if __name__ == "__main__":
       video_id_list_path = "configs/val_video_list_full.txt"
     elif is_JRDB:
       video_id_list_path = "configs/jrdb-pose/test_ids.txt"
-      # video_id_list_path = "configs/jrdb-pose/val_ids.txt"
-    else:
-      video_id_list_path = "configs/PCIT_video_list.txt"
 
-    # strategy_list = {"MVA4": ["Random", "LC", "MPE+Influence", "TPC", "THC", "WPU", "THC_weightedfilter", "WPU_weightedfilter", "THC+WPU_weightedfilter"]}
-    # strategy_list = {"PCIT2": ["Random", "HP", "TPC", "MPE+Influence", "THC_weightedfilter", "WPU_weightedfilter", "THC+WPU_weightedfilter", "_K-Meansfilter"]}
-
-    # strategy_list = {"WACV_DUW10": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_ACFT": ["THC", "WPU", "THC+WPU", "_Coresetfilter"], "WACV_DUW0.01": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.5": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.6": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.7": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_SC0.8": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_ACFT": ["HP", "MPE", "TPC", "THC", "WPU"]}
-    # strategy_list = {"WACV_ACFT": ["Random", "HP", "MPE", "TPC", "_K-Meansfilter", "_Coresetfilter"], "WACV_DUW0.001": ["THC+WPU_Coresetfilter"]}
-    # strategy_list = {"WACV_ACFT": ["HP", "MPE", "TPC", "THC", "WPU"]}
     strategy_list = {"WACV_JRDB": ["Random", "HP", "MPE", "TPC", "_K-Meansfilter", "_Coresetfilter"], "WACV_JRDB_lambda1000": ["THC+WPU_Coresetfilter"]}
     main(video_id_list_path, strategy_list, sc_thresh=None, RAW=False, ANN=True)
-    # for lam in [250, 500, 1000]:
-      # strategy_list = {f"WACV_JRDB_lambda{lam}": ["THC+WPU_Coresetfilter"]}
-      # main(video_id_list_path, strategy_list, sc_thresh=None, RAW=False, ANN=True)
-    # main(video_id_list_path, strategy_list, sc_thresh="AP .8", RAW=False, ANN=False)
