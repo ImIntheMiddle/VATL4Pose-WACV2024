@@ -13,7 +13,9 @@ install -r requirement.txt
 ```
 
 Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
+
 PoseTrack21: https://github.com/anDoer/PoseTrack21
+
 JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
 
 ## Pre-trained Model
@@ -30,6 +32,11 @@ Examples: Video-specific Active Transfer Learning on `PoseTrack21`, using `Simpl
 - **Evaluate the performance of pre-trained model on train/val/test split**
 ``` python
 ./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
+```
+
+- **Pre-train the AutoEncoder for WPU (Whole-body Pose Unnaturalness)**
+``` python
+./scripts/wholebodyAE_train --dataset_type Posetrack21
 ```
 
 - **Execute Video-specific Active Transfer Learning on test videos**
