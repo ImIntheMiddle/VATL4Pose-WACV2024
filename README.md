@@ -8,27 +8,27 @@ This is the official implementation of the paper ``Active Transfer Learning for 
 
 ## Installation
 Following the command below, please install the required libraries
-'pip install -r requirement.txt'
+```pip
+install -r requirement.txt
+```
 
 ## Pre-trained Model
 We will provide pre-trained models at Google Drive after the decision of WACV Round 2.
 
 ## Quick Start
-Examples:
+Examples: Video-specific Active Transfer Learning on `PoseTrack21`, using `SimpleBaseline`.
 
-Video-specific Active Transfer Learning on `PoseTrack21`, using `SimpleBaseline`.
-
-- **Training**: Train an initial pose estimator from scratch.
+- **Train an initial pose estimator from scratch**
 ``` bash
 ./scripts/train.sh ${CONFIG} ${EXP_ID}
 ```
 
-- **Evaluation**: Evaluate a trained model
+- **Evaluate the performance of pre-trained model on train/val/test split**
 ``` bash
 ./scripts/validate.sh ${CONFIG} ${CHECKPOINT}
 ```
 
-- **Video-specific Active Transfer Learning**
+- **Execute Video-specific Active Transfer Learning on test videos**
 ``` bash
 ./scripts/inference.sh configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml pretrained_models/fast_res50_256x192.pth ${VIDEO_NAME}
 #or
@@ -37,12 +37,12 @@ python scripts/demo_inference.py --cfg configs/coco/resnet/256x192_res50_lr1e-3_
 python scripts/demo_inference.py --detector yolox-x --cfg configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml --checkpoint pretrained_models/fast_res50_256x192.pth --indir examples/demo/
 ```
 
-- **Summarize the results**
+- **Summarize the results of video-specific ATL**
 ``` bash
 ./scripts/train.sh ./configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml exp_fastpose
 ```
 
-- **(Optional) Visualize the results**
+- **(Optional) Visualize the estimated poses on each ATL cycle**
 ``` bash
 ./scripts/train.sh ./configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml exp_fastpose
 ```

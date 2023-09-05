@@ -128,3 +128,6 @@ exp/
 data
 tensorboard/
 trackers/
+
+# private data
+PCIT/
