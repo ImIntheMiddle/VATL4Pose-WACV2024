@@ -1,6 +1,6 @@
 
 <div align="center">
-    <img src=".github/overview.png", width="400">
+    <img src=".github/overview.png", width="960">
 </div>
 
 ## ATL4VSHPE: Active Transfer Learning for Efficient Video-Specific Human Pose Estimation
