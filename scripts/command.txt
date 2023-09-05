@@ -8,11 +8,5 @@ CUDA_VISIBLE_DEVICES=4 python scripts/Run_active_learning.py --cfg configs/jrdb-
 
 CUDA_VISIBLE_DEVICES=3 python scripts/Run_active_learning.py --cfg configs/posetrack21/al_simple_posetrack.yaml --uncertainty THC+WPU --filter Coreset --memo WACV_FIXED --seedfix --continual --fixed_lambda --video_id 004524
 
-CUDA_VISIBLE_DEVICES=3 python scripts/Run_active_learning.py --cfg configs/jrdb-pose/al_simple_jrdb.yaml --uncertainty THC+WPU --filter Coreset --memo WACV_JRDBopt --seedfix --continual --video_id 00
-
-CUDA_VISIBLE_DEVICES=3 python scripts/Run_active_learning.py --cfg configs/al_simple_duw.yaml --uncertainty THC+WPU --filter Coreset --memo MVA_vis --seedfix --continual --video_id 003511 --vis
-
 CUDA_VISIBLE_DEVICES=4 python scripts/Run_active_learning.py --uncertainty WPU --memo optimize --video_id 005833 --optimize --speedup --continual
-bash scripts/run_active_learning.sh 
-
-CUDA_VISIBLE_DEVICES=1 python scripts/Run_active_learning.py --uncertainty THC --memo visualize --video_id 005068 --speedup --continual
+bash scripts/run_active_learning.sh

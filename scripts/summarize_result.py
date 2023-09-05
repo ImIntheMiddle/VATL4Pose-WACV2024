@@ -277,4 +277,4 @@ def main(name):
     print("Done!\n")
 
 if __name__ == "__main__":
-    main(name="MVA4")
+    main(name="")

@@ -128,6 +128,7 @@ exp/
 data
 tensorboard/
 trackers/
+scripts/summarize_result.py
 
 # private data
 PCIT/

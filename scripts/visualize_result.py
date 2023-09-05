@@ -247,18 +247,10 @@ def compare_video(video_paths, compv_path):
 
 if __name__ == '__main__':
     cfg = update_config("configs/jrdb-pose/al_simple_jrdb.yaml") # load config
-    # cfg = update_config("configs/al_simple_duw.yaml") # load config
     # model = "SimplePose"
     model = "FastPose"
-    # strategy_list = ["Random", "HP", "TPC", "THC_L1", "WPU_hybrid"] # strategies
-    # strategy_list = ["Random","THC_L1_weightedfilter","MPE+Influence","HP"] # strategies
-    # strategy_list = ["THC_weightedfilter"]
-    # strategy_list = ["THC+WPU_Coresetfilter"]
     strategy_list = ["THC+WPU_Coresetfilter", "MPE", "_Coresetfilter", "TPC", "HP"]
     round_list = ["Round0"]
-    # root_dir = "exp/AL_MVA4/SimplePose"
-    # root_dir = "exp/AL_MVA_vis/SimplePose"
-    # root_dir = "exp/AL_PCIT3/SimplePose"
     root_dir = "exp/AL_WACV_VIS/FastPose"
     # video_id_list = read_video_list("configs/val_video_list.txt")
     # video_id_list = read_video_list("configs/jrdb-pose/test_ids.txt")

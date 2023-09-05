@@ -12,6 +12,10 @@ Following the command below, please install the required libraries
 install -r requirement.txt
 ```
 
+Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
+PoseTrack21: https://github.com/anDoer/PoseTrack21
+JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
+
 ## Pre-trained Model
 We will provide pre-trained models at Google Drive after the decision of WACV Round 2.
 
@@ -19,32 +23,31 @@ We will provide pre-trained models at Google Drive after the decision of WACV Ro
 Examples: Video-specific Active Transfer Learning on `PoseTrack21`, using `SimpleBaseline`.
 
 - **Train an initial pose estimator from scratch**
-``` bash
-./scripts/train.sh ${CONFIG} ${EXP_ID}
+``` python
+./scripts/posetrack_train.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
 ```
 
 - **Evaluate the performance of pre-trained model on train/val/test split**
-``` bash
-./scripts/validate.sh ${CONFIG} ${CHECKPOINT}
+``` python
+./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
 ```
 
 - **Execute Video-specific Active Transfer Learning on test videos**
+Please specify the detailed settings in the shell script if you like.
 ``` bash
-./scripts/inference.sh configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml pretrained_models/fast_res50_256x192.pth ${VIDEO_NAME}
-#or
-python scripts/demo_inference.py --cfg configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml --checkpoint pretrained_models/fast_res50_256x192.pth --indir examples/demo/
-#or if you want to use yolox-x as the detector
-python scripts/demo_inference.py --detector yolox-x --cfg configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml --checkpoint pretrained_models/fast_res50_256x192.pth --indir examples/demo/
+./scripts/run_active_learning.sh ${GPU_ID}
 ```
 
 - **Summarize the results of video-specific ATL**
-``` bash
-./scripts/train.sh ./configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml exp_fastpose
+Please specify the results to summarize in the python script.
+``` python
+./scripts/detailed_result.py
 ```
 
 - **(Optional) Visualize the estimated poses on each ATL cycle**
-``` bash
-./scripts/train.sh ./configs/coco/resnet/256x192_res50_lr1e-3_1x.yaml exp_fastpose
+Please specify the results to summarize in the python script.
+``` python
+./scripts/visualize_result.py
 ```
 ## Acknowledgement
 This implementation is based on AlphaPose, ALiPy, and VL4Pose.
