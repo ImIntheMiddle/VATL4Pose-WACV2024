@@ -1,10 +1,9 @@
-
-<div align="center">
-    <img src=".github/overview.png", width="400">
-</div>
-
 ## ATL4VSHPE: Active Transfer Learning for Efficient Video-Specific Human Pose Estimation
 This is the official implementation of the paper ``Active Transfer Learning for Efficient Video-Specific Human Pose Estimation'' submitted to WACV2024.
+
+<div align="center">
+    <img src=".github/overview.png", width="960">
+</div>
 
 ## Installation
 Following the command below, please install the required libraries
