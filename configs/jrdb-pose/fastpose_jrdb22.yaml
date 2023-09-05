@@ -1,0 +1,75 @@
+DATASET:
+  TRAIN:
+    TYPE: 'JRDB2022'
+    ROOT: './data/jrdb-pose'
+    IMG_PREFIX: 'images/image_stitched'
+    ANN: 'activelearning/train/integrated_train.json'
+    # ANN: 'activelearning/train/00_jrdb-pose.json'
+    AUG:
+      FLIP: true
+      ROT_FACTOR: 40
+      SCALE_FACTOR: 0.3
+      NUM_JOINTS_HALF_BODY: 8
+      PROB_HALF_BODY: -1
+  VAL:
+    TYPE: 'JRDB2022'
+    ROOT: './data/jrdb-pose'
+    IMG_PREFIX: 'images/image_stitched'
+    ANN: 'activelearning/val/integrated_val.json'
+    # ANN: 'activelearning/val/01_jrdb-pose.json'
+  TEST:
+    TYPE: 'JRDB2022'
+    ROOT: './data/jrdb-pose'
+    IMG_PREFIX: 'images/image_stitched'
+    ANN: 'activelearning/test/integrated_test.json'
+
+DATA_PRESET:
+  TYPE: 'simple'
+  SIGMA: 2
+  NUM_JOINTS: 17
+  IMAGE_SIZE:
+  - 256
+  - 192
+  HEATMAP_SIZE:
+  - 64
+  - 48
+
+MODEL:
+  TYPE: 'FastPose'
+  # PRETRAINED: 'pretrained_models/posetrack21/fastpose_256x192.pth'
+  PRETRAINED: 'exp/initial-fastpose_jrdb22/model_best.pth'
+  TRY_LOAD: ''
+  NUM_DECONV_FILTERS:
+  - 256
+  - 256
+  - 256
+  NUM_LAYERS: 50
+
+LOSS:
+  TYPE: 'MSELoss'
+
+DETECTOR:
+  NAME: 'yolo'
+  CONFIG: 'detector/yolo/cfg/yolov3-spp.cfg'
+  WEIGHTS: 'detector/yolo/data/yolov3-spp.weights'
+  NMS_THRES: 0.6
+  CONFIDENCE: 0.1
+
+TRAIN:
+  WORLD_SIZE: 2
+  BATCH_SIZE: 240 # 11000MiBのGPUで90ぐらいが限界
+  BEGIN_EPOCH: 0
+  END_EPOCH: 100
+  OPTIMIZER: 'adam'
+  LR: 0.0005
+  LR_FACTOR: 0.1
+  LR_STEP:
+  - 90
+  - 120
+  DPG_MILESTONE: 140
+  DPG_STEP:
+  - 160
+  - 190
+
+VAL:
+  BATCH_SIZE: 270

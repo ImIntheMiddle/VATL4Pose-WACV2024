@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import pdb
 
+
 def compute_angle(x0: float, y0: float, x1: float, y1: float, x2: float, y2: float) -> float:
     epsilon = 1e-6 # avoid division by zero
     m1 = (y1 - y0) / (x1 - x0 + epsilon) # slope of (left joint, center joint)
@@ -10,7 +11,7 @@ def compute_angle(x0: float, y0: float, x1: float, y1: float, x2: float, y2: flo
     # print("tan_abs: ", tan_abs)
     return np.arctan(tan_abs) # compute angle of each joint triangle using arctan of slopes
 
-def compute_hybrid(bbox: list[float], keypoints: list[float]) -> torch.Tensor:
+def compute_hybrid(bbox: list, keypoints: list) -> torch.Tensor:
   """Compute hybrid feature of a human body. include 38 values (x, y, vis, angle, center of gravity)
 
   Args:
@@ -39,7 +40,8 @@ def compute_hybrid(bbox: list[float], keypoints: list[float]) -> torch.Tensor:
   # print("normed_y_feature: ", normed_y_feature)
 
   # angle feature. angle of each joint triangle. in total 8 angles
-  angle_triangles = np.array([[8, 6, 12], [6, 8, 10], [5, 7, 9], [7, 5, 11], [11, 12, 14], [12, 11, 13], [12, 14, 16], [11, 13, 15]]) # angle of each joint triangle (left, center, right)
+  # angle_triangles = np.array([[6, 4, 10], [4, 6, 8], [3, 5, 7], [5, 3, 9], [9, 10, 12], [10, 9, 11], [10, 12, 14], [9, 11, 13]]) # angle of each joint triangle (left, center, right)
+  angle_triangles = np.array([[8, 6, 12], [6, 8, 10], [5, 7, 9], [7, 5, 11], [11, 12, 14], [12, 11, 13], [12, 14, 16], [11, 13, 15]])
   angle_feature = np.zeros(8) # initialize angle feature
   for i in range(8):
     x0, y0 = x_keypoints[angle_triangles[i][0]], y_keypoints[angle_triangles[i][0]]
@@ -55,7 +57,7 @@ def compute_hybrid(bbox: list[float], keypoints: list[float]) -> torch.Tensor:
   feature = np.hstack((normed_x_feature, normed_y_feature, angle_feature)) # combine normed_x_feature, normed_y_feature, angle_feature
   # print(feature.shape) # (42,)
   # print(feature)
-  assert feature.shape[0] == 42, "feature must have 42 values!"
+  # assert feature.shape[0] == 38, "feature must have 38 values!"
   return feature
 
 # test code for compute_hybrid
@@ -81,5 +83,5 @@ if __name__ == "__main__":
         372.0, 581.5, 1.0
   ]
   sample_feature = compute_hybrid(sample_bbox, sample_keypoints)
-  assert sample_feature.shape == (42,)
+  assert sample_feature.shape == (38,)
   assert type(sample_feature) == torch.Tensor

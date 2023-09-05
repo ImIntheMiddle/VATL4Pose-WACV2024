@@ -88,4 +88,4 @@ class SimplePose(nn.Module):
     def get_embedding(self, x): # get feature vector from ResNet
         out = self.preact(x) # x is fed into ResNet, out is feature map
         fvec = torch.flatten(self.avgpool(out), 1) # get feature vector
-        return fvec
+        return fvec # dimension: 2048

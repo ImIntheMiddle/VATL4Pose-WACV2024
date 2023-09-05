@@ -50,7 +50,7 @@ parser.add_argument('--map', default=True, dest='map',
 
 
 opt = parser.parse_args()
-cfg_file_name = os.path.basename(opt.cfg)
+cfg_file_name = os.path.basename(opt.cfg).split('.')[0]
 cfg = update_config(opt.cfg)
 
 cfg['FILE_NAME'] = cfg_file_name
@@ -82,6 +82,5 @@ def epochInfo(self, set, idx, loss, acc):
         loss=loss,
         acc=acc
     ))
-
 
 logger.epochInfo = MethodType(epochInfo, logger)

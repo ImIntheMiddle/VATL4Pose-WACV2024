@@ -1,12 +1,14 @@
 # general libraries
 import argparse
 import os
+import io
 import pdb # import python debugger
 import platform
 import sys
 import time
 import random
 import json
+import copy
 
 # python general libraries
 import numpy as np
@@ -35,19 +37,22 @@ from alphapose.utils.metrics import evaluate_mAP, calc_accuracy, DataLogger
 from alphapose.utils.transforms import (flip, flip_heatmap, get_func_heatmap_to_coord, norm_heatmap)
 from alphapose.utils.bbox import bbox_xyxy_to_xywh
 from alphapose.utils.vis import vis_frame_fast, vis_frame
+from pose_eval.pose_eval import ospa_for_loc
 
 # original modules
 from active_learning.local_peak import localpeak_mean
-from active_learning.al_metric import compute_OKS, compute_Spearmanr
+from active_learning.al_metric import compute_OKS, compute_Spearmanr, compute_corr
 from .Whole_body_AE import WholeBodyAE
 from .Whole_body_AE import Wholebody
 from .Whole_body_AE.hybrid_feature import compute_hybrid
+from .VL4Pose.AuxiliaryNet import AuxNet
 
 """---------------------------------- Main Class ----------------------------------"""
 class ActiveLearning:
     def __init__(self, cfg, opt):
         self.round_cnt = 0
         self.cfg = cfg
+        self.dataset = cfg.DATASET.EVAL.TYPE
         self.opt = opt
         self.one_by_one = self.opt.onebyone # if True, then only one image is selected per round
         self.is_early_stop = False
@@ -59,15 +64,25 @@ class ActiveLearning:
         self.filter = self.opt.filter # type of filter
         self.video_id = self.opt.video_id
         self.get_prenext = self.opt.get_prenext
-        if self.opt.optimize:
-            IMG_PREFIX = f'images/train/{self.video_id}_bonn_train/'
-            ANN = f'activelearning/train_val/{self.video_id}_bonn_train.json'
+        if self.dataset == "Posetrack21":
+            if self.opt.optimize:
+                IMG_PREFIX = f'images/train/{self.video_id}_bonn_train/'
+                ANN = f'activelearning/train_val/{self.video_id}_bonn_train.json'
+            else:
+                IMG_PREFIX = f'images/val/{self.video_id}_mpii_test/'
+                ANN = f'activelearning/val/{self.video_id}_mpii_test.json'
         elif self.opt.PCIT:
             IMG_PREFIX = f'images/{self.video_id}_PCIT_eval/'
             ANN = f'annotations/eval/{self.video_id}.json'
-        else:
-            IMG_PREFIX = f'images/val/{self.video_id}_mpii_test/'
-            ANN = f'activelearning/val/{self.video_id}_mpii_test.json'
+        elif self.dataset == "JRDB2022":
+            # line number is corresponding to the video_id
+            with open("configs/jrdb-pose/jrdb_test.txt", "r") as f:
+            # with open("configs/jrdb-pose/jrdb_val.txt", "r") as f:
+                lines = f.readlines()
+                scene_name = lines[int(self.video_id)]
+            IMG_PREFIX = f'images/image_stitched/{scene_name}/'
+            ANN = f'activelearning/test/{self.video_id}_jrdb-pose.json'
+            # ANN = f'activelearning/val/{self.video_id}_jrdb-pose.json'
         self.cfg.DATASET.EVAL.IMG_PREFIX = IMG_PREFIX
         self.cfg.DATASET.EVAL.ANN = ANN
         self.cfg.DATASET.TRAIN.IMG_PREFIX = IMG_PREFIX
@@ -76,12 +91,17 @@ class ActiveLearning:
         # Evaluation settings
         self.eval_dataset = builder.build_dataset(self.cfg.DATASET.EVAL, preset_cfg=self.cfg.DATA_PRESET, train=False, get_prenext=self.opt.get_prenext)
         self.collate_fn = self.eval_dataset.my_collate_fn
-        self.eval_loader = torch.utils.data.DataLoader(self.eval_dataset, batch_size=self.cfg.VAL.BATCH_SIZE*self.opt.num_gpu, shuffle=False, num_workers=2, drop_last=False, pin_memory=True, collate_fn=self.collate_fn)
+        self.eval_loader = torch.utils.data.DataLoader(self.eval_dataset, batch_size=self.cfg.VAL.BATCH_SIZE*self.opt.num_gpu, shuffle=False, num_workers=8, drop_last=False, pin_memory=True, collate_fn=self.collate_fn)
+        self.cnt_early_stop = 0
+        self.finish_acc = self.opt.retrain_thresh # finishing accuracy
+        self.finish_margin = 0.05 # margin of finished accuracy
+        self.actual_finish = 100 # finished percentage
+        self.finished_minerror = 100 # finished percentage
+        self.finished_oursc = 100 # finished percentage
 
         # AL_settings
         self.eval_len = len(self.eval_dataset)
         self.stopping_criterion = StoppingCriteria(stopping_criteria=None)
-        self.finish_acc = self.cfg.VAL.FINISH_ACC
         self.query_ratio = self.cfg.VAL.QUERY_RATIO
         self.w_unc = self.cfg.VAL.W_UNC
         self.unc_lambda = self.cfg.VAL.UNC_LAMBDA # weight of uncertainty
@@ -89,33 +109,46 @@ class ActiveLearning:
         self.query_size = self.query_sizes[0] # number of query for first round
         self.expected_performance = 0 # expected performance. It controls the balance between uncertainty and representativeness
         if self.one_by_one:
-            self.query_size = 1 # query one by one
-        self.plot_cluster = False
+            self.query_size = 3 # query one by one
+        self.plot_cluster = False # plot cluster
         self.unlabeled_id = IndexCollection(list(range(self.eval_len)))
         self.labeled_id = IndexCollection()
         self.percentage = [] # number of query for each round
         self.performance = [] # list of mAP for each round
         self.performance_ann = [] # list of mAP for each round (with annotation)
+        self.ospa_list = [] # list of OSPA for each round
+        self.ospa_list_ann = [] # list of OSPA for each round (with annotation)
         self.combine_weight = [] # list of combine weight for each round
         self.query_list_list = {} # list of query for each round
         self.uncertainty_dict = {} # dict of uncertainty and idx for each round
         self.uncertainty_mean = [] # list of mean of uncertainty for each round
         self.influence_dict = {} # dict of mean of influence for each round
         self.spearmanr_list = [] # list of spearmanr for each round
+        self.corr_list = [] # list of correlation for each round
+        self.true_labeled_dict = {} # dict of true labeled data for each round
+        self.false_labeled_dict = {} # dict of false labeled data for each round
+        self.true_unlabeled_dict = {} # dict of true unlabeled data for each round
+        self.false_unlabeled_dict = {} # dict of false unlabeled data for each round
+        self.moksQ_list = [] # list of mean OKS for each round
 
         # Training settings
         self.train_dataset = builder.build_dataset(self.cfg.DATASET.TRAIN, preset_cfg=self.cfg.DATA_PRESET, train=True, get_prenext=False) # get_prenext=False for training
         self.retrain_id = IndexCollection() # index of retraining dataset
-        self.retrain_epoch = self.cfg.RETRAIN.EPOCH
+        self.retrain_epoch = self.cfg.RETRAIN.BASE
         self.lr = self.cfg.RETRAIN.LR
-        self.retrain_alpha = self.cfg.RETRAIN.ALPHA
+        self.moks_queried = 0 # last mean OKS of unlabeled data
         self.model, self.optimizer, self.scheduler = self.initialize_estimator()
         self.criterion = builder.build_loss(self.cfg.LOSS).cuda()
+        self.continual = True if self.opt.continual else False
 
         # WPU settings
         if "WPU" in self.strategy:
             self.AE, self.AE_dataset = self.initialize_AE()
-            self.AE_optimizer = torch.optim.Adam(self.AE.parameters(), lr=0.0002)
+            self.AE_optimizer = torch.optim.Adam(self.AE.parameters(), lr=self.cfg.AE.LR)
+        if "VL4Pose" in self.strategy:
+            self.auxnet = AuxNet()
+            self.auxnet_optimizer = torch.optim.Adam(self.auxnet.parameters(), lr=self.cfg.AUXNET.LR)
+
         # Other settings
         if self.opt.verbose: # test dataset and dataloader
             self.test_dataset(self.eval_dataset)
@@ -126,43 +159,45 @@ class ActiveLearning:
         self.show_info() # show information of active learning
 
     def outcome(self): # Check if the active learning is stopped
-        if True:
-            self.is_early_stop = False # reset early stop forcely
-        if self.is_early_stop:
-            # while len(self.performance) <= len(self.query_ratio): # fill the rest of performance (early stopping)
-            #     self.round_cnt += 1
-            #     self.performance.append(self.performance[-1])
-            #     self.performance_ann.append(self.performance_ann[-1])
-            #     self.uncertainty_mean.append(self.uncertainty_mean[-1])
-            #     self.percentage.append(self.query_ratio[self.round_cnt-1]*100)
-            #     self.combine_weight.append(self.combine_weight[-1])
-            return self.percentage, self.performance, self.performance_ann, self.query_list_list, self.uncertainty_dict, self.uncertainty_mean, self.influence_dict, self.combine_weight, self.spearmanr_list
+        # self.is_early_stop = True
+        if self.is_early_stop or self.one_by_one:
+            while len(self.performance) <= len(self.query_ratio): # fill the rest of performance (early stopping)
+                self.round_cnt += 1
+                self.performance.append(self.performance[-1])
+                self.performance_ann.append(self.performance_ann[-1])
+                self.ospa_list.append(self.ospa_list[-1])
+                self.ospa_list_ann.append(self.ospa_list_ann[-1])
+                self.uncertainty_mean.append(self.uncertainty_mean[-1])
+                self.percentage.append(self.query_ratio[self.round_cnt-1]*100)
+                self.combine_weight.append(self.combine_weight[-1])
+                self.moksQ_list.append(self.moksQ_list[-1])
+            finish = True
         else:
-            # self.model, self.optimizer, self.scheduler = self.initialize_estimator() # initialize estimator for next round
-            # percentage of labeled data in this round
-            if self.round_cnt == 0:
-                delta_percentage = 100*self.query_ratio[self.round_cnt]
-            elif self.round_cnt >= len(self.query_ratio):
-                delta_percentage = 0
+            if not self.continual:
+                self.model, self.optimizer, self.scheduler = self.initialize_estimator() # initialize estimator for next round
+                self.retrain_epoch = int(self.cfg.RETRAIN.BASE * len(self.labeled_id.index)/len(self.eval_dataset) + self.cfg.RETRAIN.ALPHA * (1-self.moks_queried)) # number of additional epoch
             else:
-                delta_percentage = 100*(self.query_ratio[self.round_cnt]-self.query_ratio[self.round_cnt-1])
-            self.retrain_epoch = self.cfg.RETRAIN.EPOCH + int(self.retrain_alpha * delta_percentage) # increase the number of epoch
-            print(f'[Retrain Epoch] delta_percentage: {int(delta_percentage)} --> retrain_epoch: {self.cfg.RETRAIN.EPOCH}+{int(self.retrain_alpha*delta_percentage)}={self.retrain_epoch}')
+                self.retrain_epoch = int(self.cfg.RETRAIN.ALPHA * (1-self.moks_queried)) # number of additional epoch
+            print(f'[Retrain Epoch]: {self.retrain_epoch}')
             self.retrain_model() # Retrain the model with the labeled data
             self.round_cnt += 1
-
+            finish = False
             print(f"[Judge] Unlabeled items: {len(self.unlabeled_id.index)}, Labeled items: {len(self.labeled_id.index)}", end=' ')
             if len(self.unlabeled_id.index) == 0:
                 print("\n --> Finished!")
                 self.eval_and_query() # Evaluate final estimator performance
-                return self.percentage, self.performance, self.performance_ann, self.query_list_list, self.uncertainty_dict, self.uncertainty_mean, self.influence_dict, self.combine_weight, self.spearmanr_list
+                finish = True
             else:
                 print("--> Continue...")
                 if self.round_cnt >= len(self.query_ratio): # last round
                     self.query_size = len(self.unlabeled_id.index) # query all unlabeled data
                 else:
                     self.query_size = self.query_sizes[self.round_cnt]-len(self.labeled_id.index) # number of query for next round
-                return None
+                finish = False
+        if finish:
+            return self.percentage, self.performance, self.performance_ann, self.query_list_list, self.uncertainty_dict, self.uncertainty_mean, self.influence_dict, self.combine_weight, self.spearmanr_list, self.corr_list, self.true_labeled_dict, self.true_unlabeled_dict, self.false_labeled_dict, self.false_unlabeled_dict, self.actual_finish, self.finished_minerror, self.finished_oursc, self.ospa_list, self.ospa_list_ann, self.moksQ_list
+        else:
+            return None
 
     def initialize_estimator(self): # Load an initial pose estimator
         """construct a initial pose estimator
@@ -173,22 +208,18 @@ class ActiveLearning:
         if self.cfg.MODEL.PRETRAINED:
             print(f'Loading model from {self.cfg.MODEL.PRETRAINED}...') # pretrained by PoseTrack21
             model.load_state_dict(torch.load(self.cfg.MODEL.PRETRAINED))
-            # freeze the parameters of feature extractor
-            # for param in model.parameters():
-            #     param.requires_grad = False
-            # # unfreeze the parameters of the last layer
-            # # pdb.set_trace()
-            # for param in model.final_layer.parameters():
-            #     param.requires_grad = True
         if self.cfg.RETRAIN.OPTIMIZER == 'SGD':
             optimizer = torch.optim.SGD(model.parameters(), lr=self.lr, momentum=0.9, weight_decay=0.0005)
         elif self.cfg.RETRAIN.OPTIMIZER == 'Adam':
             optimizer = torch.optim.Adam(model.parameters(), lr=self.lr)
         elif self.cfg.RETRAIN.OPTIMIZER == 'AdamW':
-            optimizer = torch.optim.AdamW(params = [{"params": model.final_layer.parameters(), "lr": self.lr*10}, {"params": model.preact.parameters(), "lr": self.lr}, {"params": model.deconv_layers.parameters(), "lr": self.lr*5}], weight_decay=0.01)
+            if self.cfg.MODEL.TYPE == 'SimplePose':
+                optimizer = torch.optim.AdamW(params = [{"params": model.final_layer.parameters(), "lr": self.lr*10}, {"params": model.preact.parameters(), "lr": self.lr}, {"params": model.deconv_layers.parameters(), "lr": self.lr*5}], weight_decay=self.cfg.RETRAIN.WEIGHT_DECAY)
+            elif self.cfg.MODEL.TYPE == 'FastPose':
+                optimizer = torch.optim.AdamW(params = [{"params": model.conv_out.parameters(), "lr": self.lr*10}, {"params": model.preact.parameters(), "lr": self.lr}, {"params": model.suffle1.parameters(), "lr": self.lr*5}, {"params": model.duc1.parameters(), "lr": self.lr*5}, {"params": model.duc2.parameters(), "lr": self.lr*5}], weight_decay=self.cfg.RETRAIN.WEIGHT_DECAY)
         else:
             raise ValueError('Optimizer not supported!')
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99) # decay learning rate by 0.95 every epoch
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=self.cfg.RETRAIN.LR_GAMMA) # decay learning rate by 0.95 every epoch
         if self.opt.device == torch.device('cuda'):
             model = torch.nn.DataParallel(model, device_ids=self.opt.gpus).cuda()
         else:
@@ -205,6 +236,7 @@ class ActiveLearning:
         print(f'[[Representativeness: {self.representativeness}]]')
         print(f'[[Filter: {self.filter}]]')
         assert(self.finish_acc <= 1.0 and self.finish_acc >= 0.0)
+        print(f'[[Retraining Scheme: {self.continual}]]')
         print(f'[[Finishing Accuracy: {self.finish_acc}]]')
         assert(self.query_ratio[-1] <= 1.0 and self.query_ratio[0] >= 0.0)
         print(f'[[Query Ratio: {self.query_ratio}]]')
@@ -212,10 +244,15 @@ class ActiveLearning:
     def eval_and_query(self):
         """Evaluate the current estimator and query the most uncertain samples"""
         print(f'\n{self.video_id}[[Round{self.round_cnt}: {self.strategy}]]')
+        GT_json = []
         kpt_json = []
         kpt_json_ann = []
         m = self.model
         m.eval()
+        if "WPU" in self.strategy:
+            self.AE.eval()
+        if "VL4Pose" in self.strategy:
+            self.auxnet.eval()
         query_candidate = {}
         OKS_dict = {}
         UNC_dict = {}
@@ -251,7 +288,7 @@ class ActiveLearning:
                     pred_next = output_next[:, self.eval_joints, :, :]
 
                 for j in range(output.shape[0]): # for each input in batch (person)
-                    heatmaps_dict = {"Round": [], "ann_ids": [], "heatmaps": [], "img": [], "img_ids": [], "bboxes": [], "uncertainty": [],"keypoints": []} # for visualization
+                    heatmaps_dict = {"Round": [], "ann_ids": [], "heatmaps": [], "img": [], "img_ids": [], "bboxes": [], "uncertainty": [],"keypoints": [], "GTkpts": []} # for visualization
                     bbox_crop = bboxes_crop[j].tolist()
                     # xywh format
                     bbox_ann = bbox_xyxy_to_xywh(bboxes_ann[j].tolist())
@@ -260,6 +297,7 @@ class ActiveLearning:
                     keypoints = np.concatenate((pose_coords, pose_scores), axis=1)
                     keypoints = keypoints.reshape(-1).tolist() # format: x1, y1, s1, x2, y2, s2, ..., shape: (51,)
                     GT_keypoints = GTkpts[j].reshape(-1).tolist() # ground truth keypoints
+                    oks = float(compute_OKS(bbox_ann, keypoints, GT_keypoints))
                     data = dict()
                     data['bbox'] = bbox_ann # format: xyxy
                     data['image_id'] = int(img_ids[j])
@@ -269,14 +307,15 @@ class ActiveLearning:
                     data['keypoints'] = keypoints
                     # pdb.set_trace()
                     data['GT_keypoints'] = GT_keypoints
-                    data['OKS'] = float(compute_OKS(bbox_ann, keypoints, GT_keypoints))
-                    OKS_dict[int(idxs[j])] = data['OKS']
-                    # print(f'OKS {int(idxs[j])}: {data["OKS"]:.3f}')
+                    data['OKS'] = oks
                     kpt_json.append(data)
-                    data_ann = data.copy()
+                    data_ann = copy.deepcopy(data)
                     if idxs[j] in self.labeled_id.index:
                         data_ann['keypoints'] = GT_keypoints
                     kpt_json_ann.append(data_ann)
+                    data_GT = copy.deepcopy(data)
+                    data_GT['keypoints'] = GT_keypoints
+                    GT_json.append(data_GT)
 
                     if (self.uncertainty == 'HP' ): # for unlabeled data, highest probability
                         uncertainty = float(-np.sum(pose_scores)) # calculate uncertainty
@@ -307,32 +346,40 @@ class ActiveLearning:
                             if not isPrev[j]:
                                 thc *= 2
                             elif self.opt.vis_thc:
-                                adj_imgs = [inps[j, 0], inps[j, 1], inps[j, 2]] # current, previous, next frame images
-                                self.visualize_thc(adj_imgs, hp_current, hp_prev, hp_next, thc, ann_ids[j])
+                                adj_hps = [pred_prev[j], pred[j], pred_next[j]]
+                                adj_imgs = [inps[j, 1], inps[j, 0], inps[j, 2]] # current, previous, next frame image
+                                self.visualize_thc(adj_imgs, adj_hps, thc, ann_ids[j], keypoints)
                         elif isPrev[j]:
                             thc *= 2
                         uncertainty = float(thc)
                         if "WPU" in self.uncertainty: # combine with WPU
                             bbox_crop = bbox_xyxy_to_xywh(bbox_crop)
-                            input = torch.tensor(compute_hybrid(bbox_crop, keypoints)).float().cuda()
+                            # input = torch.tensor(compute_hybrid(bbox_crop, np.array(keypoints[:3*3]+keypoints[5*3:]))).float().cuda() # select 15 keypoints (exclude ears)
+                            input = torch.tensor(compute_hybrid(bbox_crop, np.array(keypoints))).float().cuda() # select 17 keypoints (exclude ears)
                             output = self.AE(input) # output is the reconstructed keypoints
                             wpu = self.criterion(output, input) # calculate whole-body pose unnaturalness
-                            uncertainty += float(wpu)
-                            uncertainty /= 2 # normalize the uncertainty to 0-1
+                            uncertainty2 = float(wpu)
                     elif "WPU" in self.uncertainty:
                         if True: # use hybrid feature
                             bbox_crop = bbox_xyxy_to_xywh(bbox_crop)
+                            # input = torch.tensor(compute_hybrid(bbox_crop, keypoints[:3*3]+keypoints[5*3:])).float().cuda()
                             input = torch.tensor(compute_hybrid(bbox_crop, keypoints)).float().cuda()
                         else: # use raw keypoint as feature
                             input = torch.tensor(keypoints).float()
                         output = self.AE(input) # output is the reconstructed keypoints
-                        wpu = self.criterion(output, input) # calculate whole-body pose unnaturalness
+                        # to numpy array
+                        input, output = input.cpu().numpy(), output.cpu().numpy()
+                        input = np.concatenate([input[:3], input[5:20], input[22:]])
+                        output = np.concatenate([output[:3], output[5:20], output[22:]])
+                        wpu = self.criterion(torch.tensor(output).float().cuda(), torch.tensor(input).float().cuda())
                         if self.opt.vis_wpu:
-                            self.visualize_wpu(input.cpu().numpy(), output.cpu().numpy(), wpu, ann_ids[j])
+                            self.visualize_wpu(input, output, wpu, ann_ids[j])
                         uncertainty = float(wpu)
                     elif (self.uncertainty == 'MPE'): # multiple peak entropy
                         hp_current = pred[j].cpu().numpy()
                         uncertainty = float(self.compute_mpe(hp_current))
+                    elif (self.uncertainty == 'VL4Pose'): # VL4Pose
+                        vl4pose_loss = self.vl4pose(pose_encodings=pose_features, heatmaps=pred, joint_exist=joint_exist, epoch=e) # TODO
                     elif (self.uncertainty == 'Entropy'): # entropy
                         hp_current = pred[j].cpu().numpy()
                         uncertainty = float(self.compute_entropy(hp_current))
@@ -344,8 +391,14 @@ class ActiveLearning:
                     else: # error
                         raise ValueError("Uncertainty type is not supported")
                     total_uncertainty += uncertainty # add to total uncertainty
+                    if self.uncertainty == "THC+WPU":
+                        UNC_dict[int(idxs[j])] = [uncertainty, uncertainty2] # save uncertainty
+                        uncertainty = [uncertainty, uncertainty2]
+                    else: # single uncertainty
+                        UNC_dict[int(idxs[j])] = uncertainty
+                    OKS_dict[int(idxs[j])] = data['OKS']
+                    # print(f'ID {int(idxs[j])}: OKS {data["OKS"]:.3f}, Uncertainty {uncertainty:.3f}')
 
-                    UNC_dict[int(idxs[j])] = uncertainty
                     if idxs[j] in self.unlabeled_id.index:
                         combine_weight += localpeak_mean(pred[j][self.eval_joints].cpu().numpy()) # find the minimum peak of the heatmap
                         # print(localpeak_mean(pred[j][self.eval_joints].cpu().numpy()))
@@ -360,23 +413,29 @@ class ActiveLearning:
                         heatmaps_dict["keypoints"] = keypoints
                         heatmaps_dict["uncertainty"] = uncertainty
                         heatmaps_dict["bboxes"].append(bbox_ann)
+                        heatmaps_dict["GTkpts"] = GT_keypoints
                         hm_save_dir = os.path.join(self.opt.work_dir, 'heatmap', f'Round{self.round_cnt}')
                         if not os.path.exists(hm_save_dir):
                             os.makedirs(hm_save_dir)
                         np.save(os.path.join(hm_save_dir, f'{int(ann_ids[j])}.npy'), heatmaps_dict) # save heatmaps for visualization
-        if self.uncertainty != "None":
+        if self.uncertainty != "None" and False:
             Spearman = compute_Spearmanr(UNC_dict, OKS_dict)
-            print(f'[Evaluation] Spearmanr: {Spearman:.3f}')
-            print(f"Total uncertainty: {total_uncertainty:.3f}")
             self.spearmanr_list.append(Spearman)
+            corr = compute_corr(UNC_dict, OKS_dict)
+            self.corr_list.append(corr)
+            print(f'[Evaluation] Spearmanr: {Spearman:.3f}, Correlation: {corr:.3f}')
+            print(f"Total uncertainty: {total_uncertainty:.3f}")
 
         sysout = sys.stdout
+        GT_dict_path = self.save_GT_dict(GT_json)
         with open(os.path.join(self.opt.work_dir, 'predicted_kpt.json'), 'w') as fid:
             json.dump(kpt_json, fid)
-        res = evaluate_mAP(os.path.join(self.opt.work_dir, 'predicted_kpt.json'), ann_type='keypoints', ann_file=os.path.join(self.cfg.DATASET.EVAL.ROOT, self.cfg.DATASET.EVAL.ANN))
+        res = evaluate_mAP(os.path.join(self.opt.work_dir, 'predicted_kpt.json'), ann_type='keypoints', ann_file=GT_dict_path)
+        ospa = ospa_for_loc(ann_json_path=GT_dict_path, pr_json_path=os.path.join(self.opt.work_dir, 'predicted_kpt.json'))
         with open(os.path.join(self.opt.work_dir, 'predicted_kpt_ann.json'), 'w') as fid_ann:
             json.dump(kpt_json_ann, fid_ann)
-        res_ann = evaluate_mAP(os.path.join(self.opt.work_dir, 'predicted_kpt_ann.json'), ann_type='keypoints', ann_file=os.path.join(self.cfg.DATASET.EVAL.ROOT, self.cfg.DATASET.EVAL.ANN))
+        res_ann = evaluate_mAP(os.path.join(self.opt.work_dir, 'predicted_kpt_ann.json'), ann_type='keypoints', ann_file=GT_dict_path)
+        ospa_ann = ospa_for_loc(ann_json_path=GT_dict_path, pr_json_path=os.path.join(self.opt.work_dir, 'predicted_kpt_ann.json'))
         if self.opt.vis:
             pred_save_dir = os.path.join(self.opt.work_dir, 'prediction', f'Round{self.round_cnt}')
             if not os.path.exists(pred_save_dir):
@@ -388,7 +447,10 @@ class ActiveLearning:
         self.percentage.append((len(self.labeled_id.index)/self.eval_len)*100) # label percentage: 0~100
         self.performance.append(res) # mAP performance: 0~100
         self.performance_ann.append(res_ann) # mAP performance: 0~100
-        print(f'[Evaluation] Percentage: {self.percentage[-1]:.1f}, mAP: {res["AP"]:.3f}, AP@0.5: {res["AP .5"]:.3f}, AP@0.75: {res["AP .75"]:.3f}, mAP_ann: {res_ann["AP"]:.3f}, AP_ann@0.5: {res_ann["AP .5"]:.3f}, AP_ann@0.75: {res_ann["AP .75"]:.3f}, AP_ann@0.95: {res_ann["AP .95"]:.3f}')
+        self.ospa_list.append(ospa)
+        self.ospa_list_ann.append(ospa_ann)
+        print(f'[Evaluation] Percentage:{self.percentage[-1]:.1f}, mAP:{res["AP"]:.3f} (ANN:{res_ann["AP"]:.3f}), AP@0.5:{res["AP .5"]:.3f} (ANN:{res_ann["AP .5"]:.3f}), AP@0.6:{res["AP .6"]:.3f} (ANN:{res_ann["AP .6"]:.3f}), AP@0.75:{res["AP .75"]:.3f} (ANN:{res_ann["AP .75"]:.3f}), AP@0.95:{res["AP .95"]:.3f} (ANN:{res_ann["AP .95"]:.3f})')
+        print(f'[Evaluation] OSPA:{ospa:.3f} (ANN:{ospa_ann:.3f})')
 
         # compute influence score for all unlabeled data
         self.uncertainty_mean.append(total_uncertainty/len(self.eval_dataset)) # mean uncertainty
@@ -419,10 +481,29 @@ class ActiveLearning:
             total_score = np.zeros(len(self.unlabeled_id.index))
         elif self.uncertainty != "None": # If using both uncertainty and representativeness
             # combine uncertainty and representativeness, be careful to division by zero
-            uncertainty_score = np.array(list(query_candidate.values()))
-            self.uncertainty_dict['Round'+str(self.round_cnt)] = dict((idx,uncertainty) for idx,uncertainty in zip(list(query_candidate.keys()), uncertainty_score)) # add to uncertainty dictionary
-            uncertainty_score = (uncertainty_score - np.min(uncertainty_score)) / (np.max(uncertainty_score) - np.min(uncertainty_score)) # normalize uncertainty score to [0,1]
-            # print("uncertainty_score:", uncertainty_score)
+            if self.uncertainty == "THC+WPU":
+                uncertainty_thc = np.array(list(query_candidate.values()))[:,0]
+                uncertainty_wpu = np.array(list(query_candidate.values()))[:,1]
+                # normalize uncertainty score to [0,1] independently
+                uncertainty_thc = (uncertainty_thc - np.min(uncertainty_thc)) / (np.max(uncertainty_thc) - np.min(uncertainty_thc))
+                uncertainty_wpu = (uncertainty_wpu - np.min(uncertainty_wpu)) / (np.max(uncertainty_wpu) - np.min(uncertainty_wpu))
+                # integrate uncertainty score
+                if self.opt.THCvsWPU == "const":
+                    uncertainty_ = uncertainty_thc + uncertainty_wpu
+                else:
+                    labeled_ratio = len(self.labeled_id.index)/len(self.eval_dataset)
+                    if self.opt.THCvsWPU == "increase":
+                        uncertainty_ = labeled_ratio * uncertainty_thc + (1-labeled_ratio) * uncertainty_wpu
+                    elif self.opt.THCvsWPU == "decrease":
+                        uncertainty_ = (1-labeled_ratio) * uncertainty_thc + labeled_ratio * uncertainty_wpu
+                uncertainty_score = (uncertainty_ - np.min(uncertainty_)) / (np.max(uncertainty_) - np.min(uncertainty_)) # normalize uncertainty score to [0,1] again
+                self.uncertainty_dict['Round'+str(self.round_cnt)] = UNC_dict # add to uncertainty dictionary
+                # print("uncertainty_score:", uncertainty_score)
+            else:
+                uncertainty_score = np.array(list(query_candidate.values()))
+                self.uncertainty_dict['Round'+str(self.round_cnt)] = UNC_dict # add to uncertainty dictionary
+                uncertainty_score = (uncertainty_score - np.min(uncertainty_score)) / (np.max(uncertainty_score) - np.min(uncertainty_score)) # normalize uncertainty score to [0,1]
+                # print("uncertainty_score:", uncertainty_score)
             if self.representativeness != "None":
                 # print("combine_weight:", combine_weight)
                 total_score = combine_weight * uncertainty_score + (1-combine_weight) * influence_score # combine uncertainty and representativeness
@@ -516,25 +597,46 @@ class ActiveLearning:
                 self.pltcluster_and_save(cluster_idxs, embeddings, track_ids_list, query_list) # plot cluster result and save to file
             query_list = [int(candidate_list[i]) for i in query_list] # convert to list
         elif self.filter=="Coreset": # coreset query selection
-            uncertainty = np.zeros(len(self.eval_dataset))
-            uncertainty[candidate_list] = np.array(list(total_score))
+            unc_list = np.zeros(len(self.eval_dataset))
+            unc_list[candidate_list] = np.array(list(total_score))
             # pdb.set_trace()
-            query_list = self.coreset_selection(fvecs_matrix, uncertainty) # pick query indices from coreset
+            coreset_unc = copy.deepcopy(unc_list)
+            query_list = self.coreset_selection(fvecs_matrix, coreset_unc) # pick query indices from coreset
+            if self.plot_cluster:
+                embeddings = fvecs_matrix[candidate_list]
+                self.pltcoreset_and_save(embeddings, query_list, unc_list) # plot cluster result and save to file
         else: # error
             raise ValueError("Filter type is not supported")
 
+        tl, tu, fl, fu = self.get_corresponding_id(OKS_dict, true=True, labeled=True), self.get_corresponding_id(OKS_dict, true=True, labeled=False), self.get_corresponding_id(OKS_dict, true=False, labeled=True), self.get_corresponding_id(OKS_dict, true=False, labeled=False)
+        assert len(self.eval_dataset) == len(tl) + len(tu) + len(fl) + len(fu)
+        print(f'[Evaluation] Labeled: True={len(tl)}, False={len(fl)}, Unlabeled: True={len(tu)}, False={len(fu)}')
+        self.true_labeled_dict['Round'+str(self.round_cnt)] = tl
+        self.true_unlabeled_dict['Round'+str(self.round_cnt)] = tu
+        self.false_labeled_dict['Round'+str(self.round_cnt)] = fl
+        self.false_unlabeled_dict['Round'+str(self.round_cnt)] = fu
+
         if len(self.unlabeled_id.index) != 0: # if there is unlabeled data
             self.retrain_id = IndexCollection() # initialize retrain data
-            retrain_id = self.get_retrain_id(query_list, OKS_dict) # get retrain data
+            retrain_id, self.moks_queried = self.get_retrain_id(query_list, OKS_dict) # get retrain data
+            self.moksQ_list.append(self.moks_queried)
             self.retrain_id.update(retrain_id) # add to retrain data
-            print(f"[Retrain/Labeled]: {len(self.retrain_id.index)-len(query_list)}/{len(self.labeled_id.index)}")
+            # print(f"[Retrain/Labeled]: {len(self.retrain_id.index)-len(query_list)}/{len(self.labeled_id.index)}")
             self.labeled_id.update(query_list) # add to labeled data
             self.unlabeled_id.difference_update(query_list) # remove
             self.query_list_list['Round'+str(self.round_cnt)] = list(map(int, query_list)) # add to query list dictionary
             print(f'[Query Selection] index: {sorted(query_list)}')
-            self.is_early_stop = self.is_finished(query_list, OKS_dict) # if the performance is higher than the threshold, stop active learning
-            if self.is_early_stop:
-                print(f'[Early Stop] Performance is higher than the threshold!')
+
+            # if self.is_early_stop and time < self.finished_time:
+                # self.cnt_early_stop += 1
+                # if self.cnt_early_stop == 1:
+                #     print(f'[Early Stop] Performance is higher than the threshold at {time:.1f}%!')
+                    # self.finished_time = time # update finished time
+
+            self.actual_finish, self.finished_minerror, self.finished_oursc = self.is_finished(query_list, OKS_dict)
+            if self.actual_finish < 100:
+                print(f'[Early Stop] Performance is higher than the threshold at {self.actual_finish:.1f}%!')
+                self.is_early_stop = True
 
     def retrain_model(self):
         """Retrain the model with the labeled data"""
@@ -567,6 +669,8 @@ class ActiveLearning:
                 progress_bar.set_description('loss: {loss:.7f} | acc: {acc:.4f}'.format(loss=loss_logger.avg, acc=acc_logger.avg))
         # fine-tuning AE
         if 'WPU' in self.uncertainty:
+            self.AE, self.AE_dataset = self.initialize_AE()
+            self.AE_optimizer = torch.optim.Adam(self.AE.parameters(), lr=self.cfg.AE.LR)
             self.retrain_AE() # retrain AE
             torch.save(self.AE.state_dict(), './{}/latest_AE.pth'.format(self.opt.work_dir)) # AE
             # pass # no need to retrain AE
@@ -576,11 +680,39 @@ class ActiveLearning:
         assert len(dataset) >= 1 # at least 1 image
         print(dataset[0])
 
-    def is_finished(self, query_list, OKS_dict):
+    def save_GT_dict(self, GT_json: list) -> str:
+        """save GT keypoints to json file, formatted as COCO format"""
+        GT_dict = dict()
+        GT_path = os.path.join(self.cfg.DATASET.EVAL.ROOT, self.cfg.DATASET.EVAL.ANN)
+        with open(GT_path, 'r') as fid:
+            GT_data = json.load(fid)
+            GT_dict["images"] = GT_data["images"]
+            GT_dict["categories"] = GT_data["categories"]
+        GT_dict["annotations"] = GT_json
+
+        with open(os.path.join(self.opt.work_dir, 'GT_kpt.json'), 'w') as fid:
+            json.dump(GT_dict, fid)
+        return os.path.join(self.opt.work_dir, 'GT_kpt.json')
+
+    def is_finished(self, query_list: list, OKS_dict: dict) -> tuple:
         """judge if the active learning is finished based on the threshold"""
+        time = (len(self.labeled_id.index)/self.eval_len)*100 # label percentage: 0~100
+        # judgement of actual finish
+        if np.all(np.array(list(OKS_dict.values())) >= self.finish_acc) and time<self.actual_finish: # if all OKS is higher than the threshold, return True
+            print(f'[Finished] Actually finished at {time:.1f}%!')
+            self.actual_finish = time
+        # judgement of min-error
+        OKS_q = np.array(list(OKS_dict[i] for i in query_list)) # queried OKS
+        if np.mean(OKS_q) >= self.finish_acc and time<self.finished_minerror: # if mean OKS is lower than the threshold, return True
+            print(f'[Finished] Min-error SC has met at {time:.1f}%!')
+            self.finished_minerror = time
+        # judgement of our sc
         idx_labeled_queried = self.labeled_id.index + query_list # get labeled and queried data
-        OKS_success = [OKS_dict[idx] for idx in idx_labeled_queried if OKS_dict[idx] >= self.finish_acc] # get OKS of labeled data
-        return len(idx_labeled_queried)-len(OKS_success)==0 # judge if all labeled data have OKS higher than threshold
+        OKS_lq = np.array(list(OKS_dict[i] for i in idx_labeled_queried)) # labeled and queried OKS
+        if np.all(OKS_lq >= self.finish_acc) and time<self.finished_oursc: # if all OKS is higher than the threshold, return True
+            print(f'[Finished] Our SC has met at {time:.1f}%!')
+            self.finished_oursc = time
+        return self.actual_finish, self.finished_minerror, self.finished_oursc
 
     def random_query(self, candidate_list, query_size):
         # pdb.set_trace()
@@ -670,18 +802,35 @@ class ActiveLearning:
                 else:
                     min_distances = np.minimum(min_distances, dist)
             return min_distances
-
-        min_distances = update_distances(cluster_centers=labeled_idx, encoding=embeddings, min_distances=None)
-        # print(uncertainty)
-        # pdb.set_trace()
-        for _ in tqdm(range(self.query_size)):
+        def _query_w_unc(min_distances, uncertainty):
+            '''Select examples with highest uncertainty.'''
             if len(labeled_idx) == 0:
-                # Initialize center with a randomly selected datapoint
+                ind = np.argmax(uncertainty)
+            else:
+                ind = np.argmax(((1-self.moks_queried)*min_distances.reshape(-1)) + (self.unc_lambda*self.moks_queried*uncertainty))
+            return ind
+        def _query_fixed_lambda(min_distances, uncertainty):
+            if len(labeled_idx) == 0:
+                ind = np.argmax(uncertainty)
+            else:
+                ind = np.argmax(min_distances.reshape(-1)+self.unc_lambda*uncertainty)
+            return ind
+        def _query(min_distances, _):
+            if len(labeled_idx) == 0:
                 ind = np.random.choice(np.arange(embeddings.shape[0]))
-            else: # use normalized uncertainty here
-                ind = np.argmax(min_distances.reshape(-1)+uncertainty*self.unc_lambda)
-                # print(min_distances.reshape(-1))
-                # print(uncertainty*self.unc_lamda)
+            else:
+                ind = np.argmax(min_distances.reshape(-1))
+            return ind
+        if self.uncertainty == "None" or self.cfg.VAL.UNC_LAMBDA == 0:
+            func_query = _query
+        elif self.opt.fixed_lambda:
+            func_query = _query_fixed_lambda
+        else:
+            func_query = _query_w_unc
+
+        min_distances = update_distances(cluster_centers=labeled_idx, encoding=embeddings, min_distances=None) # initialize min_distances
+        for _ in tqdm(range(self.query_size)):
+            ind = func_query(min_distances, uncertainty)
             # print(f"{ind} was selected!")
             # New examples should not be in already selected since those points should have min_distance of zero to a cluster center.
             min_distances = update_distances(cluster_centers=[ind], encoding=embeddings, min_distances=min_distances)
@@ -706,15 +855,33 @@ class ActiveLearning:
         mOKS_unlabeled = np.mean([OKS for idx, OKS in OKS_unlabeled.items()]) # get the mean OKS of unlabeled data
         print(f"[mOKS_queried]: {mOKS_queried:.3f}, [mOKS_labeled]: {mOKS_labeled:.3f}, [mOKS_unlabeled]: {mOKS_unlabeled:.3f}")
 
-        retrain_id = [idx for idx, OKS in OKS_labeled.items() if OKS <= self.finish_acc] # get the index of labeled data with lower OKS than x_thr
+        retrain_id = [idx for idx, OKS in OKS_labeled.items() if OKS <= self.finish_acc + self.finish_margin] # get the index of labeled data with lower OKS than x_thr
         retrain_id += query_list # add newly-queried data to retrain data
         # print(f"[Retrain Data]: {sorted(retrain_id)}")
-        return retrain_id
+        return retrain_id, mOKS_queried
+
+    def get_corresponding_id(self: object, OKS_dict: dict, true=True, labeled=True) -> list:
+        """return: the index list of corresponding samples"""
+        thresh = self.finish_acc + self.finish_margin
+        if true and labeled: # get the index list of (labeled and acc>thresh) samples
+            corresponding_id = [idx for idx, OKS in OKS_dict.items() if (idx in self.labeled_id.index) and (OKS >= thresh)]
+        elif true and not labeled: # true unlabeled
+            corresponding_id = [idx for idx, OKS in OKS_dict.items() if (idx in self.unlabeled_id.index) and (OKS >= thresh)]
+        elif not true and labeled: # false labeled
+            corresponding_id = [idx for idx, OKS in OKS_dict.items() if (idx in self.labeled_id.index) and (OKS < thresh)]
+        elif not true and not labeled: # false unlabeled
+            corresponding_id = [idx for idx, OKS in OKS_dict.items() if (idx in self.unlabeled_id.index) and (OKS < thresh)]
+        return corresponding_id
 
     def initialize_AE(self):
         if True:
             AE = WholeBodyAE(z_dim=self.cfg.AE.Z_DIM)
-            AE_dataset = Wholebody(mode='val', retrain_video_id=self.video_id)
+            if self.opt.optimize:
+                mode = 'train_val' if self.dataset == "Posetrack21" else 'val'
+                AE_dataset = Wholebody(mode=mode, retrain_video_id=self.video_id, dataset_type=self.dataset)
+            else:
+                mode = 'val' if self.dataset == "Posetrack21" else 'test'
+                AE_dataset = Wholebody(mode=mode, retrain_video_id=self.video_id, dataset_type=self.dataset)
             pretrained_path = os.path.join(self.cfg.AE.PRETRAINED_ROOT, 'Hybrid', f'WholeBodyAE_zdim{self.cfg.AE.Z_DIM}.pth')
         else: # use raw keypoint as feature
             AE = WholeBodyAE(z_dim=self.cfg.AE.Z_DIM, kp_direct=True)
@@ -747,77 +914,80 @@ class ActiveLearning:
                 # TQDM
                 progress_bar.set_description('loss: {loss:.6f}'.format(loss=loss_logger.avg))
 
-    def visualize_thc(self, adjimgs, hp_current, hp_prev, hp_next, thc, ann_id, norm_type="L1"):
+    def visualize_thc(self, adjimgs, adjhps, thc, ann_id, keypoints):
         """visualize temporal heatmap continuity between current frame and adjacent frame.
         Args:
-            adjimgs (np.ndarray): adjacent frames. shape = (3, height, width, channel)
-            hp_current (np.ndarray): current frame heatmaps. shape = (num_joints, height, width)
-            hp_prev (np.ndarray): previous frames heatmaps. shape = (num_joints, height, width)
-            hp_next (np.ndarray): next frames heatmaps. shape = (num_joints, height, width)
+            adjimgs (list, Tensor): adjacent frames. shape = (3, height, width, channel)
+            hp_current (list, Tensor): current frame heatmaps. shape = (3, num_joints, height, width)
             thc (float): temporal heatmap continuity value
             ann_id (int): annotation id of the sample
-            norm_type (str, optional): Defaults to "L1".
         """
-        joints = [1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1] # 17 joints
-        hm_width, hm_height  = hp_current.shape[1], hp_current.shape[2]
-        img_width, img_height = adjimgs[0].shape[1], adjimgs[0].shape[2]
+        ann_id = ann_id % 10000
+        joints_vis = [1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1] # 17 joints
+        batch_images =[torch.Tensor(adjimg).view(3, 256, 192) for adjimg in adjimgs] # [3, 3, 256, 192]
+        batch_heatmaps = [torch.Tensor(heatmaps).view(1, 17, 64, 48) for heatmaps in adjhps] # [3, 17, 64, 48]
+        preds = [self.get_max_preds(batch_heatmaps[t].detach().cpu().numpy())[0] for t in range(3)] # [3, 17, 2]
+        hm_width, hm_height  =int(adjhps[0].shape[2]), int(adjhps[0].shape[1]) # 64, 48
 
-        frames = ["current", "prev", "next"]
-        for t, img in zip(frames, adjimgs):
-            img = img.clone().detach()
-            min, max = float(img.min()), float(img.max())
-            img.add_(-min).div_(max - min + 1e-8)
-            img = img.view(3, img_width, img_height) # (3, 256, 192)
-            img = img.mul(255).clamp(0, 255).byte().permute(1, 2, 0).cpu().numpy().copy()
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = cv2.resize(img, (hm_width, hm_height))
-            if t == "current":
-                img_current = img
-            elif t == "prev":
-                img_prev = img
-            elif t == "next":
-                img_next = img
-
-        track_id = int(str(ann_id)[-2:])
-        img_id = int(str(ann_id)[7:-2])
-        title = f'THC_{thc:.2f}_img{img_id}_id{track_id}'
-        grid_image = np.zeros((hm_height, hm_width*3, 3), dtype=np.uint8)
-
-        for joint in range(2):
-            if joints[joint] == 0:
+        batch_images = [batch_image.clone() for batch_image in batch_images]
+        min = [float(batch_image.min()) for batch_image in batch_images]
+        max = [float(batch_image.max()) for batch_image in batch_images]
+        batch_images = [batch_images[t].add_(-min[t]).div_(max[t] - min[t] + 1e-5) for t in range(3)]
+        for t in range(3):
+            img = batch_images[t].mul(255).clamp(0, 255).byte().permute(1, 2, 0).cpu().numpy() # [256, 192, 3]
+            img = cv2.cvtColor(img.copy(), cv2.COLOR_RGB2BGR)
+            img = cv2.resize(img.copy(), (hm_width, hm_height)) # [64, 48, 3]
+            batch_images[t] = img
+            heatmaps = batch_heatmaps[t][0].mul(255).clamp(0, 255).byte().cpu().numpy() # [17, 64, 48]
+            # pdb.set_trace()
+            batch_heatmaps[t] = 255-heatmaps
+        for j in range(len(joints_vis)):
+            if joints_vis[j] == 0:
                 continue
-            # previous frame
-            heatmap = hp_prev[joint]
-            heatmap = cv2.resize(heatmap, (hm_width, hm_height))
-            heatmap = cv2.applyColorMap(np.uint8(255*heatmap), cv2.COLORMAP_JET)
-            heatmap = np.float32(heatmap) / 255
-            heatmap = heatmap * 0.7 + np.float32(img_prev) * 0.3
-            heatmap = np.uint8(heatmap * 255)
-            grid_image[:, :hm_width, :] = heatmap
-            # current frame
-            heatmap = hp_current[joint]
-            heatmap = cv2.resize(heatmap, (hm_width, hm_height))
-            heatmap = cv2.applyColorMap(np.uint8(255*heatmap), cv2.COLORMAP_JET)
-            heatmap = np.float32(heatmap) / 255
-            heatmap = heatmap * 0.7 + np.float32(img_current) * 0.3
-            heatmap = np.uint8(heatmap * 255)
-            grid_image[:, hm_width:hm_width*2, :] = heatmap
-            # next frame
-            heatmap = hp_next[joint]
-            heatmap = cv2.resize(heatmap, (hm_width, hm_height))
-            heatmap = cv2.applyColorMap(np.uint8(255*heatmap), cv2.COLORMAP_JET)
-            heatmap = np.float32(heatmap) / 255
-            heatmap = heatmap * 0.7 + np.float32(img_next) * 0.3
-            heatmap = np.uint8(heatmap * 255)
-            grid_image[:, hm_width*2:, :] = heatmap
-            # save image
-            save_path = os.path.join(self.opt.work_dir, "THC_vis", f"{title}_joint{joint}.png")
+            grid_image = np.zeros((hm_height,3*hm_width,3),dtype=np.uint8) # [64, 144, 3]
+            grid_original_image = np.zeros((hm_height,3*hm_width,3),dtype=np.uint8) # [64, 144, 3]
+            for t in range(3):
+                img = batch_images[t]
+                heatmap = batch_heatmaps[t][j, :, :]
+                # adjust heatmap color
+                colored_heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+                masked_image = colored_heatmap*0.5 + img*0.5
+                width_begin = hm_width * (t%3)
+                width_end = hm_width * (t%3+1)
+                # print(width_begin, width_end)
+                grid_image[:, width_begin:width_end, :] = masked_image
+                # original image with estimated joint position
+                # convert color
+                joint = preds[t][0][j]
+                img = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+                cv2.circle(img=img, center=(int(joint[0]), int(joint[1])), radius=1, color=[0, 255, 0], thickness=2)
+                grid_original_image[:, width_begin:width_end, :] = img
+
+            # save image (add colorbar)
+            save_path = os.path.join(self.opt.work_dir, "THC_vis", f"id{ann_id}_THC{thc}/joint{j}.png")
             if not os.path.exists(os.path.dirname(save_path)):
                 os.makedirs(os.path.dirname(save_path))
-            cv2.imwrite(save_path, grid_image)
-            # print(f'[THC] ann_id: {ann_id}, joint: {joint}, thc: {thc}')
+            fig, ax = plt.subplots()
+            im = ax.imshow(grid_image, cmap='jet', vmin=0, vmax=1)
+            cax = fig.colorbar(im, ax=ax) # add colorbar
+            fig.savefig(io.BytesIO())
+            ax_pos = ax.get_position()
+            cax_pos0 = cax.ax.get_position()
+            cax_pos1 = [cax_pos0.x0, ax_pos.y0, cax_pos0.x1 - cax_pos0.x0, ax_pos.y1 - ax_pos.y0]
+            cax.ax.set_position(cax_pos1)
+            plt.savefig(save_path, bbox_inches='tight')
+            plt.close()
 
-    def visualize_wpu(self, input, output, wpu, ann_id):
+            # save original image with estimated joint position
+            save_path = os.path.join(self.opt.work_dir, "THC_vis", f"id{ann_id}_THC{thc}/joint{j}_original.png")
+            if not os.path.exists(os.path.dirname(save_path)):
+                os.makedirs(os.path.dirname(save_path))
+            fig, ax = plt.subplots()
+            img = ax.imshow(grid_original_image)
+            plt.savefig(save_path, bbox_inches='tight')
+            plt.close()
+
+    def visualize_wpu(self, input, output, wpu, ann_id, img, GT_keypoint):
         """visualize input, output hybrid features.
         Args:
             input : input hybrid feature
@@ -825,34 +995,35 @@ class ActiveLearning:
             wpu : wpu score
             ann_id : annotation id of the sample
         """
+        # joint_pairs = [[13, 11], [11, 9], [14, 12], [12, 10], [9, 10], [3, 9], [4, 10], [3, 5], [4, 6], [5, 7], [6, 8], [0, 1], [0, 2], [1, 3], [1, 4]]
         joint_vis = [1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1] # 17 joints
         joint_pairs = [[15, 13], [13, 11], [16, 14], [14, 12], [11, 12], [5, 11], [6, 12], [5, 7], [6, 8], [7, 9], [8, 10], [0, 1], [0, 2], [1, 5], [1, 6]]
-        # compute joint position (x, y coordinates)
-        input_joints_x = np.array(input[:17]) # x coordinates of input joints, shape = (17,)
-        input_joints_y = np.array(input[17:34]) # y coordinates of input joints, shape = (17,)
-        output_joints_x = np.array(output[:17]) # x coordinates of output joints, shape = (17,)
-        output_joints_y = np.array(output[17:34]) # y coordinates of output joints, shape = (17,)
-        # print(f"input: {input[:34]}")
-        # print(f"input: {output[:34]}")
+        # print(f"input: {input[:30]}")
+        # print(f"input: {output[:30]}")
 
         track_id = int(str(ann_id)[-2:])
         img_id = int(str(ann_id)[7:-2])
 
-        # visualize input and output
-        plt.figure()
-        for joint in range(len(joint_vis)):
-            if joint_vis[joint] == 1:
-                plt.scatter(input_joints_x[joint], -input_joints_y[joint], c='r')
-                plt.scatter(output_joints_x[joint], -output_joints_y[joint], c='b')
-        for pair in joint_pairs:
-            plt.plot([input_joints_x[pair[0]], input_joints_x[pair[1]]], [-input_joints_y[pair[0]], -input_joints_y[pair[1]]], c='r')
-            plt.plot([output_joints_x[pair[0]], output_joints_x[pair[1]]], [-output_joints_y[pair[0]], -output_joints_y[pair[1]]], c='b')
-        plt.title(f'WPU: {wpu:.2f}, img_id: {img_id}, track_id: {track_id}')
-        save_path = os.path.join(self.opt.work_dir, 'WPU_vis', f'WPU_{wpu:.2f}_img{img_id}_id{track_id}.png')
-        if not os.path.exists(os.path.dirname(save_path)):
-            os.makedirs(os.path.dirname(save_path))
-        plt.savefig(save_path)
-        plt.close()
+        # visualize input and output hybrid features
+        # save independently also
+        color = ['r', 'b']
+        poses = [np.array(input), np.array(output)]
+        result = ['input', 'output']
+        for i in range(2):
+            plt.figure()
+            for j in range(len(joint_vis)):
+                if joint_vis[j] == 0:
+                    continue
+                plt.scatter(poses[i][j], -poses[i][j+len(joint_vis)], c=color[i], s=100)
+                # plt.scatter(poses[i][:len(joint_vi], -poses[i][len(joint_vis):2*len(joint_vis)], c=color[i])
+            for pair in joint_pairs:
+                plt.plot([poses[i][pair[0]], poses[i][pair[1]]], [-poses[i][pair[0]+len(joint_vis)], -poses[i][pair[1]+len(joint_vis)]], c=color[i], linewidth=5)
+            plt.title(f'img_id: {img_id}, track_id: {track_id}')
+            save_path = os.path.join(self.opt.work_dir, 'WPU_vis', f'img{img_id}', f'{wpu}_id{track_id}_{result[i]}.png')
+            if not os.path.exists(os.path.dirname(save_path)):
+                os.makedirs(os.path.dirname(save_path))
+            plt.savefig(save_path)
+            plt.close()
 
     def pltcluster_and_save(self, cluster_idxs, embeddings, track_ids_list, query_list, weight=None): # plot cluster result and save to file
         """plot cluster and save the figure to file.
@@ -891,3 +1062,134 @@ class ActiveLearning:
         plt.savefig(save_dict + f'/Round{self.round_cnt}_densmap.png') # save figure
         plt.savefig(save_dict + f'/Round{self.round_cnt}_densmap.SVG') # save figure
         plt.close()
+
+    def pltcoreset_and_save(self, embeddings, query_list, unc_list): # plot cluster result and save to file
+        """plot cluster and save the figure to file.
+        embeddings (ndarray): embeddings of each sample.
+        query_list: list of query index
+        unc_list: list of uncertainty (normalized)
+        """
+        # plot cluster result using densmap in UMAP
+        from matplotlib import colors as mcolors
+        densmap_model = umap.UMAP(densmap=True, random_state=318) # densmap=True
+        densmap_emb = densmap_model.fit_transform(embeddings) # (num_samples, 2)
+
+        # plot cluster result using DensMAP
+        # color = [plt.cm.jet(i) for i in np.linspace(0, 1, cluster_num)]
+
+        plt.figure()
+        print(np.array(unc_list)[query_list])
+        print(unc_list)
+        norm = mcolors.Normalize(vmin=0, vmax=1)
+        for sample in range(embeddings.shape[0]): # for every sample in candidate_list
+            marker = 'o' if sample in query_list else 'x'
+            size = 120 if sample in query_list else 40
+            plt.scatter(densmap_emb[sample, 0], densmap_emb[sample, 1], s=size, marker=marker, c=(unc_list[sample]), cmap="jet", alpha=0.8, norm=norm) # change color according to uncertainty
+            if sample in query_list:
+                plt.annotate("query", (densmap_emb[sample, 0], densmap_emb[sample, 1]+0.2), fontsize=10)
+        plt.colorbar(label='uncertainty', norm=norm)
+        save_dict = os.path.join(self.opt.work_dir, 'coreset_result')
+        if not os.path.exists(save_dict):
+            os.makedirs(save_dict)
+        plt.savefig(save_dict + f'/Round{self.round_cnt}_densmap.png') # save figure
+        plt.savefig(save_dict + f'/Round{self.round_cnt}_densmap.pdf') # save figure
+        plt.close()
+
+    def vl4pose(self, pose_encodings, heatmaps, joint_exist, epoch):
+        '''
+            Train the auxiliary network for VL4Pose.
+
+            - param pose_encodings: (Dict of tensors) output from the pose network
+            - param heatmaps: Tensor of size (batch_size, num_joints, hm_size, hm_size)
+            - param joint_exist: Tensor of size (batch_size, num_joints)
+                - Joint status (1=Present, 0=Absent)
+                - Present=1 may include occluded joints depending on configuration.yml setting
+            - param epoch: (scalar) Epoch, used in auxiliary network loss warm start-up
+
+            - return auxnet_loss: (Torch scalar tensor) auxiliary network Loss
+        '''
+
+        assert joint_exist.dim() == 2, "joint_exist should be BS x num_hm, received: {}".format(joint_exist.shape)
+        j2i = self.dataset_obj.jnt_to_ind
+
+
+        if self.conf.dataset['load'] == 'mpii':
+            links = [[j2i['head'], j2i['neck']], [j2i['neck'], j2i['thorax']], [j2i['thorax'], j2i['pelvis']],
+                     [j2i['thorax'], j2i['lsho']], [j2i['lsho'], j2i['lelb']], [j2i['lelb'], j2i['lwri']],
+                     [j2i['thorax'], j2i['rsho']], [j2i['rsho'], j2i['relb']], [j2i['relb'], j2i['rwri']],
+                     [j2i['pelvis'], j2i['lhip']], [j2i['lhip'], j2i['lknee']], [j2i['lknee'], j2i['lankl']],
+                     [j2i['pelvis'], j2i['rhip']], [j2i['rhip'], j2i['rknee']], [j2i['rknee'], j2i['rankl']]]
+        else:
+            links = [[j2i['head'], j2i['neck']],
+                     [j2i['neck'], j2i['lsho']], [j2i['lsho'], j2i['lelb']], [j2i['lelb'], j2i['lwri']],
+                     [j2i['neck'], j2i['rsho']], [j2i['rsho'], j2i['relb']], [j2i['relb'], j2i['rwri']],
+                     [j2i['lsho'], j2i['lhip']], [j2i['lhip'], j2i['lknee']], [j2i['lknee'], j2i['lankl']],
+                     [j2i['rsho'], j2i['rhip']], [j2i['rhip'], j2i['rknee']], [j2i['rknee'], j2i['rankl']]]
+
+        parameters = self._aux_net_inference(pose_encodings)
+        parameters = parameters.reshape(self.cfg.VAL.BATCH_SIZE, len(links), 2)
+        joint_exist = joint_exist.to(parameters.device)
+        heatmaps = heatmaps.to(parameters.device)
+
+        with torch.no_grad():
+
+            joint_distances = get_pairwise_joint_distances(heatmaps)
+            joint_exist = torch.matmul(joint_exist.unsqueeze(2).type(torch.float16), joint_exist.unsqueeze(1).type(torch.float16))
+
+            # Batch Size x num_links
+            skeleton_exist = torch.stack([joint_exist[:, u, v] for u,v in links], dim=1)
+            skeleton_distances = torch.stack([joint_distances[:, u, v] for u,v in links], dim=1)
+
+        ####
+        residual = (parameters[:, :, 0].squeeze() - skeleton_distances)**2
+        residual = 0.5 * residual * torch.exp(-parameters[:, :, 1]).squeeze()
+        neg_log_likelihood = residual + (0.5 * parameters[:, :, 1].squeeze())
+        neg_log_likelihood = neg_log_likelihood * skeleton_exist
+
+        if 100 <= epoch:
+            return torch.mean(neg_log_likelihood)
+
+        else:
+            return 0.0 * torch.mean(neg_log_likelihood)
+
+
+    def _aux_net_inference(self, pose_features):
+        """
+        Common to VL4Pose, LearningLoss++ and Aleatoric which all use an auxiliary network
+        """
+        with torch.no_grad():
+            depth = len(self.conf.architecture['aux_net']['spatial_dim'])
+            encodings = torch.cat([pose_features['feature_{}'.format(i)].reshape(
+                    self.cfg.VAL.BATCH_SIZE, pose_features['feature_{}'.format(i)].shape[1], -1) for i in range(depth, 0, -1)], dim=2)
+        aux_out = self.aux_net(encodings)
+        return aux_out
+
+    def get_max_preds(self, batch_heatmaps):
+        '''
+        get predictions from score maps
+        heatmaps: numpy.ndarray([batch_size, num_joints, height, width])
+        '''
+        assert isinstance(batch_heatmaps, np.ndarray), \
+            'batch_heatmaps should be numpy.ndarray'
+        assert batch_heatmaps.ndim == 4, 'batch_images should be 4-ndim'
+
+        batch_size = batch_heatmaps.shape[0]
+        num_joints = batch_heatmaps.shape[1]
+        width = batch_heatmaps.shape[3]
+        heatmaps_reshaped = batch_heatmaps.reshape((batch_size, num_joints, -1))
+        idx = np.argmax(heatmaps_reshaped, 2)
+        maxvals = np.amax(heatmaps_reshaped, 2)
+
+        maxvals = maxvals.reshape((batch_size, num_joints, 1))
+        idx = idx.reshape((batch_size, num_joints, 1))
+
+        preds = np.tile(idx, (1, 1, 2)).astype(np.float32)
+
+        preds[:, :, 0] = (preds[:, :, 0]) % width
+        preds[:, :, 1] = np.floor((preds[:, :, 1]) / width)
+
+        pred_mask = np.tile(np.greater(maxvals, 0.0), (1, 1, 2))
+        pred_mask = pred_mask.astype(np.float32)
+
+        preds *= pred_mask
+        return preds, maxvals

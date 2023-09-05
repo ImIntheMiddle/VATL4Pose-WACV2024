@@ -83,12 +83,12 @@ def save_batch_image_with_joints(batch_image, batch_heatmaps, batch_joints, batc
     joints_vis = batch_joints_vis[0].cpu().numpy()
 
     for joint_pair in joint_pairs:
-    #     continue
+        # continue
         if joints_vis[joint_pair[0]] and joints_vis[joint_pair[1]]:
             cv2.line(img=img, pt1=(int(preds[0][joint_pair[0]][0]), int(preds[0][joint_pair[0]][1])), pt2=(int(preds[0][joint_pair[1]][0]), int(preds[0][joint_pair[1]][1])), color=[0, 0, 255], thickness=2)
 
     for j in range(num_joints):
-    #     continue
+        # continue
         if joints_vis[j]:
             # print(int(preds[0][j][0]), int(preds[0][j][1])) # x, y
             cv2.circle(img=img, center=(int(preds[0][j][0]), int(preds[0][j][1])), radius=2, color=[0, 0, 255], thickness=3)
@@ -151,12 +151,11 @@ def save_batch_heatmaps(batch_image, batch_heatmaps, file_name,
     cv2.imwrite(file_name, masked_image)
     # print("save image to {}".format(file_name))
 
-
-def vis_item(root_dir, item_path, i, save_video=False):
+def vis_item(root_dir, item_path, i, save_video=False, vis_gt=False, queries=None):
     #parse path
     ann_id = item_path.split('/')[-1].split('.')[0]
     # track_id: ann_idの下二桁
-    track_id = ann_id[-2:]
+    track_id = ann_id[-3:]
     rootdir = os.path.join(root_dir, track_id)
     if not os.path.exists(rootdir):
         os.makedirs(rootdir)
@@ -169,9 +168,17 @@ def vis_item(root_dir, item_path, i, save_video=False):
     # pdb.set_trace()
     heatmaps = item_dict.item()['heatmaps'] # [17, 64, 48]
     batch_image = item_dict.item()['img'] # list of images [channel, height, width]
-    batch_joints = item_dict.item()['keypoints'] # list of joints (length = 51 = 17*3)
-    batch_joints_vis = [1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1] # 17 joints
-    joint_pairs = [[15, 13], [13, 11], [16, 14], [14, 12], [11, 12], [5, 11], [6, 12], [5, 7], [6, 8], [7, 9], [8, 10], [0, 1], [0, 2], [1, 5], [1, 6]]
+    if vis_gt: # if visualizing ground truth
+        batch_joints = item_dict.item()['GTkpts']
+    else:
+        batch_joints = item_dict.item()['keypoints'] # list of joints (length = 51 = 17*3)
+    batch_joints_vis = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1] # 17 joints
+    for i_score in range(2, len(batch_joints), 3):
+        if batch_joints[i_score] < 0.4:
+            batch_joints_vis[i_score//3] = 0
+
+    # joint_pairs = [[15, 13], [13, 11], [16, 14], [14, 12], [11, 12], [5, 11], [6, 12], [5, 7], [6, 8], [7, 9], [8, 10], [0, 1], [0, 2], [1, 5], [1, 6]] # for PoseTrack21
+    joint_pairs = [[1,2],[0,4],[3,4],[8,10],[5,7],[10,13],[14,16],[4,5],[7,12],[4,8],[3,6],[13,15],[11,14],[6,9],[8,11]] # for JRDB-Pose
     # pdb.set_trace()
 
     batch_image =torch.Tensor(batch_image).view(1, 3, 256, 192) # [1, 3, 256, 192]
@@ -181,7 +188,7 @@ def vis_item(root_dir, item_path, i, save_video=False):
 
     # save images with joints
     os.makedirs(os.path.join(rootdir, "estimation_result"), exist_ok=True)
-    save_batch_image_with_joints(batch_image, heatmaps, batch_joints, batch_joints_vis, joint_pairs, os.path.join(rootdir, "estimation_result", f'{i}.jpg'))
+    save_batch_image_with_joints(batch_image, heatmaps, batch_joints, batch_joints_vis, joint_pairs, os.path.join(rootdir, "estimation_result", f'{i}_{ann_id}.jpg'))
     # save heatmaps
     # os.makedirs(os.path.join(rootdir, "heatmap"), exist_ok=True)
     # save_batch_heatmaps(batch_image, heatmaps, os.path.join(rootdir, "heatmap", f'{image_id}.jpg'))
@@ -200,7 +207,7 @@ def make_animation(rootdir, save_id):
             height, width, layers = img.shape
             size = (width,height) # size of each frame
             img_array.append(img) # add image to list
-        savepath = os.path.join(rootdir, track_id, 'estimation_result.mp4')
+        savepath = os.path.join(rootdir, track_id, f'estimation_result_{track_id}.mp4')
         out = cv2.VideoWriter(savepath, cv2.VideoWriter_fourcc(*'DIVX'), 2, size) # make video, frame rate = 10
         for i in range(len(img_array)): # write each frame
             out.write(img_array[i]) # write each frame
@@ -239,33 +246,54 @@ def compare_video(video_paths, compv_path):
     print(f"save video to {compv_path}!")
 
 if __name__ == '__main__':
-    cfg = update_config("configs/al_simple.yaml") # load config
-    model = "SimplePose"
+    cfg = update_config("configs/jrdb-pose/al_simple_jrdb.yaml") # load config
+    # cfg = update_config("configs/al_simple_duw.yaml") # load config
+    # model = "SimplePose"
+    model = "FastPose"
     # strategy_list = ["Random", "HP", "TPC", "THC_L1", "WPU_hybrid"] # strategies
     # strategy_list = ["Random","THC_L1_weightedfilter","MPE+Influence","HP"] # strategies
-    strategy_list = ["THC_weightedfilter"]
-    round_list = ["Round0", "Round2"]
+    # strategy_list = ["THC_weightedfilter"]
+    # strategy_list = ["THC+WPU_Coresetfilter"]
+    strategy_list = ["THC+WPU_Coresetfilter", "MPE", "_Coresetfilter", "TPC", "HP"]
+    round_list = ["Round0"]
     # root_dir = "exp/AL_MVA4/SimplePose"
-    root_dir = "exp/AL_PCIT3/SimplePose"
+    # root_dir = "exp/AL_MVA_vis/SimplePose"
+    # root_dir = "exp/AL_PCIT3/SimplePose"
+    root_dir = "exp/AL_WACV_VIS/FastPose"
     # video_id_list = read_video_list("configs/val_video_list.txt")
-    # video_id_list = ["016239"]
-    video_id_list = ["030"]
+    # video_id_list = read_video_list("configs/jrdb-pose/test_ids.txt")
+    video_id_list = ["08"]
+    # video_id_list = ["030"]
 
     for strategy in strategy_list:
         for video_id in video_id_list: # load each video's result from 'result.json' in each directory
             result_dir = os.path.join(root_dir, strategy, video_id) # exp/AL_Glory/SimplePose/HP/000000
+            result_dir = glob.glob(f"{result_dir}/*")[-1] # get the latest result
+            print(result_dir)
+            with open(os.path.join(result_dir, "result.json"), "r") as f:
+                result_dict = json.load(f)
             video_paths = []
+            gt_visualised = False
             for round in round_list:
-                results = glob.glob(f"{result_dir}/*/heatmap/{round}/*.npy")
+                queries = result_dict["query_list"][round]
+                results = glob.glob(f"{result_dir}/heatmap/{round}/*.npy")
                 print(f"strategy: {strategy}, video_id: {video_id}, round: {round}")
                 print(f"len: {len(results)}")
-                rootdir = os.path.join('exp/vis', model, strategy, video_id, round)
+                rootdir = os.path.join('exp/vis_JRDB', model, strategy, video_id, round)
+                gt_dir = os.path.join('exp/vis_JRDB', model, strategy, video_id, "gt")
                 for i, item_path in enumerate(results):
-                    # print(item_path)
-                    vis_item(rootdir, item_path, i)
-                    pass
-                if True:
-                    savepath = make_animation(rootdir, save_id="00")
-                    video_paths.append(savepath)
-            compv_path = os.path.join('exp/vis', model, strategy, video_id, 'compare.mp4')
-            compare_video(video_paths, compv_path)
+                    if i not in queries:
+                        continue
+                    print(item_path)
+                    vis_item(rootdir, item_path, i, queries)
+                    # if not gt_visualised:
+                        # vis_item(gt_dir, item_path, i, vis_gt=True. )
+                    # pass
+                # gt_visualised = True
+                # vis_id = ["00", "01", "02", "03", "04", "05", "06", "07", "08"]
+                # if True:
+                    # savepath = make_animation(rootdir, save_id="00")
+            #         video_paths.append(savepath)
+            # if len(video_paths) == 2:
+            #     compv_path = os.path.join('exp/vis', model, strategy, video_id, 'compare.mp4')
+            #     compare_video(video_paths, compv_path)

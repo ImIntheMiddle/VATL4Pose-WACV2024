@@ -5,6 +5,7 @@
 
 import platform
 import random
+import pdb
 
 import cv2
 import numpy as np
@@ -19,7 +20,6 @@ from ..transforms import (addDPG, affine_transform, flip_joints_3d, get_affine_t
 # is intalled, you can try to use these ext_modules.
 if platform.system() != 'Windows':
     from ..roi_align import RoIAlign
-
 
 class SimpleTransform(object):
     """Generation of cropped input person and pose heatmaps from SimplePose.
@@ -185,6 +185,8 @@ class SimpleTransform(object):
             bbox = addDPG(bbox, imgwidth, imght)
 
         imgwidth, imght = label['width'], label['height']
+        # print(f"imgwidth: {imgwidth}, imght: {imght}")
+        # print(f"img.shape: {img.shape}")
         assert imgwidth == img.shape[1] and imght == img.shape[0]
 
         gt_joints = label['joints_3d']

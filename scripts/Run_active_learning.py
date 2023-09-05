@@ -58,7 +58,8 @@ def parse_args():
     parser.add_argument('--representativeness', type=str, default="None", help='representativeness type') # Influence, Random
     parser.add_argument('--filter', type=str, default="None", help='filter type') # None, Random, Diversity, weighted
     parser.add_argument('--video_id', type=str, required=True, help = 'id of the video for test')
-    parser.add_argument('--wunc', type=float, default=200, help='weight of uncertainty')
+    parser.add_argument('--wunc', type=float, default=0.01, help='weight of uncertainty')
+    parser.add_argument('--retrain_thresh', type=float, default=1, help='retrain threshold')
     parser.add_argument('--verbose', action='store_true',
                         help='print detail information')
     parser.add_argument('--speedup', action='store_true',
@@ -70,8 +71,12 @@ def parse_args():
     parser.add_argument('--memo', type=str, default="test",
                         help='memo for this experiment')
     parser.add_argument("--onebyone", action="store_true", help="one by one annotation")
+    parser.add_argument("--stopping", action="store_true", help="turn on stopping criteria")
+    parser.add_argument("--continual", action="store_true", help="continual fine-tuning")
     parser.add_argument("--optimize", action="store_true", help="optimize hyperparameters by optuna")
     parser.add_argument("--PCIT", action="store_true", help="use PCIT dataset")
+    parser.add_argument("--fixed_lambda", action="store_true", help="eliminate dynamic Gc and use fixed lambda in DUW.")
+    parser.add_argument("--THCvsWPU", choices=["const", "increase", "decrease"], default="const", help="control the balance between THC and WPU when combining them. 'increase' means increasing the weight of THC linearly")
     parser.add_argument("--vis_thc", action="store_true", help="visualize THC")
     parser.add_argument("--vis_wpu", action="store_true", help="visualize WPU")
     args = parser.parse_args()
@@ -104,7 +109,7 @@ def setup_opt(opt):
         torch.backends.cudnn.deterministic = False
         print('Speed up technique applied. (Not reproducible)')
     if opt.seedfix: # fix seed for reproducibility
-        SEED = 318
+        SEED = 166 # 318/42
         random.seed(SEED)
         np.random.seed(SEED)
         torch.manual_seed(SEED)
@@ -141,16 +146,16 @@ def set_dir(cfg, opt):
     # set get_pre_next flag if uncertainty contains TPC or THC_L1
     opt.get_prenext = True if 'TPC' in opt.uncertainty or 'THC' in opt.uncertainty else False
 
-    if os.uname()[1] in ["dl30"]: # set dataset root directory
-        cfg.DATASET.TRAIN.ROOT = '/home-local/halo/PoseTrack21/' # set dataset root directory
-        cfg.DATASET.EVAL.ROOT = '/home-local/halo/PoseTrack21/'
     if opt.PCIT: # set dataset root directory
         cfg.DATASET.TRAIN.ROOT = 'data/PCIT/' # set dataset root directory
         cfg.DATASET.EVAL.ROOT = 'data/PCIT/'
 
     # Set up experiment directory
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S') # get current date and time
-    opt.work_dir = 'exp/AL_{}/{}/{}/{}/{}'.format(opt.memo, cfg.MODEL.TYPE, opt.strategy, opt.video_id, timestamp)
+    if opt.optimize: # optimize hyperparameters
+        opt.work_dir = 'exp/AL_{}/{}/{}/{}/{}'.format(opt.memo, cfg.MODEL.TYPE, opt.strategy, "optimize", timestamp)
+    else:
+        opt.work_dir = 'exp/AL_{}/{}/{}/{}/{}'.format(opt.memo, cfg.MODEL.TYPE, opt.strategy, opt.video_id, timestamp)
     os.makedirs(opt.work_dir, exist_ok=False) # create unique experiment directory
     os.system('cp {} {}/'.format(opt.cfg, opt.work_dir)) # copy config file to experiment directory
     print(f'Result will be saved to: {opt.work_dir}!\n')
@@ -168,17 +173,34 @@ def do_al(cfg, opt):
 
 def hyper_objective(cfg, opt):
     def objective(trial):
-        cfg.VAL.W_UNC = trial.suggest_float('w_unc', 0.0, 100.0)
-        print('w_unc: {}'.format(cfg.VAL.W_UNC))
-        result = do_al(cfg, opt)
-        plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[1])
-        return compute_alc(result[0], result[1]) # area under learning curve with annotation
+        # randamize the video_id
+        # opt.video_id = random.choice(opt.video_id_list)
+        cfg.VAL.UNC_LAMBDA = trial.suggest_float('unc_lambda', 0.001, 100)
+        # AE setting
+        # cfg.AE.EPOCH = trial.suggest_int('epoch', 1, 25)
+        # cfg.AE.LR = trial.suggest_float('lr', 0.00001, 0.0001)
+        # print('video_id: {}'.format(opt.video_id), "unc_lambda: {}".format(cfg.VAL.UNC_LAMBDA))
+        alc_list = []
+        for video in opt.video_id_list:
+            opt.video_id = video
+            result = do_al(cfg, opt)
+            ap95 = np.array(list(round_res["AP .95"] for round_res in result[2]))*100
+            alc = compute_alc(result[0], ap95) # area under learning curve with annotation
+            alc_list.append(alc)
+        alc = np.mean(alc_list)
+        # unc_mean = np.array(result[5]) # corrcoef_list
+        # unc_norm = unc_mean/unc_mean[0]
+        # unc_sum = np.sum(unc_norm)
+        return alc
+        # return unc_sum
     return objective
 
 def optimize_alc(cfg, opt):
-    search_space = {"w_unc": [0.0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0 ,5.0, 10.0, 50.0, 100.0, 500.0, 1000.0]}
+    search_space = {"unc_lambda": [0.001]}
+    cfg.VAL.QUERY_RATIO = [0.05, 0.1, 0.2, 0.3, 0.4, 1]
     study = optuna.create_study(direction='maximize', sampler=optuna.samplers.GridSampler(search_space))
-    study.optimize(hyper_objective(cfg,opt), n_trials=14)
+    # study = optuna.create_study(direction='maximize')
+    study.optimize(hyper_objective(cfg,opt), n_trials=30)
     print("Best ALC: {}".format(study.best_value), "Best params: {}".format(study.best_params))
     fig = optuna.visualization.plot_optimization_history(study)
     fig.write_image(os.path.join(opt.work_dir, 'optuna_history.png'))
@@ -202,6 +224,17 @@ def save_result(cfg, opt, result):
     result_json['combine_weight'] = result[7] # combine weight
     result_json['mean_uncertaity'] = result[5] # mean uncertainty
     result_json['spearmanr'] = result[8] # spearmanr_list
+    result_json['corrcoef'] = result[9] # corrcoef_list
+    result_json['true_labeled'] = result[10] # true_labeled
+    result_json['true_unlabeled'] = result[11] # true_unlabeled
+    result_json['false_labeled'] = result[12] # false_labeled
+    result_json['false_unlabeled'] = result[13] # false_unlabeled
+    result_json['actual_finish'] = result[14] # finished time
+    result_json['finished_minerror'] = result[15] # finished time
+    result_json['finished_oursc'] = result[16] # finished time
+    result_json['ospa'] = result[17] # ospa
+    result_json['ospa_ann'] = result[18] # ospa score with annotation
+    result_json['moks_queried'] = result[19] # moks queried
     # result_json['learning_curve_path'] = plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[1]) # plot learning curve
     # result_json['learning_curve_path_ann'] = plot_learning_curves(opt.work_dir, opt.video_id, opt.strategy, result[0], result[2], ann=True) # plot learning curve with annotation
 
@@ -210,12 +243,13 @@ def save_result(cfg, opt, result):
     print('Result saved to: {}!'.format(os.path.join(opt.work_dir, 'result.json')))
 
 def main(cfg, opt):
+    opt = set_dir(cfg, opt)
     if opt.optimize: # optimize hyperparameters
+        opt.video_id_list = open("configs/trainval_video_list.txt").read().splitlines() # get video id list
         optimize_alc(cfg, opt)
     else: # standard setting
         result = do_al(cfg, opt)
         save_result(cfg, opt, result) # save results
-    # cfg.VAL.W_UNC = opt.wunc
     # result = do_al(cfg, opt)
     # save_result(cfg, opt, result) # save results
 """---------------------------------- Execution ----------------------------------"""
@@ -229,5 +263,8 @@ if __name__ == '__main__':
     opt = parse_args() # get exp settings
     opt = setup_opt(opt) # setup option
     cfg = update_config(opt.cfg) # update config
-    opt = set_dir(cfg, opt)
+    # cfg.VAL.UNC_LAMBDA = opt.wunc # set weight of uncertainty
+    if opt.vis:
+        cfg.RETRAIN.BASE = 0
+        cfg.RETRAIN.ALPHA = 0
     main(cfg, opt) # run active learning

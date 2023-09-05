@@ -8,7 +8,7 @@ class WholeBodyAE(nn.Module):
         self.z_dim = z_dim
         if kp_direct: # if True, use keypoints as input of AE directly. size: 15*3 = 45
             self.input_dim = 51
-        else: # if False, use hand-crafted feature as input of AE. size: 15*2 + 8 = 38
+        else: # if False, use hand-crafted feature as input of AE. size: 17*2 + 8 = 42
             self.input_dim = 42
         self.encoder = nn.Sequential(
             nn.Linear(self.input_dim, 24),
@@ -28,7 +28,7 @@ class WholeBodyAE(nn.Module):
             nn.Linear(12, 24),
             nn.ReLU(True),
             nn.Linear(24, self.input_dim),
-            nn.Tanh()
+            nn.Sigmoid()
         )
         print(f"WholeBodyAE: z_dim: {self.z_dim}, input_dim: {self.input_dim}")
         print("Total parameters: ", sum(p.numel() for p in self.parameters() if p.requires_grad))

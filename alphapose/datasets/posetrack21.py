@@ -15,7 +15,6 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
     Parameters
     ----------
     root: str, default './data/PoseTrack21'
-    for home-local: '/home-local/halo/PoseTrack21'
         Path to the PoseTrack21 dataset.
     """
     CLASSES = ['person']
@@ -101,7 +100,7 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
                 continue
 
             ann_id = int(obj['id']) # ann_id is unique for each human in each frame
-            id = int(str(ann_id)[-2:] + str(frame['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする
+            id = int(str(ann_id)[-2:] + str(frame['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする → 人ごとにユニークなidになる（各人物 > 各フレーム）
             valid_objs.append({
                 'bbox': (xmin, ymin, xmax, ymax), # (xmin, ymin, xmax, ymax)
                 'width': width,
