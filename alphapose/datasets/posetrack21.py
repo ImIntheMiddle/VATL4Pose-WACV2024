@@ -101,6 +101,8 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
 
             ann_id = int(obj['id']) # ann_id is unique for each human in each frame
             id = int(str(ann_id)[-2:] + str(frame['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする → 人ごとにユニークなidになる（各人物 > 各フレーム）
+            # track_id is unique for each human among all videos
+            track_id = str(frame['vid_id']) + str(obj['track_id'])
             valid_objs.append({
                 'bbox': (xmin, ymin, xmax, ymax), # (xmin, ymin, xmax, ymax)
                 'width': width,
@@ -109,7 +111,7 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
                 'keypoint': obj['keypoints'],
                 'id': id,
                 'ann_id': ann_id,
-                'track_id': obj['track_id']
+                'track_id': track_id
             })
         if not valid_objs:
             if not self._skip_empty:

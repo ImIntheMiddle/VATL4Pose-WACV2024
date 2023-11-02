@@ -60,7 +60,7 @@ AUXNET:
   LR: 0.00008
 
 RETRAIN:
-  BATCH_SIZE: 24 # default: 24
+  BATCH_SIZE: 120 # default: 24
   BASE: 25 # default: continual: 25
   OPTIMIZER: 'AdamW' #SGD or Adam or AdamW
   LR: 0.00025 # continual: 0.00025
@@ -70,7 +70,7 @@ RETRAIN:
 
 VAL:
   FINISH_ACC: 1 # default: 0.75
-  BATCH_SIZE: 256 # default: 256
+  BATCH_SIZE: 1080 # default: 256
   W_UNC: 0.01
   UNC_LAMBDA: 0.01 # unc weight for coreset sampling
   QUERY_RATIO: [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0] # list of query ratio for evaluation

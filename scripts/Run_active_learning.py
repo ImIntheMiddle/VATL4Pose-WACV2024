@@ -70,6 +70,7 @@ def parse_args():
                         help='visualize & save')
     parser.add_argument('--memo', type=str, default="test",
                         help='memo for this experiment')
+    parser.add_argument('--from_scratch', action='store_true', help='train the model from scratch')
     parser.add_argument("--onebyone", action="store_true", help="one by one annotation")
     parser.add_argument("--stopping", action="store_true", help="turn on stopping criteria")
     parser.add_argument("--continual", action="store_true", help="continual fine-tuning")
@@ -263,7 +264,6 @@ if __name__ == '__main__':
     opt = parse_args() # get exp settings
     opt = setup_opt(opt) # setup option
     cfg = update_config(opt.cfg) # update config
-    # cfg.VAL.UNC_LAMBDA = opt.wunc # set weight of uncertainty
     if opt.vis:
         cfg.RETRAIN.BASE = 0
         cfg.RETRAIN.ALPHA = 0

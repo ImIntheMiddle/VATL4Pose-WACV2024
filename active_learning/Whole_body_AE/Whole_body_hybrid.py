@@ -16,6 +16,7 @@ class Wholebody(Dataset):
         self.eval_joints = [0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
         self.retrain_video_id = retrain_video_id
         if dataset_type == "Posetrack21":
+            dataset_type = "PoseTrack21"
             root = Path(f"data/PoseTrack21/activelearning/")
             if retrain_video_id is not None:
                 if self.mode == "val":
@@ -38,9 +39,10 @@ class Wholebody(Dataset):
                 self.file = os.path.join(root, self.mode, json_name)
 
         try: # read precomputed hybrid feature
-            self.items = np.load(f"data/{dataset_type}/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", allow_pickle=True)
+            npy_path = Path(f"data/{dataset_type}/activelearning/hybrid_feature/{self.mode}/{json_name}.npy")
+            self.items = np.load(npy_path, allow_pickle=True)
             self.num = len(self.items)
-            print(f"loaded {self.num} human body from {self.file}")
+            print(f"loaded {self.num} human body from {npy_path}")
         except: # compute hybrid feature from scratch
             self.num = 0 # number of human body in this json file
             self.items = []
@@ -52,7 +54,7 @@ class Wholebody(Dataset):
                         continue
                     self.num += 1 # count the number of visible human body
                     id = int(annotation['id'])
-                    if dataset_type == "Posetrack21":
+                    if dataset_type == "PoseTrack21":
                         ann_id = int(str(id)[-2:] + str(annotation['image_id'])) # idの下二桁を取り出し，img_idと結合したものをann_idとする
                     elif dataset_type == "JRDB2022":
                         ann_id = int(str(id)[-3:] + str(annotation['image_id'])) # idの下三桁を取り出し，img_idと結合したものをann_idとする
@@ -71,7 +73,7 @@ class Wholebody(Dataset):
                 # save hybrid feature
                 os.makedirs(f"data/{dataset_type}/activelearning/hybrid_feature/{self.mode}/", exist_ok=True)
                 np.save(f"data/{dataset_type}/activelearning/hybrid_feature/{self.mode}/{json_name}.npy", self.items)
-            print(f"saved {self.num} human body from {self.file}")
+            print(f"saved {self.num} hybrid feature calculated from {self.file}")
 
     # ここで取り出すデータを指定
     def __getitem__(self, index: int) -> torch.Tensor:

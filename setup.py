@@ -8,13 +8,13 @@ from Cython.Build import cythonize
 from setuptools import Extension, find_packages, setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
-MAJOR = 0
-MINOR = 5
+MAJOR = 1
+MINOR = 0
 PATCH = 0
 SUFFIX = ''
 SHORT_VERSION = '{}.{}.{}{}'.format(MAJOR, MINOR, PATCH, SUFFIX)
 
-version_file = 'alphapose/version.py'
+version_file = 'activelearning/version.py'
 
 
 def readme():
@@ -185,12 +185,12 @@ def is_installed(package_name):
 if __name__ == '__main__':
     write_version_py()
     setup(
-        name='alphapose',
+        name='vatl4pose',
         version=get_version(),
-        description='Code for AlphaPose',
+        description='Code for VATL4Pose',
         long_description=readme(),
-        keywords='computer vision, human pose estimation',
-        url='https://github.com/MVIG-SJTU/AlphaPose',
+        keywords='computer vision, human pose estimation, active learning',
+        url='https://github.com/hooray-sandpang/VATL4Pose',
         packages=find_packages(exclude=('data', 'exp',)),
         package_data={'': ['*.json', '*.txt']},
         classifiers=[

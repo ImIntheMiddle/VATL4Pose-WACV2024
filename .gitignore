@@ -114,6 +114,7 @@ venv.bak/
 exp/coco*
 *.pth
 *.weights
+*.zip
 exp/json/test_kpt.json
 exp/json/test_gt_kpt.json
 exp/json/validate_rcnn_kpt.json
@@ -123,12 +124,17 @@ tmp/
 exp/json
 tmp_*/
 examples/res*/
-data/
+data/google-cloud
+data/PoseTrack21/images
+data/PoseTrack21/posetrack_*
+
+data/jrdb-pose/jrdb2022
+data/jrdb-pose/images
 exp/
-data
 tensorboard/
 trackers/
 scripts/summarize_result.py
 
 # private data
 PCIT/
+data/PCIT/

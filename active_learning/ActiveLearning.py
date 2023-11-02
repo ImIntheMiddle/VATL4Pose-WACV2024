@@ -76,13 +76,18 @@ class ActiveLearning:
             ANN = f'annotations/eval/{self.video_id}.json'
         elif self.dataset == "JRDB2022":
             # line number is corresponding to the video_id
-            with open("configs/jrdb-pose/jrdb_test.txt", "r") as f:
-            # with open("configs/jrdb-pose/jrdb_val.txt", "r") as f:
-                lines = f.readlines()
-                scene_name = lines[int(self.video_id)]
-            IMG_PREFIX = f'images/image_stitched/{scene_name}/'
-            ANN = f'activelearning/test/{self.video_id}_jrdb-pose.json'
-            # ANN = f'activelearning/val/{self.video_id}_jrdb-pose.json'
+            if self.opt.optimize:
+                with open("configs/jrdb-pose/jrdb_val.txt", "r") as f:
+                    lines = f.readlines()
+                    scene_name = lines[int(self.video_id)]
+                IMG_PREFIX = f'images/image_stitched/{scene_name}/'
+                ANN = f'activelearning/val/{self.video_id}_jrdb-pose.json'
+            else:
+                with open("configs/jrdb-pose/jrdb_test.txt", "r") as f:
+                    lines = f.readlines()
+                    scene_name = lines[int(self.video_id)]
+                IMG_PREFIX = f'images/image_stitched/{scene_name}/'
+                ANN = f'activelearning/test/{self.video_id}_jrdb-pose.json'
         self.cfg.DATASET.EVAL.IMG_PREFIX = IMG_PREFIX
         self.cfg.DATASET.EVAL.ANN = ANN
         self.cfg.DATASET.TRAIN.IMG_PREFIX = IMG_PREFIX
@@ -159,7 +164,7 @@ class ActiveLearning:
         self.show_info() # show information of active learning
 
     def outcome(self): # Check if the active learning is stopped
-        # self.is_early_stop = True
+        # self.is_early_stop = True # for test
         if self.is_early_stop or self.one_by_one:
             while len(self.performance) <= len(self.query_ratio): # fill the rest of performance (early stopping)
                 self.round_cnt += 1
@@ -205,9 +210,13 @@ class ActiveLearning:
             model: Initial pose estimator
         """
         model = builder.build_sppe(self.cfg.MODEL, preset_cfg=self.cfg.DATA_PRESET)
-        if self.cfg.MODEL.PRETRAINED:
+        if self.opt.from_scratch:
+            print(f'Train the model from scratch!')
+        elif self.cfg.MODEL.PRETRAINED:
             print(f'Loading model from {self.cfg.MODEL.PRETRAINED}...') # pretrained by PoseTrack21
             model.load_state_dict(torch.load(self.cfg.MODEL.PRETRAINED))
+        else:
+            raise ValueError('No pretrained model is given!')
         if self.cfg.RETRAIN.OPTIMIZER == 'SGD':
             optimizer = torch.optim.SGD(model.parameters(), lr=self.lr, momentum=0.9, weight_decay=0.0005)
         elif self.cfg.RETRAIN.OPTIMIZER == 'Adam':
@@ -230,8 +239,8 @@ class ActiveLearning:
         print(f'\n[[AL strategy: {self.opt.strategy}]]')
         print(f'[[Video ID: {self.opt.video_id}]]')
         print(f'[[Number of queries: {len(self.eval_dataset)}]]')
-        # print(f'[[Pose Estimator: {self.cfg.MODEL.TYPE}]]')
-        # print(f'[[eval_jounts: {self.eval_joints}]]')
+        print(f'[[Pose Estimator: {self.cfg.MODEL.TYPE}]]')
+        print(f'[[eval_jounts: {self.eval_joints}]]')
         print(f'[[Uncertainty: {self.uncertainty}]]')
         print(f'[[Representativeness: {self.representativeness}]]')
         print(f'[[Filter: {self.filter}]]')
@@ -449,6 +458,7 @@ class ActiveLearning:
         self.performance_ann.append(res_ann) # mAP performance: 0~100
         self.ospa_list.append(ospa)
         self.ospa_list_ann.append(ospa_ann)
+        print(f'{self.video_id}[[Round{self.round_cnt}: {self.strategy}]]')
         print(f'[Evaluation] Percentage:{self.percentage[-1]:.1f}, mAP:{res["AP"]:.3f} (ANN:{res_ann["AP"]:.3f}), AP@0.5:{res["AP .5"]:.3f} (ANN:{res_ann["AP .5"]:.3f}), AP@0.6:{res["AP .6"]:.3f} (ANN:{res_ann["AP .6"]:.3f}), AP@0.75:{res["AP .75"]:.3f} (ANN:{res_ann["AP .75"]:.3f}), AP@0.95:{res["AP .95"]:.3f} (ANN:{res_ann["AP .95"]:.3f})')
         print(f'[Evaluation] OSPA:{ospa:.3f} (ANN:{ospa_ann:.3f})')
 
@@ -625,13 +635,13 @@ class ActiveLearning:
             self.labeled_id.update(query_list) # add to labeled data
             self.unlabeled_id.difference_update(query_list) # remove
             self.query_list_list['Round'+str(self.round_cnt)] = list(map(int, query_list)) # add to query list dictionary
-            print(f'[Query Selection] index: {sorted(query_list)}')
+            print(f'{self.video_id}[[Round{self.round_cnt}: {self.strategy}]] Queried: {sorted(query_list)}')
 
             # if self.is_early_stop and time < self.finished_time:
-                # self.cnt_early_stop += 1
-                # if self.cnt_early_stop == 1:
-                #     print(f'[Early Stop] Performance is higher than the threshold at {time:.1f}%!')
-                    # self.finished_time = time # update finished time
+            #     self.cnt_early_stop += 1
+            #     if self.cnt_early_stop == 1:
+            #         print(f'[Early Stop] Performance is higher than the threshold at {time:.1f}%!')
+            #         self.finished_time = time # update finished time
 
             self.actual_finish, self.finished_minerror, self.finished_oursc = self.is_finished(query_list, OKS_dict)
             if self.actual_finish < 100:
@@ -640,7 +650,7 @@ class ActiveLearning:
 
     def retrain_model(self):
         """Retrain the model with the labeled data"""
-        print(f'[Retrain]')
+        print(f'{self.video_id}[[Round{self.round_cnt}: {self.strategy}]] Retraining...')
         loss_logger = DataLogger()
         acc_logger = DataLogger()
         train_subset = Subset(self.train_dataset, self.retrain_id.index) # get labeled data
@@ -703,7 +713,7 @@ class ActiveLearning:
             self.actual_finish = time
         # judgement of min-error
         OKS_q = np.array(list(OKS_dict[i] for i in query_list)) # queried OKS
-        if np.mean(OKS_q) >= self.finish_acc and time<self.finished_minerror: # if mean OKS is lower than the threshold, return True
+        if np.mean(OKS_q) >= self.finish_acc and time<self.finished_minerror: # if mean OKS is higher than the threshold, return True
             print(f'[Finished] Min-error SC has met at {time:.1f}%!')
             self.finished_minerror = time
         # judgement of our sc

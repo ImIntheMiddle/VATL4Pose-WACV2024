@@ -2,14 +2,14 @@
 set -x
 export CUDA_VISIBLE_DEVICES=$1 # set GPU device
 
-# CONFIG="configs/posetrack21/al_simple_posetrack.yaml" # config file
-CONFIG="configs/jrdb-pose/al_simple_jrdb.yaml" # config file
+CONFIG="configs/posetrack21/al_simple_posetrack.yaml" # config file
+# CONFIG="configs/jrdb-pose/al_simple_jrdb.yaml" # config file
 UNCERTAINY="THC+WPU" # Option: None HP TPC THC_L1 THC_L2 WPU MPE Margin Entropy
 REPRESENTATIVENESS="None" # Option: None Random Influence
 FILTER="Coreset" # Option: None Random Diversity K-Means weighted Coreset
-MEMO="WACV" # memo for the experiment
-# VIDEO_ID_LIST="configs/val_video_list_full.txt" # PoseTrack21 video ids (e.g. 000342, 000522,...)
-VIDEO_ID_LIST="configs/jrdb-pose/test_ids.txt" # JRDB-Pose video ids (e.g. 00, 01,...)
+MEMO="WACV_without_transfer" # memo for the experiment
+VIDEO_ID_LIST="configs/posetrack21/val_video_list_$2.txt" # PoseTrack21 video ids (e.g. 000342, 000522,...)
+# VIDEO_ID_LIST="configs/jrdb-pose/test_ids.txt" # JRDB-Pose video ids (e.g. 00, 01,...)
 VIDEO_LIST=$(cat ${VIDEO_ID_LIST}) # read the video id list
 
 for VIDEO_ID in ${VIDEO_LIST}; do # loop over the video id list
@@ -23,6 +23,7 @@ for VIDEO_ID in ${VIDEO_LIST}; do # loop over the video id list
         --memo ${MEMO} \
         --seedfix \
         --continual \
+        # --from_scratch \
         # --wunc $3 # lambda value
         # --optimize
         # --vis \
