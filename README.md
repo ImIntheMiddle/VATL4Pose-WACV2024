@@ -18,7 +18,7 @@
 
 ## ⬇️Installation
 > **Warning**
-> Environment: Python 3., CUDA , PyTorch .
+> Environment: Python 3.10.7, CUDA 11.3, PyTorch 1.12.1
 > 
 > Later versions have not been tested.
 - Create and activate a virtual environment for this repository.
@@ -37,7 +37,7 @@
 ## 🚀Quick Start
 - You can execute **VATL (Video-specific Active Transfer Learning)** by following commands.
 
-<details><summary><bold>Unfold: ATL on PoseTrack21 using SimpleBaseline</bold></summary>
+<details><summary><bold>Unfold: VATL on PoseTrack21 using SimpleBaseline</bold></summary>
     
 1. **(Optional) Train an initial pose estimator from scratch**
     ``` python
