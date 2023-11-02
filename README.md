@@ -1,15 +1,18 @@
 # VATL4Pose
+> **Note**
+> This is an official implementation of the following two papers from IIM, TTI-J (https://www.toyota-ti.ac.jp/Lab/Denshi/iim/index.html).
+> - **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
+>   - Project page: Not Yet
+>   - arXiv: 404
+> - **Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (MVA2023 Oral)**
+>   - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
+
+> **Warning**
+> The use of code under this repository follows the MIT License. Please see the LICENSE.txt for details.
+
 <div align="center">
     <img src=".github/overview.png", width="960">
 </div>
-
-## Intro
-This is the official implementation of the following two papers from IIM, TTI-J (https://www.toyota-ti.ac.jp/Lab/Denshi/iim/index.html).
-- **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
-    - Project page: Not Yet
-    - arXiv: 404
-- **Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (MVA2023 Oral)**
-    - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
 
 ## Installation
 - Create and activate a virtual environment.
@@ -24,41 +27,45 @@ This is the official implementation of the following two papers from IIM, TTI-J 
     - JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
 
 ## Pre-trained Model
-We will provide pre-trained models at Google Drive soon.
+> **Note**
+> We will provide pre-trained models on Google Drive soon.
 
 ## Quick Start
-Examples: Video-specific Active Transfer Learning on PoseTrack21 using SimpleBaseline as a pose estimator.
+You can execute VATL (Video-specific Active Transfer Learning) by following.
+<details><summary><bold>Example: ATL on PoseTrack21 using SimpleBaseline as a pose estimator.</bold></summary>
 
-- **Train an initial pose estimator from scratch**
+1. **(Optional) Train an initial pose estimator from scratch**
     ``` python
     ./scripts/posetrack_train.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
     ```
-- **Evaluate the performance of the pre-trained model on train/val/test split**
+2. **(Optional) Evaluate the performance of the pre-trained model on train/val/test split**
     ``` python
     ./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
     ```
-- **Pre-train the AutoEncoder for WPU (Whole-body Pose Unnaturalness)**
+3. **(Optional) Pre-train the AutoEncoder for WPU (Whole-body Pose Unnaturalness)**
     ``` python
     ./scripts/wholebodyAE_train --dataset_type Posetrack21
     ```
-- **Execute Video-specific Active Transfer Learning on test videos**
+4. **Execute Video-specific Active Transfer Learning on test videos**
 
     Please specify the detailed settings in the shell script if you like.
     ``` bash
     ./scripts/run_active_learning.sh ${GPU_ID}
     ```
-- **Evaluate the results of video-specific ATL**
+5. **Evaluate the results of video-specific ATL**
 
     Please specify the results to summarize in the Python script.
     ``` python
     ./scripts/detailed_result.py
     ```
-- **(Optional) Visualize the estimated poses on each ATL cycle**
+6. **(Optional) Visualize the estimated poses on each ATL cycle**
 
     Please specify the results to summarize in the Python script.
     ``` python
     ./scripts/visualize_result.py
     ```
+</details>
+
 ## Citation
 If you found this code useful, please consider citing our work:D
 - WACV2024
@@ -84,6 +91,3 @@ We deeply appreciate the authors for their open-source codes.
 - AlphaPose: https://github.com/MVIG-SJTU/AlphaPose
 - ALiPy: https://github.com/NUAA-AL/ALiPy
 - VL4Pose: https://github.com/meghshukla/ActiveLearningForHumanPose
-
-## License
-The use of code under this repository follows the MIT License. Please see the LICENSE.txt file for details.
