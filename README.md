@@ -11,20 +11,22 @@ This is the official implementation of the following two papers from IIM, TTI-J 
 </div>
 
 ## Installation
-Following the command below, please install the required libraries:
-```pip
-install -r requirement.txt
-```
+- Create and activate a virtual environment.
+- Following the command below, please install the required packages:
+    ```pip
+    install -r requirement.txt
+    ```
 
-Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
-- PoseTrack21: https://github.com/anDoer/PoseTrack21
-- JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
+## Datasets
+- Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
+    - PoseTrack21: https://github.com/anDoer/PoseTrack21
+    - JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
 
 ## Pre-trained Model
 We will provide pre-trained models at Google Drive soon.
 
 ## Quick Start
-Examples: Video-specific Active Transfer Learning on `PoseTrack21`, using `SimpleBaseline`.
+Examples: Video-specific Active Transfer Learning on PoseTrack21 using SimpleBaseline as a pose estimator.
 
 - **Train an initial pose estimator from scratch**
     ``` python
