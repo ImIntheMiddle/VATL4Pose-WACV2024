@@ -1,5 +1,5 @@
 ## Active Transfer Learning for Efficient Video-Specific Human Pose Estimation
-This is the official implementation of the paper ``Active Transfer Learning for Efficient Video-Specific Human Pose Estimation'' submitted to WACV2024.
+This is the official implementation of the paper ``Active Transfer Learning for Efficient Video-Specific Human Pose Estimation'' accepted to WACV2024.
 
 <div align="center">
     <img src=".github/overview.png", width="960">
@@ -18,7 +18,7 @@ PoseTrack21: https://github.com/anDoer/PoseTrack21
 JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
 
 ## Pre-trained Model
-We will provide pre-trained models at Google Drive after the decision of WACV Round 2.
+We will provide pre-trained models at Google Drive soon.
 
 ## Quick Start
 Examples: Video-specific Active Transfer Learning on `PoseTrack21`, using `SimpleBaseline`.
@@ -28,7 +28,7 @@ Examples: Video-specific Active Transfer Learning on `PoseTrack21`, using `Simpl
 ./scripts/posetrack_train.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
 ```
 
-- **Evaluate the performance of pre-trained model on train/val/test split**
+- **Evaluate the performance of the pre-trained model on train/val/test split**
 ``` python
 ./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
 ```
@@ -45,19 +45,22 @@ Please specify the detailed settings in the shell script if you like.
 ```
 
 - **Summarize the results of video-specific ATL**
-Please specify the results to summarize in the python script.
+Please specify the results to summarize in the Python script.
 ``` python
 ./scripts/detailed_result.py
 ```
 
 - **(Optional) Visualize the estimated poses on each ATL cycle**
-Please specify the results to summarize in the python script.
+Please specify the results to summarize in the Python script.
 ``` python
 ./scripts/visualize_result.py
 ```
 ## Acknowledgement
 This implementation is based on AlphaPose, ALiPy, and VL4Pose.
 We deeply appreciate the authors for their open-source codes.
+AlphaPose: https://github.com/MVIG-SJTU/AlphaPose
+ALiPy: https://github.com/NUAA-AL/ALiPy
+VL4Pose: https://github.com/meghshukla/ActiveLearningForHumanPose
 
 ## License
 The use of code under this repository follows the MIT License. Please see the LICENSE.txt file for details.
