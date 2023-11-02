@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-## ATL4VSHPE: Active Transfer Learning for Efficient Video-Specific Human Pose Estimation
-This is the official implementation of the paper ``Active Transfer Learning for Efficient Video-Specific Human Pose Estimation'' submitted to WACV2024.
-=======
 # VATL4Pose
 This is the official implementation of the following two papers from IIM, TTI-J (https://www.toyota-ti.ac.jp/Lab/Denshi/iim/index.html).
 - **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
@@ -9,7 +5,6 @@ This is the official implementation of the following two papers from IIM, TTI-J 
     - arXiv: 404
 - **Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (MVA2023 Oral)**
     - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
->>>>>>> c97a3548f31239f4389f0cd507c7cab6859c0036
 
 <div align="center">
     <img src=".github/overview.png", width="960">
