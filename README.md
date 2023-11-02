@@ -1,4 +1,9 @@
 # VATL4Pose
+<div align="center">
+    <img src=".github/overview.png", width="960">
+</div>
+
+## Intro
 This is the official implementation of the following two papers from IIM, TTI-J (https://www.toyota-ti.ac.jp/Lab/Denshi/iim/index.html).
 - **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
     - Project page: Not Yet
@@ -6,18 +11,14 @@ This is the official implementation of the following two papers from IIM, TTI-J 
 - **Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (MVA2023 Oral)**
     - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
 
-<div align="center">
-    <img src=".github/overview.png", width="960">
-</div>
-
 ## Installation
 - Create and activate a virtual environment.
 - Following the command below, please install the required packages:
     ```pip
     install -r requirement.txt
     ```
-
-## Datasets
+    
+## Data Preparation
 - Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
     - PoseTrack21: https://github.com/anDoer/PoseTrack21
     - JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
