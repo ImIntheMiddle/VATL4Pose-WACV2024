@@ -10,7 +10,7 @@
 >   - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
 
 > **Warning**
-> The use of code under this repository follows the MIT License. Please see the LICENSE.txt for details.
+> The use of code under this repository follows the MIT License. Please see .LICENSE.txt for details.
 
 <div align="center">
     <img src=".github/overview.png", width="960">
