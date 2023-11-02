@@ -1,10 +1,12 @@
-# VATL4Pose
+# 🏊VATL4Pose🎬
 > **Note**
 > This is an official implementation of the following two papers from **IIM, TTI-J (https://www.toyota-ti.ac.jp/Lab/Denshi/iim/index.html).**
 > - **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
+>   - Author: Hiromu Taketsugu, Norimichi Ukita
 >   - Project page: Not Yet
 >   - arXiv: 404
 > - **Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (MVA2023 Oral)**
+>   - Author: Hiromu Taketsugu, Norimichi Ukita
 >   - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
 
 > **Warning**
@@ -81,7 +83,7 @@
 ```
 - **MVA2023**
 ```
-@INPROCEEDINGS{10215565,
+@INPROCEEDINGS{VATL4Pose_MVA23,
   author={Taketsugu, Hiromu and Ukita, Norimichi},
   booktitle={2023 18th International Conference on Machine Vision and Applications (MVA)}, 
   title={Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation}, 
