@@ -1,0 +1,86 @@
+experiment_name: "<Train Auxiliary for _ algorithm>"
+
+model: {
+  load: True,
+  type: 'hourglass',         # hourglass / hrnet
+  load_path: "/activelearning_results/MPII/Base/BaseModel_1/",
+  save_path: "/activelearning_results/MPII/<Algorithm>",
+  aux_net: {train: True, train_auxnet_only: True, warmup: 0, method: '<specify algorithm>'} # --> 'load' is created internally
+  # auxiliary network is used by the following Active Learning methods: VL4Pose, Aleatoric Uncertainty and Learning Loss
+  # aux_net loading is done internally since it is needed only if we perform active learning
+  # aux_net: method can be : { learning_loss, aleatoric, vl4pose }
+}
+
+
+dataset: {
+  load: 'mpii',                                                                                    # mpii / lsp / merged
+  mpii_params: {shuffle: True, lambda_head: 0.8, newell_validation: True, precached: True, train_ratio: 0.7},
+  lspet_params: {shuffle: False, train_ratio: 1.0},
+  lsp_params: {shuffle: False, train_ratio: 0.5}
+  # mpii_params: lambda_head pulls the head annotation closer to the body
+  # mpii_params: newell_validation uses the same train validation split as used in the Stacked Hourglass paper
+  # mpii_params: MPII post-process precached version: True implies this exists, False does the post-process and also saves a copy
+  # mpii_params: train ratio is used for splitting if newell_validation is False
+  # lsp_params: As per the documentation, we use last 1000 images for testing, first 1000 for training. Hence shuffle = False and train_ratio = 0.5 
+  # NOTE on MPII: max persons key added internally for mpii_params
+}
+
+
+active_learning: {
+  num_images: 0,
+  algorithm: 'random',   
+  base: {},
+  random: {},
+  learningLoss: {margin: 1, objective: 'KLdivergence'},
+  coreSet: {},
+  egl: {perplexity: 20, tolerance: 0.001, k: 30, og_heatmap: False},
+  aleatoric: {},
+  vl4pose: {num_peaks: 1, min_distance: 8}
+  # algorithm: can be { base, random, coreset, learning_loss, egl, multipeak_entropy, aleatoric, vl4pose }
+  # learningLoss: objective can be: { KLdivergence, YooAndKweon }
+  # egl: perplexity, tolerance and k are a part of t-SNE hyperparameters
+  # vl4pose: num_peaks: approximate heatmap with atmost num_peaks
+  # vl4pose: min_distance: minimum distance between peaks
+  # vl4pose: function: expected likelihood or max likelihood during evaluation
+  # FAST vl4pose: num_peaks: 1
+}
+
+activelearning_visualization: False
+
+# --------- Default settings, no change needed for standard active learning usage
+
+train: True                            # Train a model from scratch or re-train an existing model.
+metric: True                           # Compute PCKh scores and save in CSV file format.
+
+
+experiment_settings: {
+  epochs: 100,          # Default: 100
+  lr: 0.0003,          # Default: 3e-4
+  weight_decay: 0.0,   # Default: 0.0
+  batch_size: 16,      # Default: 32
+  threshold: 0.25,
+  hm_peak: 30,
+  occlusion: True,
+  all_joints: True
+  # NOTE: occlusion = True creates heatmaps for those joints
+  # NOTE: all_joints keeps only those images where all joints (occluded or not) are present
+  # NOTE: num_hm is created internally
+}
+
+
+architecture: {
+  hourglass: {nstack: 2, channels: 256},
+
+  hrnet: {PRETRAINED_LAYERS: ['conv1', 'bn1', 'conv2', 'bn2', 'layer1', 'transition1', 'stage2', 'transition2', 'stage3', 'transition3', 'stage4'],
+          FINAL_CONV_KERNEL: 1,
+          STAGE2: {NUM_CHANNELS: [64, 64], BLOCK: 'BASIC', NUM_BRANCHES: 2, FUSE_METHOD: 'SUM', NUM_BLOCKS: [2, 2], NUM_MODULES: 3},
+          STAGE3: {NUM_CHANNELS: [64, 64, 128, 128, 128], BLOCK: 'BASIC', NUM_BRANCHES: 5, FUSE_METHOD: 'SUM', NUM_BLOCKS: [2, 2, 2, 2, 2], NUM_MODULES: 1},
+          STAGE4: {NUM_CHANNELS: [64, 64, 128, 128, 128], BLOCK: 'BASIC', NUM_BRANCHES: 5, FUSE_METHOD: 'SUM', NUM_BLOCKS: [2, 2, 2, 2, 2], NUM_MODULES: 1}},
+
+  aux_net: {fc: [128, 64, 32, 16], conv_or_avg_pooling: 'conv'}  # conv / avg
+}
+
+visualize: False
+tensorboard: False
+
+resume_training: False
