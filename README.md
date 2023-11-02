@@ -34,17 +34,19 @@
 - After downloading, you can prepare annotation files by following (please specify the mode in each scripts).
 
 <details><summary>PoseTrack21</summary>
-    ```
-    python ./data/PoseTrack21/make_new_annotation.py
-    python ./data/PoseTrack21/integrate_new_annotation.py
-    ```
+
+```
+python ./data/PoseTrack21/make_new_annotation.py
+python ./data/PoseTrack21/integrate_new_annotation.py
+```
 </details>
 
-<details><summary>JRDB-Pose</summary>    
-    ```
-    python ./data/jrdb-pose/make_new_annotation.py
-    python ./data/jrdb-pose/integrate_new_annotation.py
-    ```
+<details><summary>JRDB-Pose</summary>
+    
+```
+python ./data/jrdb-pose/make_new_annotation.py
+python ./data/jrdb-pose/integrate_new_annotation.py
+```
 </details>
 
 - We will provide pre-trained models on Google Drive soon.
@@ -93,11 +95,15 @@
 ## ✍️Citation
 **If you found this code useful, please consider citing our work :D**
 
-- **WACV2024**
+<details><summary>WACV2024</summary>
+
 ```
-    Coming soon!
+Coming soon!
 ```
-- **MVA2023**
+</details>
+
+<details><summary>MVA2023</summary>
+
 ```
 @INPROCEEDINGS{VATL4Pose_MVA23,
   author={Taketsugu, Hiromu and Ukita, Norimichi},
@@ -109,6 +115,7 @@
   pages={1-5},
   doi={10.23919/MVA57639.2023.10215565}}
 ```
+</details>
 
 ## 🤗Acknowledgement
 This implementation is based on AlphaPose, ALiPy, and VL4Pose.
