@@ -20,7 +20,7 @@
 > **Warning**
 > Environment: Python 3.10.7, CUDA 11.3, PyTorch 1.12.1
 > 
-> Later versions have not been tested.
+> Other versions have not been tested.
 - Create and activate a virtual environment for this repository.
 - Following the command below, please install the required packages:
     ```pip
@@ -31,13 +31,29 @@
 - Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
     - PoseTrack21: https://github.com/anDoer/PoseTrack21
     - JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
+- After downloading, you can prepare annotation files by following (please specify the mode in each scripts).
+
+<details><summary>PoseTrack21</summary>
+    ```
+    python ./data/PoseTrack21/make_new_annotation.py
+    python ./data/PoseTrack21/integrate_new_annotation.py
+    ```
+</details>
+
+<details><summary>JRDB-Pose</summary>    
+    ```
+    python ./data/jrdb-pose/make_new_annotation.py
+    python ./data/jrdb-pose/integrate_new_annotation.py
+    ```
+</details>
 
 - We will provide pre-trained models on Google Drive soon.
 
 ## 🚀Quick Start
+- Make sure you are in the root directory.
 - You can execute **VATL (Video-specific Active Transfer Learning)** by following commands.
 
-<details><summary><bold>Unfold: VATL on PoseTrack21 using SimpleBaseline</bold></summary>
+<details><summary><bold>VATL on PoseTrack21 using SimpleBaseline</bold></summary>
     
 1. **(Optional) Train an initial pose estimator from scratch**
     ``` python
