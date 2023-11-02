@@ -119,22 +119,27 @@ exp/json/test_kpt.json
 exp/json/test_gt_kpt.json
 exp/json/validate_rcnn_kpt.json
 exp/json/validate_gt_kpt.json
-data/
 tmp/
 exp/json
 tmp_*/
 examples/res*/
-data/google-cloud
-data/PoseTrack21/images
-data/PoseTrack21/posetrack_*
-
-data/jrdb-pose/jrdb2022
-data/jrdb-pose/images
 exp/
 tensorboard/
 trackers/
 scripts/summarize_result.py
 
+# data
+data/coco/annotations
+data/coco/zip_coco
+data/google-cloud
+data/PoseTrack21/images
+data/PoseTrack21/posetrack_*
+data/PoseTrack21/activelearning/*
+data/jrdb-pose/jrdb2022
+data/jrdb-pose/images
+data/jrdb-pose/activelearning/*
+
 # private data
 PCIT/
 data/PCIT/
+configs/pcit
