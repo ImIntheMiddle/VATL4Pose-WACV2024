@@ -10,7 +10,7 @@
 >   - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
 
 > **Warning**
-> The use of code under this repository follows the MIT License. Please see .LICENSE.txt for details.
+> The use of code under this repository follows the MIT License. Please take a look at LICENSE for details.
 
 <div align="center">
     <img src=".github/overview.png", width="960">
@@ -26,16 +26,16 @@
     ```
     pip install -r requirement.txt
     ```
-- Then, you can setup the environment by following:
+- Then, you can set up your environment by following:
     ```
-    python setup.py
+    python setup.py build develop --user
     ```
     
 ## 🌐Downloads
 - Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
     - PoseTrack21: https://github.com/anDoer/PoseTrack21
     - JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
-- After downloading, you can prepare annotation files by following (please specify the mode in each scripts).
+- After downloading, you can prepare annotation files by following (please specify the mode in each script).
 
 <details><summary>PoseTrack21</summary>
 
