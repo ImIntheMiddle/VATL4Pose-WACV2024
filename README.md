@@ -16,6 +16,11 @@
     <img src=".github/overview.png", width="960">
 </div>
 
+## ☑️TODO
+- [ ] Provide pre-trained models
+- [ ] Release the paper on arXiv
+- [ ] Compare the result with VL4Pose
+
 ## ⬇️Installation
 > **Warning**
 > Environment: Python 3.10.7, CUDA 11.3, PyTorch 1.12.1
