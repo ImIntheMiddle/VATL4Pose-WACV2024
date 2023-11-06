@@ -26,6 +26,10 @@
     ```pip
     install -r requirement.txt
     ```
+- Then, you can setup the environment by following:
+    ```python
+    setup.py
+    ```
     
 ## 🌐Downloads
 - Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
