@@ -23,12 +23,12 @@
 > Other versions have not been tested.
 - Create and activate a virtual environment for this repository.
 - Following the command below, please install the required packages:
-    ```pip
-    install -r requirement.txt
+    ```
+    pip install -r requirement.txt
     ```
 - Then, you can setup the environment by following:
-    ```python
-    setup.py
+    ```
+    python setup.py
     ```
     
 ## 🌐Downloads
@@ -62,37 +62,37 @@ python ./data/jrdb-pose/integrate_new_annotation.py
 <details><summary><bold>VATL on PoseTrack21 using SimpleBaseline</bold></summary>
     
 1. **(Optional) Train an initial pose estimator from scratch**
-    ``` python
-    ./scripts/posetrack_train.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
+    ```
+    python ./scripts/posetrack_train.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
     ```
 2. **(Optional) Evaluate the performance of the pre-trained model on train/val/test split**
-    ``` python
-    ./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
+    ```
+    python ./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
     ```
 3. **(Optional) Pre-train the AutoEncoder for WPU (Whole-body Pose Unnaturalness)**
-    ``` python
-    ./scripts/wholebodyAE_train --dataset_type Posetrack21
+    ```
+    python ./scripts/wholebodyAE_train --dataset_type Posetrack21
     ```
 4. **Execute Video-specific Active Transfer Learning on test videos**
 
     > **Warning**
     > Please specify the detailed settings in the shell script if you like.
-    ``` bash
-    ./scripts/run_active_learning.sh ${GPU_ID}
+    ```
+    bash ./scripts/run_active_learning.sh ${GPU_ID}
     ```
 5. **Evaluate the results of video-specific ATL**
 
     > **Warning**
     > Please specify the results to summarize in the Python script.
-    ``` python
-    ./scripts/detailed_result.py
+    ```
+    python ./scripts/detailed_result.py
     ```
 6. **(Optional) Visualize the estimated poses on each ATL cycle**
 
     > **Warning**
     > Please specify the results to summarize in the Python script.
-    ``` python
-    ./scripts/visualize_result.py
+    ```
+    python ./scripts/visualize_result.py
     ```
 </details>
 
