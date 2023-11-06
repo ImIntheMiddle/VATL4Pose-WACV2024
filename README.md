@@ -127,8 +127,14 @@ Coming soon!
 </details>
 
 ## 🤗Acknowledgement
-This implementation is based on AlphaPose, ALiPy, and VL4Pose.
+This implementation is based on AlphaPose, ALiPy, DeepAL+, and VL4Pose.
 We deeply appreciate the authors for their open-source codes.
 - AlphaPose: https://github.com/MVIG-SJTU/AlphaPose
 - ALiPy: https://github.com/NUAA-AL/ALiPy
+- DeepAL+: https://github.com/SineZHAN/deepALplus
 - VL4Pose: https://github.com/meghshukla/ActiveLearningForHumanPose
+
+## 🤝Contributing
+If you'd like to contribute, you can open an issue on this repository.
+
+All contributions are welcome! All content in this repository is licensed under the MIT license.
