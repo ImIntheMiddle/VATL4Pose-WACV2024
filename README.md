@@ -108,7 +108,7 @@ python ./data/jrdb-pose/integrate_new_annotation.py
 
 ```
 @InProceedings{VATL4Pose_WACV24,
-  author       = {Hiromu Taketsugu and Norimichi Ukita},
+  author       = {Taketsugu, Hiromu and Ukita, Norimichi},
   title        = {Active Transfer Learning for Efficient Video-Specific Human Pose Estimation},
   booktitle    = {IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
   year         = {2024}}
@@ -118,7 +118,7 @@ python ./data/jrdb-pose/integrate_new_annotation.py
 <details><summary>MVA2023</summary>
 
 ```
-@INPROCEEDINGS{VATL4Pose_MVA23,
+@InProceedings{VATL4Pose_MVA23,
   author       = {Taketsugu, Hiromu and Ukita, Norimichi},
   title        = {Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation}, 
   booktitle    = {2023 18th International Conference on Machine Vision and Applications (MVA)}, 
