@@ -17,9 +17,11 @@
 </div>
 
 ## ☑️TODO
-- [ ] Provide pre-trained models
+- [x] Provide pre-trained models
 - [ ] Release the paper on arXiv
+- [ ] Open project page
 - [ ] Compare the result with VL4Pose
+- [ ] Create demos
 
 ## ⬇️Installation
 > **Warning**
@@ -58,7 +60,7 @@ python ./data/jrdb-pose/integrate_new_annotation.py
 ```
 </details>
 
-- We will provide pre-trained models on Google Drive soon.
+- You can download pretrained models of Human Pose Estimator (HRNet, FastPose and SimpleBaseline) and our Wholebody Auto-Encoder from Release.
 
 ## 🚀Quick Start
 - Make sure you are in the root directory.
