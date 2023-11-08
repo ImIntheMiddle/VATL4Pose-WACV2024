@@ -19,7 +19,8 @@
 ## ☑️TODO
 - [x] Provide pre-trained models
 - [ ] Release the paper on arXiv
-- [ ] Open project page
+- [ ] Release a project page
+- [ ] Add video results
 - [ ] Compare the result with VL4Pose
 - [ ] Create demos
 
