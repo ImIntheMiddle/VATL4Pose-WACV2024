@@ -42,7 +42,7 @@
 - Please download PoseTrack21 and JRDB-Pose, and place them under the `./data` directory.
     - PoseTrack21: https://github.com/anDoer/PoseTrack21
     - JRDB-Pose: https://jrdb.erc.monash.edu/dataset/pose
-- After downloading, you can prepare annotation files by following (please specify the mode in each script).
+- After downloading, you can prepare annotation files as follows (please specify the mode in each script):
 
 <details><summary>PoseTrack21</summary>
 
@@ -60,7 +60,8 @@ python ./data/jrdb-pose/integrate_new_annotation.py
 ```
 </details>
 
-- You can download pretrained models of Human Pose Estimator (HRNet, FastPose and SimpleBaseline) and our Wholebody Auto-Encoder from Release.
+- You can download pretrained models of Human Pose Estimator (HRNet, FastPose and SimpleBaseline) and our Wholebody Auto-Encoder from Releases ``pretrained models''.
+    - Unzip and place the ``pretrained_models'' directory under the root directory of the repository.
 
 ## 🚀Quick Start
 - Make sure you are in the root directory.
