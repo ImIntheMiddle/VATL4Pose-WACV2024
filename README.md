@@ -60,7 +60,7 @@ python ./data/jrdb-pose/integrate_new_annotation.py
 ```
 </details>
 
-- You can download pretrained models of Human Pose Estimator (HRNet, FastPose and SimpleBaseline) and our Wholebody Auto-Encoder from Releases ``pretrained models''.
+- You can download pretrained models of Human Pose Estimator (HRNet, FastPose and SimpleBaseline) and our Wholebody Auto-Encoder from Releases ``Pretrained models''.
     - Unzip and place the ``pretrained_models'' directory under the root directory of the repository.
 
 ## 🚀Quick Start
