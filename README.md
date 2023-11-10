@@ -1,4 +1,4 @@
-# 🏊VATL4Pose🎬
+# 🏊[VATL4Pose](https://arxiv.org/abs/2311.05041)🎬
 > **Note**
 > This is an official implementation of the following two papers from **IIM, TTI-J (https://www.toyota-ti.ac.jp/Lab/Denshi/iim/index.html).**
 > - **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
