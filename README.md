@@ -18,7 +18,7 @@
 
 ## ☑️TODO
 - [x] Provide pre-trained models
-- [ ] Release the paper on arXiv
+- [x] Release the paper on arXiv
 - [ ] Release a project page
 - [ ] Add video results
 - [ ] Compare the result with VL4Pose
