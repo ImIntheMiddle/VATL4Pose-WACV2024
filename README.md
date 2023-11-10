@@ -4,7 +4,7 @@
 > - **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
 >   - Author: Hiromu Taketsugu, Norimichi Ukita
 >   - Project page: Not Yet
->   - arXiv: 404
+>   - arXiv: https://arxiv.org/abs/2311.05041
 > - **Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (MVA2023 Oral)**
 >   - Author: Hiromu Taketsugu, Norimichi Ukita
 >   - PDF (IEEE Xplore): https://ieeexplore.ieee.org/abstract/document/10215565
