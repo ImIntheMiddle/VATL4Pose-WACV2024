@@ -2,11 +2,11 @@
 > **Note**
 > This is an official implementation of the following two papers from **[IIM, TTI-J](https://www.toyota-ti.ac.jp/Lab/Denshi/iim/index.html).**
 > - **Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (WACV2024 main)**
->   - Author: Hiromu Taketsugu, [Norimichi Ukita](https://www.toyota-ti.ac.jp/Lab/Denshi/iim/ukita/index.html)
+>   - Author: [Hiromu Taketsugu](https://iminthemiddle.github.io/), [Norimichi Ukita](https://www.toyota-ti.ac.jp/Lab/Denshi/iim/ukita/index.html)
 >   - [Project page](https://iminthemiddle.github.io/VATL4Pose-Page/)
 >   - [arXiv](https://arxiv.org/abs/2311.05041)
 > - **Uncertainty Criteria in Active Transfer Learning for Efficient Video-Specific Human Pose Estimation (MVA2023 Oral)**
->   - Author: Hiromu Taketsugu, [Norimichi Ukita](https://www.toyota-ti.ac.jp/Lab/Denshi/iim/ukita/index.html)
+>   - Author: [Hiromu Taketsugu](https://iminthemiddle.github.io/), [Norimichi Ukita](https://www.toyota-ti.ac.jp/Lab/Denshi/iim/ukita/index.html)
 >   - [IEEE Xplore](https://ieeexplore.ieee.org/abstract/document/10215565)
 
 > **Warning**
