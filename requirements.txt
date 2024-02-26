@@ -178,7 +178,7 @@ tifffile==2022.8.12
 timm==0.1.20
 tinycss2==1.1.1
 toml==0.10.2
-torch==1.12.1+cu113
+torch==1.13.1
 torchfile==0.1.0
 torchvision==0.13.1+cu113
 tornado==6.2
