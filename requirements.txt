@@ -45,7 +45,7 @@ fastrlock==0.8.1
 fiftyone==0.17.2
 fiftyone-brain==0.9.1
 fiftyone-db==0.3.0
-fonttools==4.37.4
+fonttools==4.43.0
 future==0.18.3
 glob2==0.7
 google-auth==2.14.1
