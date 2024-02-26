@@ -17,7 +17,7 @@ bleach==5.0.1
 boto3==1.24.89
 botocore==1.27.89
 cachetools==5.2.0
-certifi==2022.9.24
+certifi==2023.7.22
 cffi==1.15.1
 charset-normalizer==2.1.1
 chumpy==0.70
