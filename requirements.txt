@@ -74,7 +74,7 @@ joblib==1.2.0
 jsonpatch==1.32
 jsonpointer==2.3
 jsonschema==4.16.0
-jupyter-core==4.11.1
+jupyter-core==4.11.2
 jupyter-server==1.21.0
 jupyter_client==7.4.2
 jupyterlab-pygments==0.2.2
