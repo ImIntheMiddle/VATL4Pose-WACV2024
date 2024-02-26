@@ -46,7 +46,7 @@ fiftyone==0.17.2
 fiftyone-brain==0.9.1
 fiftyone-db==0.3.0
 fonttools==4.37.4
-future==0.18.2
+future==0.18.3
 glob2==0.7
 google-auth==2.14.1
 google-auth-oauthlib==0.4.6
