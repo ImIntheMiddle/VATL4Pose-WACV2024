@@ -121,7 +121,7 @@ prettytable==3.5.0
 priority==2.0.0
 prometheus-client==0.15.0
 prompt-toolkit==3.0.31
-protobuf==3.20.1
+protobuf==3.20.2
 psutil==5.9.2
 ptyprocess==0.7.0
 pure-eval==0.2.2
