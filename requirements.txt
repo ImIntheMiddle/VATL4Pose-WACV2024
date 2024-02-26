@@ -52,7 +52,7 @@ google-auth==2.14.1
 google-auth-oauthlib==0.4.6
 graphql-core==3.1.7
 greenlet==1.1.3
-grpcio==1.50.0
+grpcio==1.53.2
 h11==0.12.0
 h2==4.1.0
 halpecocotools==0.0.0
