@@ -77,11 +77,11 @@ python ./data/jrdb-pose/integrate_new_annotation.py
     ```
 2. **(Optional) Evaluate the performance of the pre-trained model on train/val/test split**
     ```
-    python ./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
+    python ./scripts/poseestimator_eval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
     ```
 3. **(Optional) Pre-train the AutoEncoder for WPU (Whole-body Pose Unnaturalness)**
     ```
-    python ./scripts/wholebodyAE_train --dataset_type Posetrack21
+    python ./scripts/wholebodyAE_train.py --dataset_type Posetrack21
     ```
 4. **Execute Video-specific Active Transfer Learning on test videos**
 
