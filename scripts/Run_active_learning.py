@@ -110,7 +110,7 @@ def setup_opt(opt):
         torch.backends.cudnn.deterministic = False
         print('Speed up technique applied. (Not reproducible)')
     if opt.seedfix: # fix seed for reproducibility
-        SEED = 166 # 318/42
+        SEED = 166
         random.seed(SEED)
         np.random.seed(SEED)
         torch.manual_seed(SEED)

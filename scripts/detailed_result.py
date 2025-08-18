@@ -383,7 +383,7 @@ if __name__ == "__main__":
     is_JRDB = False
 
     if is_PoseTrack:
-      video_id_list_path = "configs/val_video_list_full.txt"
+      video_id_list_path = "configs/posetrack21/val_video_list.txt"
     elif is_JRDB:
       video_id_list_path = "configs/jrdb-pose/val_ids.txt"
     else:

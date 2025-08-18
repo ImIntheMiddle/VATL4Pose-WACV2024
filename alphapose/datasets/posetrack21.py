@@ -193,8 +193,15 @@ class Posetrack21(CustomDataset): # alphapose/models/builder.py
         # transform img and gt annotation into input_img and training label
         # torch.from_numpy(img).to(self._device) # move to device
         input, label, label_mask, bbox_crop = self.transformation(img, label) # no augmentation. bbox format: (xmin, ymin, xmax, ymax)
+        # print dtypes
+        assert label.dtype == torch.float32, f'label: {label.dtype}'
+        assert label_mask.dtype == torch.float32, f'label_mask: {label_mask.dtype}'
+        assert bbox_crop.dtype == torch.float32, f'bbox_crop: {bbox_crop.dtype}'
+        assert bbox_ann.dtype == torch.float32, f'bbox_ann: {bbox_ann.dtype}'
         stacked_inp = torch.stack([input, torch.zeros_like(input), torch.zeros_like(input)], dim=0) # only use current image
-        GTkpt = torch.tensor(GTkpt)
+        assert stacked_inp.dtype == torch.float32, f'stacked_inp: {stacked_inp.dtype}'
+        GTkpt = torch.tensor(GTkpt, dtype=torch.float32)
+        assert GTkpt.dtype == torch.float32, f'GTkpt: {GTkpt.dtype}'
         return idx, stacked_inp, label, label_mask, GTkpt, img_id, ann_id, bbox_crop, bbox_ann, False, False # isPrev and isNext are always False
 
     def my_collate_fn(self, batch):

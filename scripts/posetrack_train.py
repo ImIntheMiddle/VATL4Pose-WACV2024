@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import requests
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import numpy as np
 import torch
 import torch.nn as nn
@@ -38,11 +38,8 @@ def train(opt, train_loader, m, criterion, optimizer, writer):
 
     train_loader = tqdm(train_loader, dynamic_ncols=True)
 
-    for i, (inps, labels, label_masks, img_ids, ann_ids, bboxes) in enumerate(train_loader):
-        if isinstance(inps, list):
-            inps = [inp.cuda().requires_grad_() for inp in inps]
-        else:
-            inps = inps.cuda().requires_grad_()
+    for i, (_, inps, labels, label_masks, _, img_ids, ann_ids, bboxes, _, _, _) in enumerate(train_loader):
+        inps = inps[:, 0].cuda().requires_grad_()
         if isinstance(labels, list):
             labels = [label.cuda() for label in labels]
             label_masks = [label_mask.cuda() for label_mask in label_masks]
@@ -102,13 +99,9 @@ def validate_gt(m, opt, cfg, heatmap_to_coord):
     hm_size = cfg.DATA_PRESET.HEATMAP_SIZE
 
     gt_val_loader = tqdm(gt_val_loader, dynamic_ncols=True)
-    for i, (inps, labels, label_masks, img_ids, ann_ids, bboxes) in enumerate(gt_val_loader):
-        if isinstance(inps, list):
-            inps = [inp.cuda() for inp in inps]
-        else:
-            inps = inps.cuda()
+    for i, (_, inps, labels, label_masks, _, img_ids, ann_ids, bboxes, _, _, _) in enumerate(gt_val_loader):
 
-        output = m(inps) # input inps into model
+        output = m(inps[:, 0].cuda()) # input inps into model
 
         pred = output
         assert pred.dim() == 4

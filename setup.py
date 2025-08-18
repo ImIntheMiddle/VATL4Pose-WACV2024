@@ -14,7 +14,7 @@ PATCH = 0
 SUFFIX = ''
 SHORT_VERSION = '{}.{}.{}{}'.format(MAJOR, MINOR, PATCH, SUFFIX)
 
-version_file = 'activelearning/version.py'
+version_file = 'active_learning/version.py'
 
 
 def readme():

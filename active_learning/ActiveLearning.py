@@ -37,7 +37,7 @@ from alphapose.utils.metrics import evaluate_mAP, calc_accuracy, DataLogger
 from alphapose.utils.transforms import (flip, flip_heatmap, get_func_heatmap_to_coord, norm_heatmap)
 from alphapose.utils.bbox import bbox_xyxy_to_xywh
 from alphapose.utils.vis import vis_frame_fast, vis_frame
-from pose_eval.pose_eval import ospa_for_loc
+from JRDB_toolkit.pose_eval import ospa_for_loc
 
 # original modules
 from active_learning.local_peak import localpeak_mean

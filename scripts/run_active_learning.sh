@@ -8,7 +8,7 @@ UNCERTAINY="THC+WPU" # Option: None HP TPC THC_L1 THC_L2 WPU MPE Margin Entropy
 REPRESENTATIVENESS="None" # Option: None Random Influence
 FILTER="Coreset" # Option: None Random Diversity K-Means weighted Coreset
 MEMO="WACV_without_transfer" # memo for the experiment
-VIDEO_ID_LIST="configs/posetrack21/val_video_list_$2.txt" # PoseTrack21 video ids (e.g. 000342, 000522,...)
+VIDEO_ID_LIST="configs/posetrack21/val_video_list.txt" # PoseTrack21 video ids (e.g. 000342, 000522,...)
 # VIDEO_ID_LIST="configs/jrdb-pose/test_ids.txt" # JRDB-Pose video ids (e.g. 00, 01,...)
 VIDEO_LIST=$(cat ${VIDEO_ID_LIST}) # read the video id list
 
