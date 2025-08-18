@@ -29,12 +29,17 @@
 > Environment: Python 3.10.7, CUDA 11.3, PyTorch 1.12.1
 > 
 > Other versions have not been tested.
-- Create and activate a virtual environment for this repository.
-- Following the command below, please install the required packages:
+- Create and activate a virtual environment for this repository. I personally recommend uv for the package management.
+- Following the commands below, please install the required packages:
+    - For uv user:
     ```
-    pip install -r requirement.txt
+    uv sync
     ```
-- Then, you need to setup pycocotools by following:
+    - For pip user:
+    ```
+    pip install -r requirements.txt
+    ```
+- Then, you need to setup pycocotools by following commands:
     ```
     cd data/coco/cocoapi/PythonAPI
     python setup.py install
