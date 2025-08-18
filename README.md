@@ -17,12 +17,9 @@
 </div>
 
 ## ☑️TODO
-- [x] Provide pre-trained models
+- [x] Release pre-trained models
 - [x] Release the paper on arXiv
 - [x] Release a project page
-- [ ] Add video results
-- [ ] Compare the result with VL4Pose
-- [ ] Create demos
 
 ## 📑Abstract
 ***Human Pose (HP) estimation** is actively researched because of its wide range of applications. However, even estimators pre-trained on large datasets may not perform satisfactorily due to a domain gap between the training and test data. To address this issue, we present our approach **combining Active Learning (AL) and Transfer Learning (TL) to adapt HP estimators to individual video domains efficiently.** For efficient learning, our approach quantifies **(i) the estimation uncertainty based on the temporal changes in the estimated heatmaps** and **(ii) the unnaturalness in the estimated full-body HPs.** These quantified criteria are then effectively **combined with the state-of-the-art representativeness criterion** to select uncertain and diverse samples for efficient HP estimator learning. Furthermore, we reconsider the existing Active Transfer Learning (ATL) method to introduce **novel ideas related to the retraining methods and Stopping Criteria (SC).** Experimental results demonstrate that our method enhances learning efficiency and outperforms comparative methods.*
@@ -37,9 +34,10 @@
     ```
     pip install -r requirement.txt
     ```
-- Then, you can set up your environment by following:
+- Then, you need to setup pycocotools by following:
     ```
-    python setup.py build develop --user
+    cd data/coco/cocoapi/PythonAPI
+    python setup.py install
     ```
     
 ## 🌐Downloads
@@ -79,11 +77,11 @@ python ./data/jrdb-pose/integrate_new_annotation.py
     ```
 2. **(Optional) Evaluate the performance of the pre-trained model on train/val/test split**
     ```
-    python ./scripts/poseestimatoreval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
+    python ./scripts/poseestimator_eval.py --cfg ./configs/posetrack21/{CONFIG_FILE} --exp-id {EXP_ID}
     ```
 3. **(Optional) Pre-train the AutoEncoder for WPU (Whole-body Pose Unnaturalness)**
     ```
-    python ./scripts/wholebodyAE_train --dataset_type Posetrack21
+    python ./scripts/wholebodyAE_train.py --dataset_type Posetrack21
     ```
 4. **Execute Video-specific Active Transfer Learning on test videos**
 
