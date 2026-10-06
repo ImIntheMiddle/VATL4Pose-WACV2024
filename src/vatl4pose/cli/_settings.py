@@ -5,7 +5,9 @@ A run directory holds the state and the result of one video under one set of set
 the new settings, or skip a video that was finished under the old ones. The first start of a run
 therefore writes ``settings.json``, and every later start (a resume, or a check before skipping a
 finished video) compares the settings it was given with that file. A difference raises an error that
-names the keys and tells the user to pick a new ``run.name``.
+names the keys and tells the user to pick a new ``run.name``. The file counts only once the run has
+produced a state, oracle files, a result or a done marker; a start that failed before that has its
+settings replaced by the next start.
 
 The fingerprint holds the package version, the dataset, split and video id, the keypoint spec (name and
 SHA-256 of all its fields), the seed, the estimator architecture, its weights file (path and SHA-256),
@@ -134,26 +136,34 @@ def differences(stored: dict[str, Any], current: dict[str, Any]) -> list[str]:
 def check_settings(run_dir: pathlib.Path, current: dict[str, Any]) -> bool:
     """Compare ``current`` with the ``settings.json`` of ``run_dir``.
 
+    A run directory holds a run once it has a ``state`` directory, ``oracle`` files, a result or a
+    done marker. A start that failed before that (a missing autoencoder checkpoint, weights that do
+    not fit the network) leaves a ``settings.json`` that no run depends on, so other settings
+    replace it and the corrected start needs no new ``run.name``.
+
     Returns:
-        ``True`` if the file exists and matches, ``False`` if the run directory holds no run yet.
+        ``True`` if the file exists and matches, ``False`` if the directory holds no run yet and
+        the caller has to write the settings.
 
     Raises:
-        ValueError: If the settings differ, or the directory holds a run (state, oracle files, a
-            result or a done marker) that has no ``settings.json``.
+        ValueError: If the settings differ from those of a run in the directory, or the directory
+            holds a run that has no ``settings.json``.
     """
+    leftovers = [
+        name for name in ("state", "oracle", RESULT_NAME) if (run_dir / name).exists()
+    ] + (["done marker"] if is_done(run_dir) else [])
     path = run_dir / SETTINGS_NAME
     if path.is_file():
         stored = json.loads(path.read_text(encoding="utf-8"))
         found = differences(stored, current)
-        if found:
+        if not found:
+            return True
+        if leftovers:
             raise ValueError(
                 f"{run_dir} was made with other settings ({'; '.join(found)}). Use another "
                 f"run.name for the new settings, or delete {run_dir} to start this video again."
             )
-        return True
-    leftovers = [
-        name for name in ("state", "oracle", RESULT_NAME) if (run_dir / name).exists()
-    ] + (["done marker"] if is_done(run_dir) else [])
+        return False
     if leftovers:
         raise ValueError(
             f"{run_dir} holds a run ({', '.join(leftovers)}) but no {SETTINGS_NAME}, so its "
