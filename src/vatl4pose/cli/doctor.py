@@ -8,12 +8,17 @@ Options are ``key=value`` overrides of :class:`DoctorConfig`. The command prints
 check and exits with status 1 if any check failed. CUDA is informational: a machine without
 a GPU passes.
 
+``datasets=[posetrack21]`` restricts the dataset, estimator and autoencoder checks to the
+listed datasets (default: ``posetrack21`` and ``jrdb_pose``), so a user who has only one
+dataset can pass.
+
 Layout of ``paths.data_root``: ``PoseTrack21/`` and ``jrdb-pose/``, each with the
 sub-directories the readers in :mod:`vatl4pose.data.annotations` open. Without
 ``paths.data_root`` the dataset checks are listed as skipped.
 
 The whole-body autoencoder check covers the ``wholebodyAE/<dataset>/Hybrid/`` files that the
-release manifest lists, and no other file.
+release manifest lists, and no other file. A manifest file that belongs to no dataset (see
+``_WEIGHT_PREFIXES``) is always a failed row.
 """
 
 from __future__ import annotations
@@ -32,23 +37,26 @@ from vatl4pose.keypoints import get_spec
 
 from .weights_manifest import load_release_manifest, sha256_file
 
-_USAGE = """usage: vatl4pose-doctor paths.weights_root=DIR [paths.data_root=DIR]
+_USAGE = """usage: vatl4pose-doctor paths.weights_root=DIR [paths.data_root=DIR] [datasets=[NAME,...]]
 
 Checks torch and CUDA, the dataset layout below paths.data_root, the files of the release
 below paths.weights_root (SHA256) and the input dimension of the whole-body autoencoder
-checkpoints of the release. Exits with status 1 if a check failed."""
+checkpoints of the release. NAME is posetrack21 or jrdb_pose (default: both); only the
+listed datasets and their weights are checked. Exits with status 1 if a check failed."""
 
-_DATASETS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
-    # (preset name, directory below data_root, sub-paths the readers open)
-    ("posetrack21", "PoseTrack21", ("activelearning/val", "images/val")),
-    ("jrdb_pose", "jrdb-pose", ("activelearning/test", "images/image_stitched")),
-)
-
-_AE_DATASETS: Mapping[str, str] = {
-    "Posetrack21": "posetrack21",
-    "JRDB2022": "jrdb_pose",
+_DATASETS: Mapping[str, tuple[str, tuple[str, ...]]] = {
+    # preset name: (directory below data_root, sub-paths the readers open)
+    "posetrack21": ("PoseTrack21", ("activelearning/val", "images/val")),
+    "jrdb_pose": ("jrdb-pose", ("activelearning/test", "images/image_stitched")),
 }
-"""Directory below ``wholebodyAE/`` -> keypoint preset of the checkpoints inside."""
+
+_WEIGHT_PREFIXES: tuple[tuple[str, str], ...] = (
+    # (prefix of a manifest path, dataset it belongs to)
+    ("posetrack21/", "posetrack21"),
+    ("wholebodyAE/Posetrack21/", "posetrack21"),
+    ("jrdb/", "jrdb_pose"),
+    ("wholebodyAE/JRDB2022/", "jrdb_pose"),
+)
 
 _AE_ERRORS = (ValueError, RuntimeError, EOFError, OSError, pickle.UnpicklingError)
 
@@ -66,6 +74,7 @@ class DoctorConfig:
     """Options of ``vatl4pose-doctor``."""
 
     paths: PathsConfig = field(default_factory=PathsConfig)
+    datasets: list[str] = field(default_factory=lambda: list(_DATASETS))
 
 
 class CheckResult(NamedTuple):
@@ -104,9 +113,20 @@ def _check_cuda() -> CheckResult:
     )
 
 
-def _check_datasets(data_root: pathlib.Path | None) -> list[CheckResult]:
+def _dataset_of(rel: str) -> str | None:
+    """Return the dataset a manifest path belongs to, or ``None`` if it belongs to none."""
+    for prefix, dataset in _WEIGHT_PREFIXES:
+        if rel.startswith(prefix):
+            return dataset
+    return None
+
+
+def _check_datasets(
+    data_root: pathlib.Path | None, datasets: Sequence[str]
+) -> list[CheckResult]:
     results: list[CheckResult] = []
-    for key, directory, subpaths in _DATASETS:
+    for key in datasets:
+        directory, subpaths = _DATASETS[key]
         if data_root is None:
             results.append(
                 CheckResult(
@@ -124,12 +144,27 @@ def _check_datasets(data_root: pathlib.Path | None) -> list[CheckResult]:
 
 
 def _check_weight_files(
-    weights_root: pathlib.Path, release_manifest: Mapping[str, str]
+    weights_root: pathlib.Path,
+    release_manifest: Mapping[str, str],
+    datasets: Sequence[str],
 ) -> list[CheckResult]:
     results: list[CheckResult] = []
     for rel, expected in release_manifest.items():
         path = weights_root / rel
         name = f"weight:{rel}"
+        dataset = _dataset_of(rel)
+        if dataset is None:
+            results.append(
+                CheckResult(
+                    name,
+                    False,
+                    f"{path}: belongs to no known dataset ({', '.join(_DATASETS)}), "
+                    "not checked",
+                )
+            )
+            continue
+        if dataset not in datasets:
+            continue
         if not path.is_file():
             results.append(
                 CheckResult(name, False, f"{path}: missing, expected SHA256 {expected}")
@@ -150,28 +185,35 @@ def _check_weight_files(
 
 
 def _check_autoencoders(
-    weights_root: pathlib.Path, release_manifest: Mapping[str, str]
+    weights_root: pathlib.Path,
+    release_manifest: Mapping[str, str],
+    datasets: Sequence[str],
 ) -> list[CheckResult]:
-    """Check the input dimension of the Hybrid autoencoder files listed in the manifest."""
+    """Check the input dimension of the Hybrid autoencoder files listed in the manifest.
+
+    Only files of the selected ``datasets`` are read. A file of no dataset is already a
+    failed ``weight:`` row.
+    """
     from vatl4pose.models.wholebody_ae import read_input_dim
 
     results: list[CheckResult] = []
     for rel in sorted(release_manifest):
         parts = rel.split("/")
-        if parts[0] != "wholebodyAE":
+        dataset = _dataset_of(rel)
+        if parts[0] != "wholebodyAE" or dataset not in datasets:
             continue
         name, ckpt = f"ae:{rel}", weights_root / rel
-        if len(parts) != 4 or parts[1] not in _AE_DATASETS or parts[2] != "Hybrid":
+        if len(parts) != 4 or parts[2] != "Hybrid":
             results.append(
                 CheckResult(
                     name,
                     False,
-                    f"{ckpt}: no input-dim rule, expected wholebodyAE/"
-                    f"{{{'|'.join(_AE_DATASETS)}}}/Hybrid/<file>",
+                    f"{ckpt}: no input-dim rule, expected "
+                    "wholebodyAE/<dataset>/Hybrid/<file>",
                 )
             )
             continue
-        spec = get_spec(_AE_DATASETS[parts[1]])
+        spec = get_spec(dataset)
         try:
             actual = read_input_dim(ckpt)
         except _AE_ERRORS as exc:
@@ -197,24 +239,35 @@ def run_checks(
     """Run every check and return one result per row.
 
     Args:
-        cfg: Weights and dataset locations.
+        cfg: Weights and dataset locations, and the datasets to check.
         release_manifest: ``{relative path: SHA256}`` of the files that must exist below
             ``cfg.paths.weights_root``. ``None`` selects the manifest shipped with the package.
     """
     manifest = load_release_manifest() if release_manifest is None else release_manifest
+    for dataset in cfg.datasets:
+        if dataset not in _DATASETS:
+            raise ValueError(
+                f"unknown dataset '{dataset}', known: {', '.join(_DATASETS)}"
+            )
+    datasets = list(dict.fromkeys(cfg.datasets))
     weights_root = pathlib.Path(cfg.paths.weights_root)
     data_root = (
         None if cfg.paths.data_root is None else pathlib.Path(cfg.paths.data_root)
     )
     torch_result = _check_torch()
     results = [torch_result, _check_cuda()]
+    root_ok = weights_root.is_dir()
     results.append(
-        CheckResult("weights_root", weights_root.is_dir(), str(weights_root))
+        CheckResult(
+            "weights_root",
+            root_ok,
+            str(weights_root) if root_ok else f"not a directory: {weights_root}",
+        )
     )
-    results += _check_datasets(data_root)
-    results += _check_weight_files(weights_root, manifest)
+    results += _check_datasets(data_root, datasets)
+    results += _check_weight_files(weights_root, manifest, datasets)
     if torch_result.ok:
-        results += _check_autoencoders(weights_root, manifest)
+        results += _check_autoencoders(weights_root, manifest, datasets)
     else:
         results.append(
             CheckResult(

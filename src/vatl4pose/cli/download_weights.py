@@ -16,11 +16,13 @@ import json
 import os
 import pathlib
 import shutil
+import stat
 import sys
 import tempfile
 import urllib.request
 import zipfile
 import zlib
+from collections import Counter
 from collections.abc import Mapping, Sequence
 
 from .weights_manifest import check_relative_path, load_release_manifest
@@ -34,6 +36,17 @@ RELEASE_URL = (
 _MEMBER_PREFIX = "pretrained_models/"
 _MANIFEST_NAME = "MANIFEST.json"
 _CHUNK = 1 << 20
+_MAX_MANIFEST_BYTES = 1 << 20
+_ZIP_READ_ERRORS = (
+    zipfile.BadZipFile,
+    zlib.error,
+    RuntimeError,
+    NotImplementedError,
+    EOFError,
+    OSError,
+)
+"""What ``zipfile`` raises for a corrupt header or stream, an encrypted member or an unknown
+compression method. Only calls that read the zip are wrapped with it, never writes."""
 
 
 def _member_to_relative(name: str) -> str:
@@ -53,15 +66,17 @@ def _member_to_relative(name: str) -> str:
 def _read_zip_manifest(zf: zipfile.ZipFile, zip_path: pathlib.Path) -> dict[str, str]:
     """Return the ``MANIFEST.json`` of the zip as ``{member name: SHA256}``."""
     try:
-        raw = json.loads(zf.read(_MANIFEST_NAME))
+        info = zf.getinfo(_MANIFEST_NAME)
     except KeyError as exc:
         raise ValueError(f"{zip_path} has no {_MANIFEST_NAME}") from exc
-    except (
-        json.JSONDecodeError,
-        UnicodeDecodeError,
-        zipfile.BadZipFile,
-        zlib.error,
-    ) as exc:
+    if info.file_size > _MAX_MANIFEST_BYTES:
+        raise ValueError(
+            f"{zip_path}: {_MANIFEST_NAME} is too large "
+            f"({info.file_size} bytes, limit {_MAX_MANIFEST_BYTES})"
+        )
+    try:
+        raw = json.loads(zf.read(info))
+    except (json.JSONDecodeError, UnicodeDecodeError, *_ZIP_READ_ERRORS) as exc:
         raise ValueError(f"{zip_path}: cannot read {_MANIFEST_NAME}: {exc}") from exc
     if not isinstance(raw, dict) or not all(
         isinstance(name, str) and isinstance(digest, str)
@@ -76,22 +91,31 @@ def _read_zip_manifest(zf: zipfile.ZipFile, zip_path: pathlib.Path) -> dict[str,
 def _plan_members(
     zf: zipfile.ZipFile, zip_path: pathlib.Path, release: Mapping[str, str]
 ) -> list[tuple[str, str, str]]:
-    """Check the structure of the zip and return ``(member, relative path, SHA256)`` rows.
+    """Check the zip against its manifest and ``release``; return the rows to extract.
 
-    Rows follow the order of the zip. Nothing is extracted and no member is read here.
+    A row is ``(member, relative path, SHA256)``, in the order of the zip. Nothing is
+    extracted and no member except ``MANIFEST.json`` is read here, so every check that does
+    not need the member bytes (names, links, set equality, release hashes) happens before
+    the first byte is written.
 
     Raises:
-        ValueError: On duplicate members, unsafe names, a member or manifest entry without
-            counterpart, or a member set that differs from ``release``.
+        ValueError: On duplicate members, symbolic links, unsafe names, a member or manifest
+            entry without counterpart, a member set that differs from ``release``, or a
+            SHA256 in the zip manifest that differs from ``release``.
     """
-    names = [info.filename for info in zf.infolist()]
-    duplicates = sorted({name for name in names if names.count(name) > 1})
+    infos = zf.infolist()
+    counts = Counter(info.filename for info in infos)
+    duplicates = sorted(name for name, count in counts.items() if count > 1)
     if duplicates:
         raise ValueError(f"{zip_path}: duplicate member '{duplicates[0]}'")
     zip_manifest = _read_zip_manifest(zf, zip_path)
-    files = [name for name in names if name != _MANIFEST_NAME]
     rows: list[tuple[str, str, str]] = []
-    for name in files:
+    for info in infos:
+        name = info.filename
+        if stat.S_ISLNK(info.external_attr >> 16):
+            raise ValueError(f"member '{name}' is a symbolic link")
+        if name == _MANIFEST_NAME:
+            continue
         if name.endswith("/"):
             if not name.startswith(_MEMBER_PREFIX) or ".." in name.split("/"):
                 raise ValueError(f"member '{name}' is outside {_MEMBER_PREFIX}")
@@ -115,6 +139,13 @@ def _plan_members(
     missing = sorted(release_rels - zip_rels)
     if missing:
         raise ValueError(f"release file '{missing[0]}' is missing from the zip")
+    for name, rel, expected in rows:
+        if release[rel] != expected:
+            raise ValueError(
+                f"member '{name}': SHA256 {expected} in {_MANIFEST_NAME} differs from "
+                f"{release[rel]} in the release manifest of this vatl4pose version "
+                "(zip of another release?)"
+            )
     return rows
 
 
@@ -122,17 +153,27 @@ def _stage_member(zf: zipfile.ZipFile, name: str, target: pathlib.Path) -> str:
     """Copy member ``name`` to ``target`` and return the SHA256 of the bytes written.
 
     Raises:
-        ValueError: If the zip reports corrupted data for the member.
+        ValueError: If the zip cannot be read for the member (corrupt data, encryption,
+            unknown compression). Errors of writing ``target`` stay ``OSError``.
     """
     digest = hashlib.sha256()
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with zf.open(name) as source, open(target, "wb") as sink:
-            for chunk in iter(lambda: source.read(_CHUNK), b""):
-                digest.update(chunk)
-                sink.write(chunk)
-    except (zipfile.BadZipFile, zlib.error) as exc:
+        source = zf.open(name)
+    except _ZIP_READ_ERRORS as exc:
         raise ValueError(f"member '{name}' is corrupted in the zip: {exc}") from exc
+    with source, open(target, "wb") as sink:
+        while True:
+            try:
+                chunk = source.read(_CHUNK)
+            except _ZIP_READ_ERRORS as exc:
+                raise ValueError(
+                    f"member '{name}' is corrupted in the zip: {exc}"
+                ) from exc
+            if not chunk:
+                break
+            digest.update(chunk)
+            sink.write(chunk)
     return digest.hexdigest()
 
 
@@ -143,8 +184,9 @@ def install_from_zip(
 ) -> list[pathlib.Path]:
     """Install the weights of a release zip below ``weights_root``.
 
-    Every member is verified against the SHA256 in the zip's ``MANIFEST.json`` and against
-    ``release_manifest`` before any file reaches ``weights_root``. Members are staged in a
+    The zip manifest is compared with ``release_manifest`` before anything is written. Every
+    member is then verified against the SHA256 in the zip's ``MANIFEST.json`` before any file
+    reaches ``weights_root``. Members are staged in a
     temporary directory ``weights_root/.partial-<pid>-<random>/`` and moved into place with
     ``os.replace`` only after all of them passed, so a failure installs nothing.
 
@@ -180,12 +222,6 @@ def install_from_zip(
         try:
             staged: list[tuple[pathlib.Path, pathlib.Path]] = []
             for name, rel, expected in rows:
-                if release[rel] != expected:
-                    raise ValueError(
-                        f"member '{name}': SHA256 {expected} in {_MANIFEST_NAME} differs from "
-                        f"{release[rel]} in the release manifest of this vatl4pose version "
-                        "(zip of another release?)"
-                    )
                 actual = _stage_member(archive, name, partial / rel)
                 if actual != expected:
                     raise ValueError(
