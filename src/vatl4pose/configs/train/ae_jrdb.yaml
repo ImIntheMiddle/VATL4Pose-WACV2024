@@ -1,5 +1,5 @@
 # @package _global_
-# Pretraining of the whole-body autoencoder on JRDB-Pose (spec 13.3): the recipe of ae_posetrack21 on the
+# Pretraining of the whole-body autoencoder on JRDB-Pose: the recipe of ae_posetrack21 on the
 # 10 training and 2 validation videos (paper: 10 and 2 videos).
 defaults:
   - override /dataset: jrdb_pose

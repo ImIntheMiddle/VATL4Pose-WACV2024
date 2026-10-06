@@ -25,7 +25,7 @@ Round ``r`` evaluates and then queries ``query_sizes[r] - n_labeled`` people wit
 below 1.0 ends the run at that fraction (labeling under a budget); the legacy code queried all the
 remaining people in an extra round.
 
-Decisions where the plan left a choice:
+Decisions of this implementation:
 
 * A query of size 0 (``int`` rounding on a small video) skips steps 3 to 7; the round still
   evaluates and is saved. Its mean query OKS does not exist, so it is ``None`` and the strategy's

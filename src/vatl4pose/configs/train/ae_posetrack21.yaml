@@ -1,5 +1,5 @@
 # @package _global_
-# Pretraining of the whole-body autoencoder on PoseTrack21 (spec 13.3). Paper: Adam, lr 1e-3, 300 epochs.
+# Pretraining of the whole-body autoencoder on PoseTrack21. Paper: Adam, lr 1e-3, 300 epochs.
 # Legacy scripts/wholebodyAE_train.py: AdamW lr 0.001 (line 118), lr 0.0002 at epoch 12 and 0.00005 at
 # epoch 40 (137-140), batch 10000 (125), early stopping patience 30 on the validation loss (120).
 defaults:
