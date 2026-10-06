@@ -309,6 +309,8 @@ class VideoCache:
         self._spec = expected_spec
         with h5py.File(self._path, "r") as handle:
             self._check_attributes(handle, expected_spec, expected_annotation_sha256)
+            self._dataset = self._text_attribute(handle, "dataset")
+            self._video_id = self._text_attribute(handle, "video_id")
             self._arrays = self._load_arrays(handle, expected_spec)
             self._length = int(handle["crops"].shape[0])
 
@@ -321,6 +323,16 @@ class VideoCache:
     def spec(self) -> KeypointSpec:
         """The keypoint spec the cache was checked against (it matches the one it was built for)."""
         return self._spec
+
+    @property
+    def dataset(self) -> str:
+        """Name of the dataset the cache was built from, e.g. ``"posetrack21"``."""
+        return self._dataset
+
+    @property
+    def video_id(self) -> str:
+        """Identifier of the video the cache was built from."""
+        return self._video_id
 
     def __len__(self) -> int:
         return self._length
@@ -358,6 +370,13 @@ class VideoCache:
             for row, sample in enumerate(idx):
                 out[row] = crops[int(sample)]
         return torch.from_numpy(out)
+
+    def _text_attribute(self, handle: h5py.File, name: str) -> str:
+        if name not in handle.attrs:
+            raise ValueError(
+                f"{self._path} is not a vatl4pose cache: attribute {name!r} is missing"
+            )
+        return str(handle.attrs[name])
 
     def _check_attributes(
         self,

@@ -82,6 +82,8 @@ class PoseEstimator(nn.Module):
     """Interface shared by the three networks."""
 
     num_joints: int
+    arch: str
+    """Name of the network in :class:`EstimatorConfig` and in the result files."""
 
     def _check_input(self, x: torch.Tensor) -> None:
         assert x.is_floating_point(), x.dtype
@@ -159,6 +161,8 @@ class _ResNetEstimator(PoseEstimator):
 class SimpleBaselineEstimator(_ResNetEstimator):
     """ResNet-50, three transposed-convolution blocks of 256 filters, and a 1x1 output convolution."""
 
+    arch = "simplebaseline"
+
     def __init__(self, num_joints: int) -> None:
         super().__init__()
         self.num_joints = num_joints
@@ -185,6 +189,8 @@ class FastPoseEstimator(_ResNetEstimator):
     shuffle has no parameters, so it belongs to no optimizer group.
     """
 
+    arch = "fastpose"
+
     def __init__(self, num_joints: int) -> None:
         super().__init__()
         self.num_joints = num_joints
@@ -208,6 +214,8 @@ class FastPoseEstimator(_ResNetEstimator):
 
 class HRNetEstimator(PoseHighResolutionNet, PoseEstimator):
     """HRNet-W32 of Microsoft (vendored under ``third_party/hrnet``) with a 1x1 output convolution."""
+
+    arch = "hrnet_w32"
 
     def __init__(self, num_joints: int) -> None:
         super().__init__(num_joints, **_HRNET_W32_STAGES, final_conv_kernel=1)
