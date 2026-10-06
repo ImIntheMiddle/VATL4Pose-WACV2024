@@ -60,7 +60,7 @@ vatl4pose-download-weights --weights-root pretrained_models
 vatl4pose-doctor paths.weights_root=pretrained_models paths.data_root=data
 ```
 
-The first command downloads the weights of the release, checks each file by SHA256 and installs six files below `pretrained_models/`. They are the estimators SimpleBaseline, FastPose and HRNet-W32 for PoseTrack21, FastPose for JRDB-Pose, and the whole-body autoencoder (Hybrid, zdim 4) of each dataset. `--from-file PATH` installs from a zip that you downloaded yourself. The second command checks the whole setup and exits with status 1 if a check fails.
+The first command downloads the weights of the release, checks each file by SHA256 and installs six files below `pretrained_models/`. The files are the estimators SimpleBaseline, FastPose and HRNet-W32 for PoseTrack21, FastPose for JRDB-Pose, and the whole-body autoencoder (Hybrid, zdim 4) of each dataset. `--from-file PATH` installs from a zip that you downloaded yourself. The second command checks the whole setup and exits with status 1 if a check fails.
 
 The paper evaluates SimpleBaseline on PoseTrack21 (Table 2) and FastPose on JRDB-Pose (Table 4). `strategy=thc_wpu_duw` is the proposed method and the default.
 
@@ -78,7 +78,7 @@ vatl4pose-summarize experiment=wacv2024_jrdb
 
 `vatl4pose-atl` writes `outputs/<experiment>/<estimator>/<strategy>/<video>/result.json` for each video, with the strategy name from the second column of the table below, for example `THC+WPU_Coresetfilter`. The command skips a finished video and resumes an interrupted one. To use several GPUs, start one process per GPU with `CUDA_VISIBLE_DEVICES=<n> ... run.shard=<n>/<number of GPUs>`. `vatl4pose-summarize` writes `summary.md`, `summary.json` and the learning curves to `outputs/<experiment>/summary/<estimator>/`. The strategies `thc`, `wpu`, `thc_wpu`, `thc_coreset`, `wpu_coreset` (the ablation of the paper) and `vl4pose` run the same way.
 
-The table gives the paper values of the ALC of AP@0.6 in percent, the mean over the videos. The ALC is the area under the learning curve of AP@0.6 over the share of labeled people, and the labeled people count as correct. `summary.md` shows it in the column `ALC AP .6`.
+The table gives the paper values of the ALC of AP@0.6 in percent, the mean over the videos, and in its last row the round-0 AP@0.6 of the 2023 runs. The ALC is the area under the learning curve of AP@0.6 over the share of labeled people, and the labeled people count as correct. `summary.md` shows it in the column `ALC AP .6`.
 
 | `strategy=` | name in `summary.md` | name in the paper | PoseTrack21, SimpleBaseline, 170 videos | JRDB-Pose, FastPose, 15 videos |
 |---|---|---|---|---|
@@ -89,28 +89,29 @@ The table gives the paper values of the ALC of AP@0.6 in percent, the mean over 
 | `kmeans` | _K-Meansfilter | k-means | 97.65 | 96.41 |
 | `coreset` | _Coresetfilter | Core-Set | 98.12 | 95.60 |
 | `thc_wpu_duw` | THC+WPU_Coresetfilter | THC+WPU+DUW | 98.21 | 96.52 |
+| all | all | AP@0.6 before any annotation (round 0), 2023 runs, scale 0 to 1 | - | 0.561 |
 
-Before any annotation (round 0), FastPose with the JRDB-Pose weights reaches a mean AP@0.6 of 0.561 over the 15 test videos in the 2023 runs. The value of one video is `performances[0]["AP .6"]` in its `result.json`. The 2023 code evaluated JRDB-Pose with the OKS sigmas of COCO, and this version uses the OKS sigmas of JRDB-Pose. The JRDB-Pose sigmas raise the round-0 AP@0.6 of video 00 from 0.592 to 0.602.
+The last row is the mean over the 15 JRDB-Pose test videos of FastPose with the released weights. The value of one video is `performances[0]["AP .6"]` in its `result.json`. The 2023 code evaluated JRDB-Pose with the OKS sigmas of COCO, and this version uses the OKS sigmas of JRDB-Pose. The JRDB-Pose sigmas raise the round-0 AP@0.6 of video 00 from 0.592 to 0.602.
 
 ## Using your own data
 
-Put your videos in this layout. `dataset.root` is the dataset directory, relative to `paths.data_root` unless it is an absolute path.
+Extract the frames of each video to image files first, and put the frames and one annotation file per video in this layout. `dataset.root` is the dataset directory, relative to `paths.data_root` unless it is an absolute path.
 
 ```
-data/mine/images/<video>/<frame>.jpg
-data/mine/annotations/<video>.json
+data/mine/images/clip1/000001.jpg
+data/mine/annotations/clip1.json
 ```
 
 `annotations/<video>.json` is a COCO keypoints file with track ids. The reader takes these fields and ignores the others.
 
-- `images`: `id`, `file_name` (relative to `dataset.root`, unique in the file), `width`, `height`.
-- `annotations`: `id` (integer, unique in the file), `image_id`, `track_id` (all integers or all strings in a file), `bbox` as `[x, y, w, h]`, and optionally `keypoints` as a flat list of `x, y, visibility` for every joint.
+- `images`: `id`, `file_name` (relative to `dataset.root`, for example `images/clip1/000001.jpg`, unique in the file), `width`, `height`.
+- `annotations`: `id` (integer, unique in the file), `image_id`, `track_id` (all integers or all strings in a file), `bbox` as `[x, y, w, h]`, and optionally `keypoints` as a flat list of `x, y, visibility` for every joint. Leave the key out for a person without ground truth, because `[]` and `null` raise an error.
 
-The boxes and the track ids come from your own detector and tracker, and boxes alone are enough. An annotation with an empty box is skipped. An annotation without `keypoints`, or without a visible joint, is a person without ground truth. Only a missing `keypoints` key means no keypoints; `"keypoints": []` or `null` raises an error.
+The reader orders the frames by the sorted `file_name`, so number the frames with zero padding (`000001.jpg`, not `1.jpg`). The boxes and the track ids come from your own detector and tracker, and an annotation with an empty box is skipped.
 
-With `oracle=coco_file` the keypoints of this file are not used as labels. They only give the AP and OSPA that the loop reports. If every person has a visible joint, the loop reports both as for the paper datasets. If one person or more have none, the loop computes no AP and no OSPA. It logs one warning at each start of a run, `result.json` holds `null` for `performances`, `performances_ann`, `ospa` and `ospa_ann` in every round, and `vatl4pose-summarize` lists the video as "no ground truth" and leaves it out of the means. The selection, the annotation rounds and the retraining do not read the ground truth and run as usual. `oracle=simulated`, `vatl4pose-tune`, `vatl4pose-eval` and `vatl4pose-train` answer or score with the keypoints, so they stop with an error for a video that has a person without them.
+With `oracle=coco_file` the keypoints of this file are not labels. The loop reads them only to report AP and OSPA. If any person has no visible joint, `result.json` holds `null` for these metrics and `vatl4pose-summarize` lists the video as "no ground truth". Selection, annotation rounds and retraining run as usual, while `oracle=simulated`, `vatl4pose-tune`, `vatl4pose-eval` and `vatl4pose-train` need the keypoints and stop with an error for such a video.
 
-`dataset.keypoints` gives the joint layout. The value is the name of a preset (`coco17`, `posetrack21`, `jrdb_pose`) or a mapping with all seven fields of a keypoint spec. Joint indices count from 0.
+`dataset.keypoints` gives the joint layout. The value is the name of a preset (`coco17`, `posetrack21`, `jrdb_pose`) or a mapping with all seven fields of a keypoint spec. Joint indices count from 0. The joint order of a preset is the order of `joint_names` in `src/vatl4pose/keypoints/spec.py`. `coco17` is the COCO order. `posetrack21` has the same order except at joints 1 and 2, which are `head_bottom` and `head_top` instead of the eyes. `jrdb_pose` has its own order. A file in COCO order needs `coco17` or a custom spec.
 
 | field | content |
 |---|---|
@@ -128,9 +129,26 @@ With `oracle=coco_file` the keypoints of this file are not used as labels. They 
 
 `dataset.keypoints` also works for `dataset=posetrack21` and `dataset=jrdb_pose`, where it replaces the preset (for example to test other flip pairs or OKS sigmas). The annotation files must have the joint count of the spec. A cache belongs to one spec, so build it again with `vatl4pose-prepare` and another `paths.output_root`, and give each spec its own `run.name`.
 
-The released estimators and autoencoders fit the layouts `posetrack21` and `jrdb_pose`. For another layout, train an estimator with `vatl4pose-train train.target=estimator` (see `vatl4pose-train --help` and `src/vatl4pose/configs/train/`). Train an autoencoder with `train.target=ae` as well, unless you use a strategy without WPU such as `strategy=thc_coreset`. The result of `vatl4pose-train` is `outputs/train/<run.name>/best.pth`, which you give as `estimator.weights` or `ae.checkpoint`.
+The released estimators and autoencoders match the joint orders of `posetrack21` and `jrdb_pose`. Data in COCO order, or in another layout, needs an estimator trained for that layout. Write the ids of the training and the validation videos into two text files with one id per line, here `train_ids.txt` and `val_ids.txt`. These videos need `keypoints`.
 
-The example below uses the PoseTrack21 layout and weights on two videos, `clip1` and `clip2`, and ends at 20 % labeled people. `loop.query_ratio` lists the share of labeled people after each round, and the default `[0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0]` ends with all people.
+```
+vatl4pose-train dataset=coco_custom dataset.root=mine dataset.keypoints=coco17 \
+  estimator=simplebaseline estimator.weights=null estimator.imagenet_init=true \
+  train.target=estimator train.train_ids_file=train_ids.txt train.val_ids_file=val_ids.txt \
+  run.name=mine_estimator run.device=cuda
+```
+
+`estimator.imagenet_init=true` starts from the torchvision ImageNet weights, which the command downloads on first use. The command writes `best.pth` (the epoch with the best validation AP), `last.pth`, `log.jsonl` and `summary.json` to `outputs/train/mine_estimator/`, and it refuses a directory that already holds a run. The recipe of the paper is in `src/vatl4pose/configs/train/`. The autoencoder of WPU is trained with `train.target=ae`, and you can skip it if you use a strategy without WPU such as `strategy=thc_coreset`.
+
+```
+vatl4pose-train dataset=coco_custom dataset.root=mine dataset.keypoints=coco17 \
+  train.target=ae train.train_ids_file=train_ids.txt train.val_ids_file=val_ids.txt \
+  run.name=mine_ae run.device=cuda
+```
+
+Pass the trained files to `vatl4pose-atl` as absolute paths, for example `estimator.weights=/home/me/VATL4Pose-WACV2024/outputs/train/mine_estimator/best.pth` and `ae.checkpoint=/home/me/VATL4Pose-WACV2024/outputs/train/mine_ae/best.pth`. The options `estimator.weights` and `ae.checkpoint` resolve relative to `paths.weights_root`, so a path that starts with `outputs/` raises a `FileNotFoundError`.
+
+The example below uses the `posetrack21` layout and the weights from `vatl4pose-download-weights` on two videos, `clip1` and `clip2`, and ends at 20 % labeled people. `loop.query_ratio` lists the share of labeled people after each round, and the default `[0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0]` ends with all people. `loop.save_final_model=true` makes the run write `final_estimator.pth` into the run directory of each video, next to `result.json`. The file holds the weights of the estimator adapted to that video.
 
 ```
 vatl4pose-prepare dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1,clip2]' dataset.keypoints=posetrack21
@@ -138,7 +156,7 @@ vatl4pose-prepare dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1,clip
 vatl4pose-atl dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1,clip2]' dataset.keypoints=posetrack21 \
   estimator=simplebaseline estimator.weights=posetrack21/simplebaseline_256x192.pth \
   ae.checkpoint=wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth \
-  oracle=coco_file run.name=mine run.device=cuda 'loop.query_ratio=[0.05,0.1,0.2]'
+  oracle=coco_file run.name=mine run.device=cuda 'loop.query_ratio=[0.05,0.1,0.2]' loop.save_final_model=true
 ```
 
 With `oracle=coco_file` a person annotates the queries of every round.
@@ -176,4 +194,4 @@ The earlier paper on the uncertainty criteria is MVA 2023 ([IEEE Xplore](https:/
 
 This repository is released under the MIT License (`LICENSE`). `third_party/hrnet/` holds the HRNet-W32 network definition of [deep-high-resolution-net.pytorch](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch) under its MIT license (`third_party/hrnet/LICENSE`), and `third_party/hrnet/UPSTREAM.md` lists the source commit and every local change. VL4Pose and AlphaPose are reimplemented here and their code is not included.
 
-This work builds on [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose), [ALiPy](https://github.com/NUAA-AL/ALiPy), [DeepAL+](https://github.com/SineZHAN/deepALplus) and [VL4Pose](https://github.com/meghshukla/ActiveLearningForHumanPose). We thank their authors.
+This work builds on [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose), [ALiPy](https://github.com/NUAA-AL/ALiPy), [DeepAL+](https://github.com/SineZHAN/deepALplus) and [VL4Pose](https://github.com/meghshukla/ActiveLearningForHumanPose), whose authors we thank.
