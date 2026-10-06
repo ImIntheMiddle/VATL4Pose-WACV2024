@@ -11,6 +11,9 @@ a GPU passes.
 Layout of ``paths.data_root``: ``PoseTrack21/`` and ``jrdb-pose/``, each with the
 sub-directories the readers in :mod:`vatl4pose.data.annotations` open. Without
 ``paths.data_root`` the dataset checks are listed as skipped.
+
+The whole-body autoencoder check covers the ``wholebodyAE/<dataset>/Hybrid/`` files that the
+release manifest lists, and no other file.
 """
 
 from __future__ import annotations
@@ -32,8 +35,8 @@ from .weights_manifest import load_release_manifest, sha256_file
 _USAGE = """usage: vatl4pose-doctor paths.weights_root=DIR [paths.data_root=DIR]
 
 Checks torch and CUDA, the dataset layout below paths.data_root, the files of the release
-below paths.weights_root (SHA256) and the input dimension of every whole-body autoencoder
-checkpoint. Exits with status 1 if a check failed."""
+below paths.weights_root (SHA256) and the input dimension of the whole-body autoencoder
+checkpoints of the release. Exits with status 1 if a check failed."""
 
 _DATASETS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     # (preset name, directory below data_root, sub-paths the readers open)
@@ -46,9 +49,6 @@ _AE_DATASETS: Mapping[str, str] = {
     "JRDB2022": "jrdb_pose",
 }
 """Directory below ``wholebodyAE/`` -> keypoint preset of the checkpoints inside."""
-
-_RAW_VALUES_PER_JOINT = 3
-"""The ``Raw`` autoencoder input is x, y and score of every joint (legacy ``kp_direct``: 51 for 17 joints)."""
 
 _AE_ERRORS = (ValueError, RuntimeError, EOFError, OSError, pickle.UnpicklingError)
 
@@ -149,39 +149,45 @@ def _check_weight_files(
     return results
 
 
-def _check_autoencoders(weights_root: pathlib.Path) -> list[CheckResult]:
-    """Check the input dimension of every ``Hybrid`` and ``Raw`` checkpoint of each dataset."""
+def _check_autoencoders(
+    weights_root: pathlib.Path, release_manifest: Mapping[str, str]
+) -> list[CheckResult]:
+    """Check the input dimension of the Hybrid autoencoder files listed in the manifest."""
     from vatl4pose.models.wholebody_ae import read_input_dim
 
     results: list[CheckResult] = []
-    for directory, preset in _AE_DATASETS.items():
-        spec = get_spec(preset)
-        expected_dim = {
-            "Hybrid": spec.ae_input_dim,
-            "Raw": _RAW_VALUES_PER_JOINT * spec.num_joints,
-        }
-        for kind, expected in expected_dim.items():
-            folder = weights_root / "wholebodyAE" / directory / kind
-            for ckpt in sorted(folder.glob("*.pth")) if folder.is_dir() else []:
-                name = f"ae:{ckpt.relative_to(weights_root)}"
-                try:
-                    actual = read_input_dim(ckpt)
-                except _AE_ERRORS as exc:
-                    results.append(
-                        CheckResult(name, False, f"{ckpt}: cannot read: {exc}")
-                    )
-                    continue
-                detail = f"{ckpt}: input dim {actual}"
-                if actual == expected:
-                    results.append(CheckResult(name, True, detail))
-                else:
-                    results.append(
-                        CheckResult(
-                            name,
-                            False,
-                            f"{detail}, expected {expected} ({spec.name} {kind} feature)",
-                        )
-                    )
+    for rel in sorted(release_manifest):
+        parts = rel.split("/")
+        if parts[0] != "wholebodyAE":
+            continue
+        name, ckpt = f"ae:{rel}", weights_root / rel
+        if len(parts) != 4 or parts[1] not in _AE_DATASETS or parts[2] != "Hybrid":
+            results.append(
+                CheckResult(
+                    name,
+                    False,
+                    f"{ckpt}: no input-dim rule, expected wholebodyAE/"
+                    f"{{{'|'.join(_AE_DATASETS)}}}/Hybrid/<file>",
+                )
+            )
+            continue
+        spec = get_spec(_AE_DATASETS[parts[1]])
+        try:
+            actual = read_input_dim(ckpt)
+        except _AE_ERRORS as exc:
+            results.append(CheckResult(name, False, f"{ckpt}: cannot read: {exc}"))
+            continue
+        detail = f"{ckpt}: input dim {actual}"
+        if actual == spec.ae_input_dim:
+            results.append(CheckResult(name, True, detail))
+        else:
+            results.append(
+                CheckResult(
+                    name,
+                    False,
+                    f"{detail}, expected {spec.ae_input_dim} ({spec.name} Hybrid feature)",
+                )
+            )
     return results
 
 
@@ -208,7 +214,7 @@ def run_checks(
     results += _check_datasets(data_root)
     results += _check_weight_files(weights_root, manifest)
     if torch_result.ok:
-        results += _check_autoencoders(weights_root)
+        results += _check_autoencoders(weights_root, manifest)
     else:
         results.append(
             CheckResult(

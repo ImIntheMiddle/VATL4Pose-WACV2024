@@ -4,12 +4,5 @@
   "posetrack21/hrnet_256x192.pth": "faffc60d3a7c5cc512a31d0814a90a78c98b63cc1dda753e2f4b6ecdd105bd01",
   "posetrack21/simplebaseline_256x192.pth": "7329616ee09bc90cf744bce99b9fb030a2f199f52d2b8baca09df807d73b49b4",
   "wholebodyAE/JRDB2022/Hybrid/WholeBodyAE_zdim4.pth": "1f519896a1b26cf66b146d74f0eb2a077e24f1c3ef7abde1963ae58e683549d5",
-  "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim2.pth": "d1a85160dca7168c22d84904cdf9e17b953212a06476cab6dda230652f3ad240",
-  "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim3.pth": "42f18098b6931e583b64d61c35dfe89a52ba8cbea1da9712a1f82d0d527ae96f",
-  "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth": "d84726bf33ee1aea9fb52a28b97798bb7b8a5236457ebb5bf5190267dee227ae",
-  "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim5.pth": "18c593dfcb5cc65c88ec9fb1706a9f5d59f0942c1c7efafd0f16b30e2866c1e0",
-  "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim2.pth": "c7d62a57cebf2fa825b0a43eb358ed3c92a3f4982d7d8dd641b095f116d3d87f",
-  "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim3.pth": "a11c1894f2605f48c9ee0da3c579ca2ac801958ba09f848869db46d985450d52",
-  "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim4.pth": "c6fb245a4ce78f201ac0d20e0c056ceb618d8e1f8b804265ad3d83528b59f9c9",
-  "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim5.pth": "1e613b14ea7d566409bb082e6afc68e44da8e930076d6be3de913836f2376872"
+  "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth": "d84726bf33ee1aea9fb52a28b97798bb7b8a5236457ebb5bf5190267dee227ae"
 }

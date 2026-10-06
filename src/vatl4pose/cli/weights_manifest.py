@@ -28,16 +28,9 @@ RELEASE_FILES: tuple[str, ...] = (
     "posetrack21/hrnet_256x192.pth",
     "posetrack21/simplebaseline_256x192.pth",
     "wholebodyAE/JRDB2022/Hybrid/WholeBodyAE_zdim4.pth",
-    "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim2.pth",
-    "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim3.pth",
     "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth",
-    "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim5.pth",
-    "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim2.pth",
-    "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim3.pth",
-    "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim4.pth",
-    "wholebodyAE/Posetrack21/Raw/WholeBodyAE_zdim5.pth",
 )
-"""The files of the current release, relative to the weights root."""
+"""The files of the v1 release, relative to the weights root: the files v1 uses."""
 
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
