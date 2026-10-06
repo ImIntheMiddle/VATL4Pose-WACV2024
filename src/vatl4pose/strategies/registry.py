@@ -6,9 +6,9 @@ Every component registers itself under a name with a decorator::
     class MyScorer:
         def score(self, ctx: RoundContext) -> np.ndarray: ...
 
-The package registers the baselines when it is imported. Another method (the proposed one,
-VL4Pose) is a package of its own that registers its components when it is imported; nothing in
-the baselines changes. The module list :data:`PLUGIN_MODULES` names the packages that hold
+The package registers the baselines when it is imported. Another method (for example the
+proposed one, VATL) is a package of its own that registers its components when it is imported;
+nothing in the baselines changes. The module list :data:`PLUGIN_MODULES` names the packages that hold
 components. A name that no registry knows yet triggers the import of every listed module that is
 not imported yet, and the lookup is retried once, so a :class:`StrategyConfig` can name a
 component of a plugin without the caller importing the plugin. :func:`build_strategy` then builds

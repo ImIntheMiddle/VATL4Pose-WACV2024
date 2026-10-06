@@ -26,9 +26,10 @@ class DUWSelector:
     of the legacy ``u[pick] = 0``. The score ``total`` is not changed.
 
     The distance is the unscaled Euclidean distance of the embeddings, as in the legacy code. With
-    ``lam = 0`` the distance alone decides after the first pick, which is still the most uncertain
-    sample. The legacy code switched to its k-center with a random first pick at ``lam == 0``;
-    that selection is the ``coreset`` selector here (preset ``_Coresetfilter``).
+    ``lam = 0`` and ``m < 1`` the distance alone decides after the first pick, which is still the
+    most uncertain sample. With ``lam = 0`` and ``m = 1`` every value is 0, so each pick is the
+    lowest candidate index. The legacy code switched to its k-center with a random first pick at
+    ``lam == 0``; that selection is the ``coreset`` selector here (preset ``_Coresetfilter``).
 
     Args:
         lam: Weight of the uncertainty term (``lam >= 0``). The experiment configs set it:
