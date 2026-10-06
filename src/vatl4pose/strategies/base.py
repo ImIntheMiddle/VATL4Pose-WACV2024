@@ -160,7 +160,15 @@ class Combiner(Protocol):
 
 
 class Selector(Protocol):
-    """Picks the samples to query."""
+    """Picks the samples to query.
+
+    ``needs_embeddings`` tells the loop whether ``select`` reads ``ctx.embeddings``, so that the
+    loop computes them. It is a class attribute, ``True`` for the selectors that cluster the
+    embeddings or measure distances between them. A selector without the attribute counts as
+    ``False``.
+    """
+
+    needs_embeddings: bool = False
 
     def select(self, total: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
         """Return ``k`` distinct unlabeled sample indices as an int64 vector."""
@@ -252,6 +260,11 @@ class Strategy:
         self.scorers = list(scorers)
         self.combiner = combiner
         self.selector = selector
+
+    @property
+    def needs_embeddings(self) -> bool:
+        """Whether the selector reads ``ctx.embeddings`` (``Selector.needs_embeddings``)."""
+        return bool(getattr(self.selector, "needs_embeddings", False))
 
     def query(
         self, ctx: RoundContext, k: int

@@ -36,6 +36,8 @@ class DUWSelector:
             0.01 for PoseTrack21, 1000 for JRDB-Pose.
     """
 
+    needs_embeddings = True
+
     def __init__(self, lam: float) -> None:
         if not (math.isfinite(lam) and lam >= 0):
             raise ValueError(f"lam must be finite and non-negative, got {lam}")

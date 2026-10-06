@@ -9,8 +9,8 @@ A round of :class:`ActiveLearningLoop` is the procedure of the paper. One method
 3. :meth:`~ActiveLearningLoop._extras`: the inputs that WPU (the autoencoder) and VL4Pose (the link
    Gaussians) need.
 4. :meth:`~ActiveLearningLoop._select`: the strategy chooses the people to annotate.
-5. :meth:`~ActiveLearningLoop._ask_oracle`: the oracle answers, or the loop stops with
-   :class:`Pending` until the human has annotated.
+5. :meth:`~ActiveLearningLoop._ask_oracle`: the oracle answers, or the loop stores the query and
+   stops with :class:`Pending` until the human has annotated.
 6. :meth:`~ActiveLearningLoop._retrain`: the estimator learns from the new answers and the people it
    has not solved yet.
 7. :meth:`~ActiveLearningLoop._finetune_ae`: the autoencoder is tuned on the labeled people.
@@ -30,10 +30,14 @@ Decisions where the plan left a choice:
 * The auxiliary network of VL4Pose is new in every round, trained on the labeled people with this
   round's features; nothing of it is saved. Without labeled people (round 0) it keeps its random
   initial weights.
-* The autoencoder of round ``r + 1`` is a function of the pretrained checkpoint, the labeled set
-  and the seed. A resume rebuilds it with the same function instead of storing it.
-* The retraining set, the mean query OKS and the OKS of the labeled people use the labels the
+* The autoencoder of round ``r + 1`` is a function of the pretrained checkpoint, the labels of the
+  labeled people and the seed. A resume rebuilds it with the same function instead of storing it.
+* The retraining set, the mean query OKS, the OKS of the labeled people, the autoencoder tuning
+  (the hybrid features of the labels) and the training of the auxiliary network use the labels the
   oracle gave. With the simulated oracle they are the ground truth.
+* When the oracle has no answers yet, the query of the round is stored (see :mod:`.state`) and the
+  next ``run`` asks the oracle for the same people with the same predictions, without inference or
+  selection, whatever the model is then. The round then ends as if it had run without a pause.
 
 The processes that run videos in parallel share nothing; the per-video lock is the job of the caller.
 """
@@ -59,7 +63,7 @@ from ..data.datasets import FinetuneDataset
 from ..data.geometry import HEATMAP_SIZE, heatmaps_to_coords, to_input_tensor
 from ..eval import evaluate_predictions, oks_per_sample
 from ..models.estimator import PoseEstimator
-from ..models.wholebody_ae import WholeBodyAE
+from ..models.wholebody_ae import WholeBodyAE, compute_hybrid
 from ..oracle import Oracle
 from ..strategies import RoundContext, Strategy, local_peak_mean
 from ..strategies.baselines.vl4pose import EXTRAS_KEY as VL4POSE_KEY
@@ -67,7 +71,16 @@ from ..train import Finetuner
 from . import extras
 from .results import build_result, write_result
 from .runs import video_seed
-from .state import LoopState, RoundRecord, load_state, save_state, write_atomic
+from .state import (
+    LoopState,
+    PendingQuery,
+    RoundRecord,
+    load_pending,
+    load_state,
+    save_pending,
+    save_state,
+    write_atomic,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +90,6 @@ AE_KEY = "ae"
 STEPS = ("infer", "eval", "select", "oracle", "retrain", "ae")
 """The timed steps of a round; ``total`` is added to them in the record."""
 
-# The selectors that cluster the backbone embeddings. The VL4Pose scorer also reads them. A
-# selector of another package that needs embeddings has to be added here; without them it raises
-# its own error in the first query.
-_EMBEDDING_SELECTORS = frozenset({"kmeans", "coreset", "coreset_duw"})
 _PEAK_CHUNK = 256
 # Settings that do not change what a round computes; a resume may differ in them.
 _RESUME_FREE = ("infer_batch_size", "save_final_model")
@@ -189,6 +198,28 @@ class _Evaluation:
     combine_weight: float | None
 
 
+@dataclass
+class _Query:
+    """What a round has decided before the oracle answers.
+
+    Attributes:
+        queried: Sorted int64 sample indices to annotate, at least one.
+        predictions: ``(N, K, 3)`` float64 predictions (x, y, peak value) of the model as it was
+            when the round inferred; the oracle may prefill from them and the OKS of the queried
+            and the labeled people is measured on them.
+        score_means: Mean raw score of every scorer that scored.
+    """
+
+    queried: np.ndarray
+    predictions: np.ndarray
+    score_means: dict[str, float]
+
+    @property
+    def coords(self) -> np.ndarray:
+        """``(N, K, 2)`` float32 predicted joints, exactly the ones that were decoded."""
+        return self.predictions[:, :, :2].astype(np.float32)
+
+
 class _Clock:
     """Wall-clock seconds per step of one round; waits for the GPU so that a step owns its work."""
 
@@ -196,6 +227,13 @@ class _Clock:
         self._device = device
         self.times = dict.fromkeys(STEPS, 0.0)
         self._start = time.perf_counter()
+        self._carried = 0.0
+
+    def carry(self, timings: dict[str, float]) -> None:
+        """Add the work that a stopped run did on this round before it waited for the oracle."""
+        for step in STEPS:
+            self.times[step] += timings[step]
+        self._carried = timings["total"]
 
     def _synchronize(self) -> None:
         if self._device.type == "cuda":
@@ -212,9 +250,12 @@ class _Clock:
             self.times[step] += time.perf_counter() - began
 
     def timings(self) -> dict[str, float]:
-        """The seconds of every step and ``total``, the time since the round began."""
+        """The seconds of every step and ``total``, the time the round has worked."""
         self._synchronize()
-        return {**self.times, "total": time.perf_counter() - self._start}
+        return {
+            **self.times,
+            "total": self._carried + time.perf_counter() - self._start,
+        }
 
 
 def _derived_seed(base: int, *parts: int | str) -> int:
@@ -236,8 +277,9 @@ class ActiveLearningLoop:
     Args:
         cache: Cache of the video.
         estimator: The pose model; it must be the model of ``finetuner``.
-        strategy: The query strategy. Scorers ``wpu`` and ``vl4pose`` and the selectors
-            ``kmeans``, ``coreset`` and ``coreset_duw`` make the loop provide what they need.
+        strategy: The query strategy. The scorers ``wpu`` and ``vl4pose`` make the loop provide the
+            autoencoder and the link Gaussians; a selector with ``needs_embeddings`` makes it
+            compute the embeddings.
         oracle: The source of the labels.
         finetuner: Trains ``estimator`` after every query. Its seed must be
             ``video_seed(cfg.seed, cache.video_id)``, so that one seed drives every part of a run.
@@ -292,9 +334,8 @@ class ActiveLearningLoop:
         scorers = strategy.config.scorers
         self._uses_ae = "wpu" in scorers
         self._uses_vl4pose = "vl4pose" in scorers
-        self._uses_embeddings = (
-            self._uses_vl4pose or strategy.config.selector in _EMBEDDING_SELECTORS
-        )
+        # the selector declares what it reads; the VL4Pose scorer is fed from the embeddings
+        self._uses_embeddings = self._uses_vl4pose or strategy.needs_embeddings
         if self._uses_ae:
             if ae_ckpt is None:
                 raise ValueError(
@@ -321,6 +362,7 @@ class ActiveLearningLoop:
         }
 
         # per run, set by _restore()
+        self._config: dict[str, Any]
         self._state: LoopState
         self._rng: np.random.Generator
         self._labeled: np.ndarray
@@ -359,35 +401,30 @@ class ActiveLearningLoop:
 
     def _run_round(self, round_index: int) -> Pending | None:
         clock = _Clock(self.device)
-        with clock.measure("infer"):
-            pool = self._infer()
-        with clock.measure("eval"):
-            evaluation = self._evaluate(pool)
+        stored = load_pending(self.state_dir, round_index)
+        if stored is None:
+            evaluation, query = self._prepare(round_index, clock)
+        else:
+            evaluation, query = self._reuse(stored, clock)
         queried: list[int] | None = None
         answers: np.ndarray | None = None
         moks: float | None = None
-        score_means: dict[str, float] = {}
         if self._has_query(round_index):
-            size = self._query_sizes[round_index] - int(self._labeled.sum())
-            if size > 0:
-                with clock.measure("select"):
-                    extra_inputs = self._extras(round_index, pool)
-                    picked, score_means = self._select(
-                        round_index, pool, size, extra_inputs
-                    )
+            queried = []
+            if query is not None:
                 with clock.measure("oracle"):
-                    outcome = self._ask_oracle(round_index, picked, pool)
+                    outcome = self._ask_oracle(round_index, query)
                 if isinstance(outcome, Pending):
+                    if stored is None:
+                        self._store_pending(round_index, evaluation, query, clock)
                     return outcome
                 answers = outcome
+                queried = query.queried.tolist()
                 with clock.measure("retrain"):
-                    moks = self._retrain(round_index, pool, picked, answers)
+                    moks = self._retrain(round_index, query, answers)
                 if self._uses_ae and self._has_query(round_index + 1):
                     with clock.measure("ae"):
                         self._finetune_ae()
-                queried = picked.tolist()
-            else:
-                queried = []
         record = RoundRecord(
             percentage=evaluation.percentage,
             performance=evaluation.performance,
@@ -396,7 +433,8 @@ class ActiveLearningLoop:
             ospa_ann=evaluation.ospa_ann,
             combine_weight=evaluation.combine_weight,
             score_means={
-                name: score_means.get(name) for name in self.strategy.config.scorers
+                name: None if query is None else query.score_means.get(name)
+                for name in self.strategy.config.scorers
             },
             queried=queried,
             answers=None if answers is None else answers.tolist(),
@@ -414,6 +452,81 @@ class ActiveLearningLoop:
             record.timings["total"],
         )
         return None
+
+    def _prepare(
+        self, round_index: int, clock: _Clock
+    ) -> tuple[_Evaluation, _Query | None]:
+        """Steps 1 to 4: infer, evaluate and (if the round queries somebody) select.
+
+        Returns:
+            The evaluation and the query; the query is ``None`` in the final round and for a query
+            of size 0.
+        """
+        with clock.measure("infer"):
+            pool = self._infer()
+        with clock.measure("eval"):
+            evaluation = self._evaluate(pool)
+        size = 0
+        if self._has_query(round_index):
+            size = self._query_sizes[round_index] - int(self._labeled.sum())
+        if size == 0:
+            return evaluation, None
+        with clock.measure("select"):
+            extra_inputs = self._extras(round_index, pool)
+            picked, score_means = self._select(round_index, pool, size, extra_inputs)
+        return evaluation, _Query(picked, pool.predictions, score_means)
+
+    def _reuse(self, stored: PendingQuery, clock: _Clock) -> tuple[_Evaluation, _Query]:
+        """The query of a round that was waiting for the oracle, instead of steps 1 to 4.
+
+        The generator continues from where the selection left it, and the clock continues from
+        the work done before the pause.
+        """
+        self._check_config(
+            stored.config, f"the pending query of round {stored.round_index}"
+        )
+        queried = np.asarray(stored.queried, dtype=np.int64)
+        expected = (self.n, self.spec.num_joints, 3)
+        if (
+            queried.ndim != 1
+            or queried.size == 0
+            or queried.min() < 0
+            or queried.max() >= self.n
+            or stored.predictions.shape != expected
+        ):
+            raise ValueError(
+                f"the pending query of round {stored.round_index} does not fit this video: "
+                f"{queried.size} queried people, predictions of shape {stored.predictions.shape} "
+                f"instead of {expected}; remove {self.state_dir} to start the run again"
+            )
+        self._rng.bit_generator.state = stored.rng
+        clock.carry(stored.timings)
+        return (
+            _Evaluation(**stored.evaluation),
+            _Query(queried, stored.predictions, stored.score_means),
+        )
+
+    def _store_pending(
+        self,
+        round_index: int,
+        evaluation: _Evaluation,
+        query: _Query,
+        clock: _Clock,
+    ) -> None:
+        """Keep the query of a round whose oracle has no answers yet (see :mod:`.state`)."""
+        save_pending(
+            self.state_dir,
+            PendingQuery(
+                round_index=round_index,
+                config=self._config,
+                queried=query.queried.tolist(),
+                predictions=query.predictions,
+                evaluation=dataclasses.asdict(evaluation),
+                score_means=query.score_means,
+                rng=self._rng.bit_generator.state,
+                timings=clock.timings(),
+            ),
+        )
 
     # ------------------------------------------------------------------ start, finish
 
@@ -441,29 +554,35 @@ class ActiveLearningLoop:
         }
         return json.loads(json.dumps(config, allow_nan=False))
 
+    def _check_config(self, stored: dict[str, Any], what: str) -> None:
+        """Raise if ``what`` was written by a run with other settings than this one."""
+        config = self._config
+        differences = [
+            f"{key}: {what} has {stored.get(key)!r}, this run has {config.get(key)!r}"
+            for key in sorted(set(config) | set(stored))
+            if config.get(key) != stored.get(key)
+        ]
+        if differences:
+            raise ValueError(
+                f"{self.state_dir} belongs to a run with other settings ("
+                + "; ".join(differences)
+                + "). Use another run directory, or remove the state to start again."
+            )
+
     def _restore(self) -> None:
         """Load the state of the finished rounds, or start a new one; always from the files."""
-        config = self._fingerprint()
         self._labeled = np.zeros(self.n, dtype=bool)
         self._labels = np.zeros((self.n, self.spec.num_joints, 3), dtype=np.float64)
         self._rng = np.random.default_rng(self.seed)
+        self._config = self._fingerprint()
         loaded = load_state(self.state_dir)
         if loaded is None:
-            self._state = LoopState(config=config, rng=self._rng.bit_generator.state)
+            self._state = LoopState(
+                config=self._config, rng=self._rng.bit_generator.state
+            )
             torch.manual_seed(self.seed)
         else:
-            differences = [
-                f"{key}: the state has {loaded.state.config.get(key)!r}, this run has "
-                f"{config.get(key)!r}"
-                for key in sorted(set(config) | set(loaded.state.config))
-                if config.get(key) != loaded.state.config.get(key)
-            ]
-            if differences:
-                raise ValueError(
-                    f"{self.state_dir} belongs to a run with other settings ("
-                    + "; ".join(differences)
-                    + "). Use another run directory, or remove the state to start again."
-                )
+            self._check_config(loaded.state.config, "the state")
             self._state = loaded.state
             self._rng.bit_generator.state = loaded.state.rng
             torch.set_rng_state(loaded.torch_rng)
@@ -530,10 +649,12 @@ class ActiveLearningLoop:
 
     # ------------------------------------------------------------------ step 2: evaluation
 
-    def _oks(self, pool: _Pool, index: np.ndarray, labels: np.ndarray) -> np.ndarray:
-        """OKS of the predictions of the people ``index`` against ``labels``, float64."""
+    def _oks(
+        self, coords: np.ndarray, index: np.ndarray, labels: np.ndarray
+    ) -> np.ndarray:
+        """OKS of the predicted joints ``coords`` of the people ``index`` against ``labels``."""
         return oks_per_sample(
-            pool.coords[index], labels, self._boxes_xywh[index], self._sigmas
+            coords[index], labels, self._boxes_xywh[index], self._sigmas
         )
 
     def _evaluate(self, pool: _Pool) -> _Evaluation:
@@ -635,36 +756,42 @@ class ActiveLearningLoop:
 
     # ------------------------------------------------------------------ step 5: oracle
 
-    def _ask_oracle(
-        self, round_index: int, picked: np.ndarray, pool: _Pool
-    ) -> np.ndarray | Pending:
-        """The labels of ``picked`` as ``(k, K, 3)``, or :class:`Pending` if they are not there yet."""
-        outcome = self.oracle.request(picked, round_index, pool.predictions)
+    def _ask_oracle(self, round_index: int, query: _Query) -> np.ndarray | Pending:
+        """The labels of the queried people as ``(k, K, 3)``, or :class:`Pending` if not there yet."""
+        outcome = self.oracle.request(query.queried, round_index, query.predictions)
         if not outcome.ready:
             return Pending(round_index=round_index, message=outcome.message)
         assert outcome.keypoints is not None
-        expected = (len(picked), self.spec.num_joints, 3)
-        if outcome.keypoints.shape != expected:
+        answers = outcome.keypoints
+        expected = (len(query.queried), self.spec.num_joints, 3)
+        if answers.shape != expected:
             raise ValueError(
-                f"the oracle answered with shape {outcome.keypoints.shape} for a request of "
-                f"{len(picked)} people; expected {expected}"
+                f"the oracle answered with shape {answers.shape} for a request of "
+                f"{len(query.queried)} people; expected {expected}"
             )
-        return outcome.keypoints
+        if self._uses_ae:
+            blind = query.queried[~(answers[:, :, 2] > 0).any(axis=1)]
+            if blind.size:
+                raise ValueError(
+                    f"the oracle marked no joint visible for the samples {blind.tolist()}; the "
+                    "autoencoder of the WPU score is tuned on the hybrid feature of the labels, "
+                    "which needs one visible joint per person"
+                )
+        return answers
 
     # ------------------------------------------------------------------ step 6: retraining
 
-    def _retrain(
-        self, round_index: int, pool: _Pool, picked: np.ndarray, answers: np.ndarray
-    ) -> float:
+    def _retrain(self, round_index: int, query: _Query, answers: np.ndarray) -> float:
         """Label the people, train the estimator on them, return their mean query OKS.
 
         The training set is the queried people plus the labeled people whose OKS (under the model
         before this training) is at most ``finish_acc + 0.05``; the number of epochs follows from
         the mean OKS of the queried people.
         """
+        picked, coords = query.queried, query.coords
         before = np.flatnonzero(self._labeled)
-        oks_before = self._oks(pool, before, self._labels[before])
-        moks = float(self._oks(pool, picked, answers).mean())
+        oks_before = self._oks(coords, before, self._labels[before])
+        moks = float(self._oks(coords, picked, answers).mean())
         self._labeled[picked] = True
         self._labels[picked] = answers
         training = Finetuner.retrain_indices(
@@ -692,17 +819,22 @@ class ActiveLearningLoop:
         )
 
     def _build_ae(self) -> WholeBodyAE:
-        """The pretrained autoencoder, tuned on the ground-truth features of the labeled people.
+        """The pretrained autoencoder, tuned on the hybrid features of the labels of the labeled people.
 
-        The result depends on the checkpoint, the labeled set and the seed only, so a resume
-        gets the autoencoder the uninterrupted run had.
+        The features are those of the answers of the oracle, with the label visibility as weights
+        (with the simulated oracle: the cached ``hybrid_gt``). The result depends on the
+        checkpoint, the labels and the seed only, so a resume gets the autoencoder the
+        uninterrupted run had.
         """
         ae = self._pretrained_ae()
         labeled = np.flatnonzero(self._labeled)
         if labeled.size:
+            features = compute_hybrid(
+                self._arrays.bbox_json_xywh[labeled], self._labels[labeled], self.spec
+            )
             extras.finetune_wholebody_ae(
                 ae,
-                self._arrays.hybrid_gt[labeled],
+                features,
                 epochs=self.cfg.ae_finetune_epochs,
                 lr=self.cfg.ae_finetune_lr,
                 batch_size=self.cfg.ae_finetune_batch,

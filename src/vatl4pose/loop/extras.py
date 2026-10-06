@@ -1,7 +1,7 @@
 """The inputs that some query strategies need besides the heatmaps, and how the loop builds them.
 
 * The WPU scorer reads a whole-body autoencoder. Every round the loop starts from the pretrained
-  checkpoint and tunes it on the ground-truth features of the labeled people
+  checkpoint and tunes it on the hybrid features of the labels of the labeled people
   (:func:`load_pretrained_ae`, :func:`finetune_wholebody_ae`).
 * The VL4Pose scorer reads the Gaussian over every link length that an auxiliary network predicts
   for every person. Every round the loop trains a new network on the labeled people and predicts
@@ -50,7 +50,8 @@ def finetune_wholebody_ae(
 
     Args:
         ae: The autoencoder, usually just loaded from its pretrained checkpoint.
-        features: ``(n, ae.input_dim)`` features, one row per labeled person, from the ground truth.
+        features: ``(n, ae.input_dim)`` hybrid features, one row per labeled person, of the labels
+            that the oracle gave.
         epochs: Number of passes; 0 changes nothing.
         lr: Learning rate of Adam.
         batch_size: Rows per step.

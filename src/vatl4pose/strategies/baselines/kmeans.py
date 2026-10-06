@@ -58,6 +58,8 @@ class KMeansSelector:
     member nearest to the cluster center. The result is in cluster order.
     """
 
+    needs_embeddings = True
+
     def select(self, total: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
         unlabeled = unlabeled_for_query(ctx, k)
         if ctx.embeddings is None:
