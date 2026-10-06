@@ -1,0 +1,69 @@
+"""OSPA (optimal sub-pattern assignment) of predicted poses against labelled poses.
+
+For one image with ``n`` labelled poses and ``n`` predicted poses, the OSPA is the cost of the best
+one-to-one assignment, where assigning prediction ``p`` to label ``g`` costs ``1 - OKS(g, p)``,
+divided by ``n``. A set of predictions with fewer or more poses than the labels would add the
+cardinality difference ``|n_gt - n_pred|`` to the numerator and divide by the larger count. Here
+every prediction belongs to exactly one labelled sample, so both sets have the same size in every
+image and that term is zero. The OSPA of a set of images is the mean over the images that have
+labels; 0 is perfect and 1 is the worst value.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+
+from .oks import as_float_array, as_pose_xy, as_sigmas, oks_matrix
+
+
+def ospa(
+    pred_kpt: np.ndarray,
+    gt_kpt: np.ndarray,
+    gt_bbox_xywh: np.ndarray,
+    image_id: np.ndarray,
+    sigmas: np.ndarray | Sequence[float],
+) -> float:
+    """OSPA of one prediction per labelled person, averaged over the images.
+
+    Args:
+        pred_kpt: ``(N, K, 2)`` predicted joint coordinates (``(N, K, 3)`` is accepted; the third
+            column is ignored).
+        gt_kpt: ``(N, K, 3)`` labelled joints ``x, y, visibility``.
+        gt_bbox_xywh: ``(N, 4)`` label boxes ``[x, y, w, h]``; ``w * h`` is the area in the OKS.
+        image_id: ``(N,)`` integer image id of every sample.
+        sigmas: ``(K,)`` OKS sigmas (``KeypointSpec.oks_sigmas``), the same as in :func:`keypoint_ap`.
+
+    Returns:
+        The mean over the images of the per-image OSPA, in ``[0, 1]``.
+
+    Raises:
+        ValueError: If no sample is given.
+    """
+    sig = as_sigmas(sigmas)
+    k = sig.shape[0]
+    pred = as_pose_xy("pred_kpt", pred_kpt, k)
+    gt = as_float_array("gt_kpt", gt_kpt, (k, 3))
+    box = as_float_array("gt_bbox_xywh", gt_bbox_xywh, (4,))
+    image = np.asarray(image_id)
+    assert np.issubdtype(image.dtype, np.integer) and image.ndim == 1, (
+        f"image_id: expected an integer array of shape (N,), got {image.dtype} {image.shape}"
+    )
+    n = pred.shape[0]
+    assert gt.shape[0] == box.shape[0] == image.shape[0] == n, (
+        f"pred_kpt, gt_kpt, gt_bbox_xywh and image_id must hold the same number of samples, "
+        f"got {n}, {gt.shape[0]}, {box.shape[0]}, {image.shape[0]}"
+    )
+    if n == 0:
+        raise ValueError("ospa: no sample given")
+
+    order = np.argsort(image, kind="stable")
+    _, first = np.unique(image[order], return_index=True)
+    per_image = []
+    for members in np.split(order, first[1:]):
+        cost = 1.0 - oks_matrix(pred[members], gt[members], box[members], sig)
+        rows, cols = linear_sum_assignment(cost)
+        per_image.append(cost[rows, cols].sum() / members.shape[0])
+    return float(np.mean(per_image))
