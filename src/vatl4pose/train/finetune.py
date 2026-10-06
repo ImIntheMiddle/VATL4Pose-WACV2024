@@ -214,12 +214,15 @@ class Finetuner:
             raise ValueError(f"seed must be non-negative, got {seed}")
         expected = estimator.state_dict()
         if set(initial_state) != set(expected) or any(
-            initial_state[k].shape != expected[k].shape for k in expected
+            initial_state[k].shape != expected[k].shape
+            or initial_state[k].dtype != expected[k].dtype
+            for k in expected
         ):
             raise ValueError(
                 "initial_state does not fit the estimator: "
                 f"{len(set(initial_state) - set(expected))} unexpected keys, "
-                f"{len(set(expected) - set(initial_state))} missing keys, shapes must agree"
+                f"{len(set(expected) - set(initial_state))} missing keys, "
+                "shapes and dtypes must agree"
             )
         self.model = estimator.to(device)
         self.cfg = cfg
@@ -289,7 +292,7 @@ class Finetuner:
 
         Args:
             labeled_before: ``(L,)`` integer sample indices labeled before this round.
-            oks_before: ``(L,)`` finite OKS of those people, row for row.
+            oks_before: ``(L,)`` float64 finite OKS of those people, row for row.
             queried: ``(Q,)`` integer sample indices queried in this round.
             finish_acc: OKS from which a person counts as solved, in ``[0, 1]``.
 
@@ -308,11 +311,9 @@ class Finetuner:
             raise ValueError(
                 f"queried: expected a 1-D integer array, got {queried.dtype} {queried.shape}"
             )
-        if oks_before.shape != labeled_before.shape or not np.issubdtype(
-            oks_before.dtype, np.floating
-        ):
+        if oks_before.shape != labeled_before.shape or oks_before.dtype != np.float64:
             raise ValueError(
-                f"oks_before: expected a float array of shape {labeled_before.shape}, got "
+                f"oks_before: expected a float64 array of shape {labeled_before.shape}, got "
                 f"{oks_before.dtype} {oks_before.shape}"
             )
         if not np.isfinite(oks_before).all():
@@ -327,34 +328,37 @@ class Finetuner:
         self.model.load_state_dict(self._initial_state, strict=True)
         self.optimizer, self.scheduler = self._build_optimizer()
 
-    def run(
-        self, dataset: FinetuneDataset, epochs: int, round_index: int
-    ) -> list[float]:
+    def run(self, dataset: FinetuneDataset, epochs: int) -> list[float]:
         """Train ``epochs`` epochs on ``dataset``.
 
-        The non-continual scheme resets the model, optimizer and schedule first, also when
-        ``epochs`` is 0. Every epoch sets the dataset to the epoch counter of the round (from 0),
-        visits the items in :func:`shuffle_order`, and steps the schedule once. The training flag
-        of the model is restored at the end.
+        The round is the ``round_index`` of the dataset, so that the augmentation of the items
+        and the order of the epochs belong to the same round. The non-continual scheme resets
+        the model, optimizer and schedule first, also when ``epochs`` is 0. Every epoch sets the
+        dataset to the epoch counter of the round (from 0), visits the items in
+        :func:`shuffle_order`, and steps the schedule once, after the batches of the epoch.
+        The training flag of the model is restored at the end.
 
         Args:
-            dataset: Training items of the round; ``round_index`` must be the one the dataset
-                was built with, so that augmentation and order belong to the same round.
+            dataset: Training items of the round; its ``seed`` must equal the seed of this
+                finetuner.
             epochs: Number of epochs, 0 or more.
-            round_index: Active-learning round, non-negative.
 
         Returns:
             The mean loss of every epoch, weighted by batch size; empty for 0 epochs.
 
         Raises:
-            ValueError: If ``epochs`` or ``round_index`` is negative, or ``dataset`` is empty
-                while ``epochs`` is positive.
+            ValueError: If ``epochs`` is negative, the seed of ``dataset`` differs from the
+                seed of this finetuner, or ``dataset`` is empty while ``epochs`` is positive.
             FloatingPointError: If the loss of an epoch is not finite.
         """
         if epochs < 0:
             raise ValueError(f"epochs must be >= 0, got {epochs}")
-        if round_index < 0:
-            raise ValueError(f"round_index must be non-negative, got {round_index}")
+        if dataset.seed != self.seed:
+            raise ValueError(
+                f"dataset was built with seed {dataset.seed}, this finetuner has seed "
+                f"{self.seed}; the augmentation and the order would use different seeds"
+            )
+        round_index = dataset.round_index
         if epochs > 0 and len(dataset) == 0:
             raise ValueError("dataset is empty; there is nothing to train on")
         if not self.cfg.continual:

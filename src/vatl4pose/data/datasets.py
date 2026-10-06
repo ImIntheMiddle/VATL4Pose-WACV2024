@@ -133,6 +133,16 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         # shared memory: the worker processes of a loader read the epoch that the main process sets
         self._epoch = torch.zeros((), dtype=torch.int64).share_memory_()
 
+    @property
+    def seed(self) -> int:
+        """The seed of the run, as given to the constructor (read-only)."""
+        return self._seed
+
+    @property
+    def round_index(self) -> int:
+        """The active-learning round, as given to the constructor (read-only)."""
+        return self._round_index
+
     def set_epoch(self, epoch: int) -> None:
         """Set the epoch whose augmentation draws the following reads use.
 
