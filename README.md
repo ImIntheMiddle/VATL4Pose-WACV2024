@@ -161,6 +161,19 @@ vatl4pose-atl dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1,clip2]' 
   oracle=coco_file run.name=mine run.device=cuda 'loop.query_ratio=[0.05,0.1,0.2]' loop.save_final_model=true
 ```
 
+The proposed strategy `thc_wpu_duw` has one setting that depends on the data, `lam`, the weight of the uncertainty term of DUW. The experiment configs set `lam=0.01` for PoseTrack21 and `lam=1000` for JRDB-Pose, and your own data uses `lam=0.01` unless you pass `lam=<value>`. `vatl4pose-tune` chooses `lam` for your data when you have annotated videos to tune on. For every value in `tune.lams` it runs the loop with `oracle=simulated` on the videos of `tune.ids_file`, and it writes the ALC of `tune.metric` (default `AP .95`) for each value to `outputs/<run.name>/tune/<estimator>/<strategy>/tune.md`. Tuning needs the keypoints of every person in its videos, because the simulated oracle answers with them and the objective is an AP, so the command stops with an error for a video without them. Without annotated videos, keep `lam=0.01`. Build the caches of the tuning videos with `vatl4pose-prepare`, and give the best value to `vatl4pose-atl` as `lam=<value>`.
+
+```
+vatl4pose-prepare dataset=coco_custom dataset.root=mine 'dataset.ids=[val1,val2]' dataset.keypoints=posetrack21
+
+vatl4pose-tune dataset=coco_custom dataset.root=mine dataset.keypoints=posetrack21 \
+  estimator=simplebaseline estimator.weights=posetrack21/simplebaseline_256x192.pth \
+  ae.checkpoint=wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth \
+  tune.ids_file=val_ids.txt 'tune.lams=[0.01,1,100]' run.name=mine_tune run.device=cuda
+```
+
+For the two paper datasets, the tuning videos are the `train_val` split of PoseTrack21 and the `val` split of JRDB-Pose. Their caches come from `vatl4pose-prepare experiment=wacv2024_posetrack21 dataset.split=train_val 'dataset.ids_file=${tune.ids_file}'` (and `dataset.split=val` with `experiment=wacv2024_jrdb`), and `vatl4pose-tune experiment=wacv2024_posetrack21 'tune.lams=[0.01,0.1,1]'` then tunes on them.
+
 With `oracle=coco_file` a person annotates the queries of every round.
 
 1. The run writes `outputs/<run.name>/<estimator>/<strategy>/<video>/oracle/round_XX_queries.json` for each video. The file is a COCO keypoints file with the selected people. Each person carries the model's prediction as a starting point. The command goes on with the next video, prints a `Pending` line for each video and exits with status 0.
