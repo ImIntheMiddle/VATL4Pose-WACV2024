@@ -306,6 +306,7 @@ class VideoCache:
         expected_annotation_sha256: str | None = None,
     ) -> None:
         self._path = pathlib.Path(path)
+        self._spec = expected_spec
         with h5py.File(self._path, "r") as handle:
             self._check_attributes(handle, expected_spec, expected_annotation_sha256)
             self._arrays = self._load_arrays(handle, expected_spec)
@@ -315,6 +316,11 @@ class VideoCache:
     def path(self) -> pathlib.Path:
         """The cache file."""
         return self._path
+
+    @property
+    def spec(self) -> KeypointSpec:
+        """The keypoint spec the cache was checked against (it matches the one it was built for)."""
+        return self._spec
 
     def __len__(self) -> int:
         return self._length
