@@ -23,8 +23,11 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import functools
 import json
 import pathlib
+import signal
+import types
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -87,11 +90,34 @@ LOGGERS = ("json", "wandb")
 ORACLES = ("simulated", "coco_file")
 
 
+STOP_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
+"""The signals that end a command like Ctrl-C does: ``timeout``, schedulers and ``kill -TERM``."""
+
+
+def _stop(signum: int, frame: Optional[types.FrameType]) -> None:
+    raise SystemExit(128 + signum)
+
+
 def hydra_command(task: Callable[[DictConfig], None]) -> Callable[[], None]:
-    """The console-script entry of ``task``: Hydra composes ``base.yaml`` and calls ``task(cfg)``."""
-    return hydra.main(
+    """The console-script entry of ``task``: Hydra composes ``base.yaml`` and calls ``task(cfg)``.
+
+    The entry turns ``SIGTERM`` and ``SIGHUP`` into ``SystemExit`` (exit status ``128 + signal``),
+    so that both unwind the task the way ``SIGINT`` does through ``KeyboardInterrupt``. The
+    ``with`` blocks of the task then run, a stopped ``vatl4pose-atl`` releases the lock of its
+    video and the next start resumes it. ``SIGKILL`` cannot be caught; it leaves the lock behind,
+    and the user removes it by hand (see ``VideoLock``).
+    """
+    main = hydra.main(
         version_base="1.3", config_path="pkg://vatl4pose.configs", config_name="base"
     )(task)
+
+    @functools.wraps(main)
+    def stoppable(*args: Any, **kwargs: Any) -> None:
+        for signum in STOP_SIGNALS:
+            signal.signal(signum, _stop)
+        main(*args, **kwargs)
+
+    return stoppable
 
 
 # ------------------------------------------------------------------ run settings
