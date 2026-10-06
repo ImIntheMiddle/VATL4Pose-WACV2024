@@ -5,9 +5,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 # data, weights, outputs (never tracked)
-data/
-weights/
-outputs/
+/data/
+/weights/
+/outputs/
 *.h5
 *.pth
 *.zip
