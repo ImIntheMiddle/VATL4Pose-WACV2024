@@ -444,7 +444,7 @@ def run_video(
             run_dir,
             name,
             job.run.name or "",
-            _wandb_config(job, video_id, split),
+            _wandb_config(job, video_id, split) if job.logger == "wandb" else {},
             output_root(job.paths),
             video_id,
         ) as on_round:

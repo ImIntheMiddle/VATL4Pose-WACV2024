@@ -31,8 +31,9 @@ model) and has ``null`` where the round computed nothing:
     ``retrain``, ``ae`` (the fine-tuning of the autoencoder) and ``total`` (the round without the
     write of its state). A step that did not run is 0.
 ``git_commit``
-    The commit that the package was run from, or ``null`` when it was not run from a git checkout
-    (an installed wheel carries no commit).
+    The commit that the package was run from, or ``null`` when it was not run from its own git
+    checkout (an installed wheel carries no commit) or git could not name the commit (one warning
+    says why).
 
 A video in which some person has no ground truth (boxes without keypoints, see
 :mod:`vatl4pose.data.annotations`) has no AP and no OSPA. ``performances``, ``performances_ann``,
@@ -43,6 +44,7 @@ lists it as "no ground truth". All other lists are computed as usual.
 from __future__ import annotations
 
 import json
+import logging
 import pathlib
 import re
 import subprocess
@@ -58,50 +60,67 @@ RESULT_SCHEMA = "vatl4pose.result/1"
 RESULT_NAME = "result.json"
 
 _COMMIT = re.compile(r"[0-9a-f]{40,64}")
+_WARNED: set[pathlib.Path] = set()
+logger = logging.getLogger(__name__)
+
+
+def _warn_once(root: pathlib.Path, reason: str) -> None:
+    """Log that the commit of the checkout ``root`` is unknown, once per process and checkout."""
+    if root in _WARNED:
+        return
+    _WARNED.add(root)
+    logger.warning(
+        "the git commit of the checkout %s is not recorded (null in result.json): %s",
+        root,
+        reason,
+    )
 
 
 def git_commit(package_dir: pathlib.Path | None = None) -> str | None:
-    """The ``HEAD`` commit of the git checkout that ``package_dir`` lies in, or ``None``.
+    """The ``HEAD`` commit of the checkout that this package runs from, or ``None``.
 
-    ``None`` means that no directory from ``package_dir`` up to the root has a ``.git`` entry: the
-    package is installed, not run from a checkout. Where a ``.git`` entry exists, git must answer;
-    a failure raises instead of reporting ``None``.
+    The package runs from its own checkout when ``package_dir`` is ``<root>/src/vatl4pose`` and
+    ``<root>`` has a ``.git`` entry. Any other place gives ``None`` without a message: an installed
+    package (``site-packages`` has no ``src`` parent), also one inside the ``.venv`` of another
+    project, whose repository is never asked. When the checkout exists but git cannot answer for
+    it (the program is missing, git refuses the directory, ``<root>/.git`` is no repository so
+    that git would find another one above it), the result is ``None`` and one warning per process
+    and checkout says why. The commit is information about the run, and a failure to read it must
+    not end an hours-long run.
 
     Args:
-        package_dir: The directory to start from; the directory of the ``vatl4pose`` package if
-            omitted.
-
-    Raises:
-        RuntimeError: If a ``.git`` entry exists and ``git rev-parse HEAD`` fails or does not
-            print a commit hash.
+        package_dir: The directory of the ``vatl4pose`` package; the running one if omitted.
     """
-    start = (
-        pathlib.Path(vatl4pose.__file__).resolve().parent
+    package = (
+        pathlib.Path(vatl4pose.__file__).parent
         if package_dir is None
-        else package_dir
-    )
-    start = pathlib.Path(start).resolve()
-    for folder in (start, *start.parents):
-        if not (folder / ".git").exists():
-            continue
-        try:
-            done = subprocess.run(
-                ["git", "-C", str(folder), "rev-parse", "HEAD"],
-                capture_output=True,
-                text=True,
-            )
-        except FileNotFoundError as error:
-            raise RuntimeError(
-                f"{folder} is a git checkout but the program 'git' cannot be started: {error}"
-            ) from error
-        commit = done.stdout.strip()
-        if done.returncode != 0 or not _COMMIT.fullmatch(commit):
-            raise RuntimeError(
-                f"`git -C {folder} rev-parse HEAD` failed (exit code {done.returncode}): "
-                f"{done.stderr.strip() or commit!r}"
-            )
-        return commit
-    return None
+        else pathlib.Path(package_dir)
+    ).resolve()
+    root = package.parent.parent
+    if package.parent.name != "src" or not (root / ".git").exists():
+        return None
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel", "HEAD"],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as error:
+        _warn_once(root, f"the program 'git' cannot be started ({error})")
+        return None
+    lines = done.stdout.split()
+    if done.returncode != 0 or len(lines) != 2 or not _COMMIT.fullmatch(lines[1]):
+        reason = done.stderr.strip() or done.stdout.strip()
+        _warn_once(root, f"`git rev-parse HEAD` failed (exit code {done.returncode}): {reason}")
+        return None
+    if pathlib.Path(lines[0]).resolve() != root:
+        _warn_once(
+            root,
+            f"git answers for another repository, {lines[0]}, because {root}/.git is not "
+            "a repository",
+        )
+        return None
+    return lines[1]
 
 
 def build_result(
