@@ -25,6 +25,10 @@ cu124 = ["torch==2.6.0", "torchvision==0.21.0"]
 cu128 = ["torch==2.7.1", "torchvision==0.22.1"]
 wandb = ["wandb>=0.18"]
 
+[project.scripts]
+vatl4pose-download-weights = "vatl4pose.cli.download_weights:main"
+vatl4pose-doctor = "vatl4pose.cli.doctor:main"
+
 [build-system]
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
