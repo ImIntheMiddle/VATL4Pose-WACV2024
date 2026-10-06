@@ -18,6 +18,8 @@ class RandomSelector:
     draw. The total score is ignored.
     """
 
+    needs_embeddings = False
+
     def select(self, total: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
         unlabeled = unlabeled_for_query(ctx, k)
         draw = np.asarray(ctx.rng.random(unlabeled.shape[0]), dtype=np.float64)

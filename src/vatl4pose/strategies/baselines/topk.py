@@ -23,6 +23,8 @@ def rank_unlabeled(score: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
 class TopKSelector:
     """The ``k`` unlabeled samples with the highest total score."""
 
+    needs_embeddings = False
+
     def select(self, total: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
         unlabeled = unlabeled_for_query(ctx, k)
         assert total.shape == (ctx.num_samples,), (

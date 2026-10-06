@@ -18,13 +18,19 @@ A round of :class:`ActiveLearningLoop` is the procedure of the paper. One method
 
 Round ``r`` evaluates and then queries ``query_sizes[r] - n_labeled`` people with
 ``query_sizes = [int(N * ratio) for ratio in query_ratio]``. The last round, numbered
-``len(query_ratio)``, only evaluates the final model: no query and no retraining.
+``len(query_ratio)``, only evaluates the final model: no query and no retraining. A last ratio
+below 1.0 ends the run at that fraction (labeling under a budget); the legacy code queried all the
+remaining people in an extra round.
 
 Decisions where the plan left a choice:
 
 * A query of size 0 (``int`` rounding on a small video) skips steps 3 to 7; the round still
   evaluates and is saved. Its mean query OKS does not exist, so it is ``None`` and the strategy's
   ``moks_previous`` stays at the last value that exists (0.0 before any).
+* A query that takes every unlabeled person is forced by ``Strategy.query``, which scores nothing;
+  step 3 is skipped too, so no auxiliary network is trained and no autoencoder is passed on.
+* The query is stored (see :mod:`.state`) before the oracle is asked the first time, so that a run
+  killed after the request never selects the round again.
 * Every list of queried indices is sorted before the oracle sees it, so the order of the answers,
   of the fine-tuning set and of the files does not depend on the selector's order.
 * The auxiliary network of VL4Pose is new in every round, trained on the labeled people with this
@@ -35,9 +41,10 @@ Decisions where the plan left a choice:
 * The retraining set, the mean query OKS, the OKS of the labeled people, the autoencoder tuning
   (the hybrid features of the labels) and the training of the auxiliary network use the labels the
   oracle gave. With the simulated oracle they are the ground truth.
-* When the oracle has no answers yet, the query of the round is stored (see :mod:`.state`) and the
-  next ``run`` asks the oracle for the same people with the same predictions, without inference or
-  selection, whatever the model is then. The round then ends as if it had run without a pause.
+* A ``run`` that finds the stored query of its round (the oracle had no answers yet, or the run
+  was killed after the request) asks the oracle for the same people with the same predictions,
+  without inference or selection, whatever the model is then. The round then ends as if it had run
+  without a pause.
 
 The processes that run videos in parallel share nothing; the per-video lock is the job of the caller.
 """
@@ -100,15 +107,18 @@ class LoopConfig:
     """Settings of the loop; the defaults are the ones of the paper.
 
     Attributes:
-        query_ratio: Share of the video that is labeled after each query, non-decreasing in
+        query_ratio: Share of the video that is labeled after each query, strictly increasing in
             ``(0, 1]``. ``len(query_ratio)`` queries and one more evaluation make the rounds.
+            The run ends once the last ratio is labeled: a last ratio below 1.0 stops at that
+            fraction, which labels under a budget on data of your own. The legacy code queried
+            all remaining people in an extra round after the last ratio.
         infer_batch_size: People per forward pass of the inference.
         save_final_model: Write the state dict of the final model to ``final_estimator.pth``.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.
         ae_finetune_epochs: Epochs of the autoencoder tuning after every retraining.
         ae_finetune_lr: Learning rate (Adam) of that tuning.
         ae_finetune_batch: Batch size of that tuning.
-        ae_z_dim: Latent size of the autoencoder checkpoint (4 for the released ones).
+        ae_z_dim: Latent size of the autoencoder checkpoint (4 for the released ones), at least 1.
         vl4pose_epochs: Training epochs of the auxiliary network of VL4Pose in every round.
         vl4pose_lr: Learning rate (Adam) of the auxiliary network.
         vl4pose_batch_size: Batch size of its training and of its prediction.
@@ -133,8 +143,8 @@ class LoopConfig:
             raise ValueError(
                 f"query_ratio must be a non-empty sequence of values in (0, 1], got {ratio}"
             )
-        if any(b < a for a, b in zip(ratio, ratio[1:])):
-            raise ValueError(f"query_ratio must not decrease, got {ratio}")
+        if any(b <= a for a, b in zip(ratio, ratio[1:])):
+            raise ValueError(f"query_ratio must increase strictly, got {ratio}")
         for name in ("infer_batch_size", "ae_finetune_batch", "vl4pose_batch_size"):
             if getattr(self, name) < 1:
                 raise ValueError(
@@ -144,6 +154,8 @@ class LoopConfig:
             raise ValueError(
                 f"vl4pose_epochs must be at least 1, got {self.vl4pose_epochs}"
             )
+        if self.ae_z_dim < 1:
+            raise ValueError(f"ae_z_dim must be at least 1, got {self.ae_z_dim}")
         if self.ae_finetune_epochs < 0:
             raise ValueError(
                 f"ae_finetune_epochs must be at least 0, got {self.ae_finetune_epochs}"
@@ -173,6 +185,28 @@ class _Pool:
     coords: np.ndarray  # (N, K, 2) float32, image pixels
     maxvals: np.ndarray  # (N, K) float32
     embeddings: np.ndarray | None  # (N, C) float32
+
+    def __post_init__(self) -> None:
+        n, k = self.coords.shape[:2]
+        assert self.coords.shape == (n, k, 2) and self.coords.dtype == np.float32, (
+            f"coords: expected float32 (N, K, 2), got {self.coords.dtype} {self.coords.shape}"
+        )
+        assert self.maxvals.shape == (n, k) and self.maxvals.dtype == np.float32, (
+            f"maxvals: expected float32 ({n}, {k}), got {self.maxvals.dtype} {self.maxvals.shape}"
+        )
+        assert self.heatmaps.dtype == torch.float32 and tuple(self.heatmaps.shape) == (
+            n,
+            k,
+            *HEATMAP_SIZE,
+        ), (
+            f"heatmaps: expected float32 ({n}, {k}, {HEATMAP_SIZE[0]}, {HEATMAP_SIZE[1]}), got "
+            f"{self.heatmaps.dtype} {tuple(self.heatmaps.shape)}"
+        )
+        assert self.embeddings is None or (
+            self.embeddings.ndim == 2
+            and self.embeddings.shape[0] == n
+            and self.embeddings.dtype == np.float32
+        ), "embeddings: expected float32 (N, C) or None"
 
     @property
     def predictions(self) -> np.ndarray:
@@ -213,6 +247,27 @@ class _Query:
     queried: np.ndarray
     predictions: np.ndarray
     score_means: dict[str, float]
+
+    def __post_init__(self) -> None:
+        assert (
+            self.predictions.ndim == 3
+            and self.predictions.shape[2] == 3
+            and self.predictions.dtype == np.float64
+        ), (
+            f"predictions: expected float64 (N, K, 3), got {self.predictions.dtype} "
+            f"{self.predictions.shape}"
+        )
+        n = self.predictions.shape[0]
+        assert (
+            self.queried.ndim == 1
+            and self.queried.dtype == np.int64
+            and self.queried.size > 0
+            and self.queried[0] >= 0
+            and self.queried[-1] < n
+            and bool(np.all(np.diff(self.queried) > 0))
+        ), (
+            f"queried: expected sorted distinct int64 indices in [0, {n}), got {self.queried}"
+        )
 
     @property
     def coords(self) -> np.ndarray:
@@ -412,11 +467,12 @@ class ActiveLearningLoop:
         if self._has_query(round_index):
             queried = []
             if query is not None:
+                # stored before the first request, so that a kill cannot lose the query
+                if stored is None:
+                    self._store_pending(round_index, evaluation, query, clock)
                 with clock.measure("oracle"):
                     outcome = self._ask_oracle(round_index, query)
                 if isinstance(outcome, Pending):
-                    if stored is None:
-                        self._store_pending(round_index, evaluation, query, clock)
                     return outcome
                 answers = outcome
                 queried = query.queried.tolist()
@@ -433,7 +489,7 @@ class ActiveLearningLoop:
             ospa_ann=evaluation.ospa_ann,
             combine_weight=evaluation.combine_weight,
             score_means={
-                name: None if query is None else query.score_means.get(name)
+                name: query.score_means[name] if query and query.score_means else None
                 for name in self.strategy.config.scorers
             },
             queried=queried,
@@ -472,9 +528,23 @@ class ActiveLearningLoop:
         if size == 0:
             return evaluation, None
         with clock.measure("select"):
-            extra_inputs = self._extras(round_index, pool)
+            # a query that takes every unlabeled person is forced: the strategy scores nothing
+            forced = size >= self.n - int(self._labeled.sum())
+            extra_inputs = {} if forced else self._extras(round_index, pool)
             picked, score_means = self._select(round_index, pool, size, extra_inputs)
+        self._check_scores(score_means, size)
         return evaluation, _Query(picked, pool.predictions, score_means)
+
+    def _check_scores(self, score_means: dict[str, float], size: int) -> None:
+        """Raise unless the scores are ``{}`` (a forced query) or those of the strategy's scorers."""
+        forced = size >= self.n - int(self._labeled.sum())
+        scorers = self.strategy.config.scorers
+        expected = [] if forced else sorted(scorers)
+        if sorted(score_means) != expected:
+            raise ValueError(
+                f"strategy {self.strategy.config.name!r} gave scores for {sorted(score_means)}; a "
+                f"{'forced' if forced else 'regular'} query must give {expected}"
+            )
 
     def _reuse(self, stored: PendingQuery, clock: _Clock) -> tuple[_Evaluation, _Query]:
         """The query of a round that was waiting for the oracle, instead of steps 1 to 4.
@@ -499,6 +569,7 @@ class ActiveLearningLoop:
                 f"{queried.size} queried people, predictions of shape {stored.predictions.shape} "
                 f"instead of {expected}; remove {self.state_dir} to start the run again"
             )
+        self._check_scores(stored.score_means, queried.size)
         self._rng.bit_generator.state = stored.rng
         clock.carry(stored.timings)
         return (
@@ -702,6 +773,7 @@ class ActiveLearningLoop:
         """The inputs of the scorers that need more than the heatmaps (see :mod:`.extras`)."""
         inputs: dict[str, Any] = {}
         if self._uses_ae:
+            assert self._ae is not None, "the autoencoder of this round was not built"
             inputs[AE_KEY] = self._ae
         if self._uses_vl4pose:
             assert pool.embeddings is not None
