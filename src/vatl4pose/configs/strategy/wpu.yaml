@@ -1,0 +1,6 @@
+# WPU: whole-body pose uncertainty from the autoencoder (proposed uncertainty, top-k selection).
+name: WPU
+scorers: [wpu]
+combiner: single
+selector: topk
+params: {}

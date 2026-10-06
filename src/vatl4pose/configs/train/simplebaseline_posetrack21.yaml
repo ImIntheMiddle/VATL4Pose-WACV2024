@@ -1,0 +1,27 @@
+# @package _global_
+# Initial training of SimpleBaseline on PoseTrack21 (spec 13.3): the 2023 recipe on one device.
+# Paper: Adam, lr 1e-3, early stopping at epoch 62. Legacy configs/posetrack21/simplebaseline_posetrack21.yaml:
+#   BATCH_SIZE 180 (line 57), END_EPOCH 200 (59), OPTIMIZER adam (60), LR 0.001 (61), LR_FACTOR 0.1 (62),
+#   LR_STEP 90, 120 (63-65). The best epoch is chosen by the validation AP; select it against the paper's 62.
+defaults:
+  - override /dataset: posetrack21
+  - override /estimator: simplebaseline
+
+run:
+  name: simplebaseline_posetrack21
+
+# random weights with the ImageNet ResNet-50 backbone
+estimator:
+  weights: null
+  imagenet_init: true
+
+train:
+  target: estimator
+  train_split: train
+  train_ids_file: ${splits:posetrack21_train.txt}
+  val_split: train_val
+  val_ids_file: ${splits:posetrack21_train_val.txt}
+  lr: 1.0e-3
+  milestones: [90, 120]
+  epochs: 200
+  batch_size: 180

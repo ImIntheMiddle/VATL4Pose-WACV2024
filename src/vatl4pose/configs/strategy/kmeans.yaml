@@ -1,0 +1,6 @@
+# K-Means filter on the backbone embeddings (baseline).
+name: _K-Meansfilter
+scorers: []
+combiner: none
+selector: kmeans
+params: {}

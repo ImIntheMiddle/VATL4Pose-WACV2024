@@ -1,0 +1,6 @@
+# Core-Set filter on the backbone embeddings (baseline).
+name: _Coresetfilter
+scorers: []
+combiner: none
+selector: coreset
+params: {}

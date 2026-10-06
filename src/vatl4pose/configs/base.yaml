@@ -1,0 +1,34 @@
+# Base of every command: the schema, one default of every group, and the run settings.
+# Compose with `vatl4pose-<command> key=value ...`; `--help` prints the whole tree.
+defaults:
+  - vatl4pose_schema
+  - dataset: coco_custom
+  - estimator: simplebaseline
+  - strategy: thc_wpu_duw
+  - oracle: simulated
+  - train: null
+  - experiment: null
+  - _self_
+
+paths:
+  data_root: data
+  weights_root: pretrained_models
+  output_root: outputs
+
+run:
+  seed: 166
+  device: cpu
+  shard: "0/1"
+
+logger: json
+
+hydra:
+  job:
+    chdir: false
+  help:
+    header: >-
+      vatl4pose ${hydra.job.name}: set values with key=value and choose a group option with
+      group=option. The module vatl4pose.cli.${hydra.job.name} documents the command.
+  run:
+    # one directory per process, so that parallel shards never write the same Hydra files
+    dir: ${paths.output_root}/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}_${hydra.job.name}_${pid:}

@@ -1,0 +1,6 @@
+# Random sampling (baseline).
+name: Random
+scorers: []
+combiner: none
+selector: random
+params: {}

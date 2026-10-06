@@ -28,6 +28,12 @@ wandb = ["wandb>=0.18"]
 [project.scripts]
 vatl4pose-download-weights = "vatl4pose.cli.download_weights:main"
 vatl4pose-doctor = "vatl4pose.cli.doctor:main"
+vatl4pose-prepare = "vatl4pose.cli.prepare:main"
+vatl4pose-train = "vatl4pose.cli.train:main"
+vatl4pose-eval = "vatl4pose.cli.evaluate:main"
+vatl4pose-atl = "vatl4pose.cli.atl:main"
+vatl4pose-tune = "vatl4pose.cli.tune:main"
+vatl4pose-summarize = "vatl4pose.cli.summarize:main"
 
 [build-system]
 requires = ["hatchling>=1.25"]

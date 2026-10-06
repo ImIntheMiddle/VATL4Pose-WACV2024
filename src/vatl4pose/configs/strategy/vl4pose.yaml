@@ -1,0 +1,6 @@
+# VL4Pose: link-length uncertainty of an auxiliary network (baseline).
+name: VL4Pose
+scorers: [vl4pose]
+combiner: single
+selector: topk
+params: {}

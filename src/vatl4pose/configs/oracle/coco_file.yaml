@@ -1,0 +1,2 @@
+# A human annotates every query in CVAT or Label Studio; see vatl4pose.oracle.coco_file.
+name: coco_file

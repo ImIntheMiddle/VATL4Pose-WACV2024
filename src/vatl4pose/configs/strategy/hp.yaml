@@ -1,0 +1,6 @@
+# HP: the summed heatmap peak (baseline, 'LC' in the paper tables).
+name: HP
+scorers: [hp]
+combiner: single
+selector: topk
+params: {}

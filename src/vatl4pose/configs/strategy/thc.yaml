@@ -1,0 +1,6 @@
+# THC: temporal heatmap consistency (proposed uncertainty, top-k selection).
+name: THC
+scorers: [thc]
+combiner: single
+selector: topk
+params: {}

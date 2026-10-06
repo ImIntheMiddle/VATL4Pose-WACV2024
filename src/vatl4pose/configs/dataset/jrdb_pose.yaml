@@ -1,0 +1,5 @@
+# JRDB-Pose as prepared for active learning (activelearning/<split>/<video>_jrdb-pose.json).
+name: jrdb_pose
+root: jrdb-pose
+split: test
+ids_file: ${splits:jrdb_pose_test.txt}

@@ -1,0 +1,6 @@
+# THC and WPU, min-max normalized and summed (top-k selection).
+name: THC+WPU
+scorers: [thc, wpu]
+combiner: minmax_sum
+selector: topk
+params: {}

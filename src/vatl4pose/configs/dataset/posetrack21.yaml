@@ -1,0 +1,5 @@
+# PoseTrack21 as prepared for active learning (activelearning/<split>/<video>_*.json).
+name: posetrack21
+root: PoseTrack21
+split: val
+ids_file: ${splits:posetrack21_val.txt}

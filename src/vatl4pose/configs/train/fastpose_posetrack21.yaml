@@ -1,0 +1,25 @@
+# @package _global_
+# Initial training of FastPose on PoseTrack21 (spec 13.3): the 2023 recipe on one device.
+# Paper: Adam, lr 1e-3, early stopping at epoch 57. Legacy configs/posetrack21/fastpose_posetrack21.yaml:
+#   BATCH_SIZE 70 (line 52), END_EPOCH 200 (54), LR 0.001 (56), LR_FACTOR 0.1 (57), LR_STEP 90, 120 (58-60).
+defaults:
+  - override /dataset: posetrack21
+  - override /estimator: fastpose
+
+run:
+  name: fastpose_posetrack21
+
+estimator:
+  weights: null
+  imagenet_init: true
+
+train:
+  target: estimator
+  train_split: train
+  train_ids_file: ${splits:posetrack21_train.txt}
+  val_split: train_val
+  val_ids_file: ${splits:posetrack21_train_val.txt}
+  lr: 1.0e-3
+  milestones: [90, 120]
+  epochs: 200
+  batch_size: 70

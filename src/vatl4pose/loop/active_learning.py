@@ -57,7 +57,7 @@ import json
 import logging
 import pathlib
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -337,6 +337,9 @@ class ActiveLearningLoop:
         run_dir: Directory of the run; ``state/``, ``result.json`` and ``final_estimator.pth`` go
             here. The CLI holds the per-video lock.
         device: Device of the inference and of the autoencoder.
+        on_round: Called as ``on_round(round_index, record)`` after the state of every finished round
+            is saved, for logging. It is not called for a round that stops with :class:`Pending`, and
+            a resumed run calls it only for the rounds it finishes itself.
 
     Raises:
         ValueError: If the finetuner does not train ``estimator`` or has another seed, or the
@@ -354,6 +357,7 @@ class ActiveLearningLoop:
         cfg: LoopConfig,
         run_dir: pathlib.Path,
         device: torch.device,
+        on_round: Callable[[int, RoundRecord], None] | None = None,
     ) -> None:
         self.cache = cache
         self.estimator = estimator
@@ -365,6 +369,7 @@ class ActiveLearningLoop:
         self.run_dir = pathlib.Path(run_dir)
         self.state_dir = self.run_dir / "state"
         self.device = device
+        self._on_round = on_round
         self.spec = cache.spec
         self.seed = video_seed(cfg.seed, cache.video_id)
         if finetuner.model is not estimator:
@@ -501,6 +506,8 @@ class ActiveLearningLoop:
             record.performance_ann["AP"],
             record.timings["total"],
         )
+        if self._on_round is not None:
+            self._on_round(round_index, record)
         return None
 
     def _prepare(

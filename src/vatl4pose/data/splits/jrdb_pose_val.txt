@@ -1,0 +1,3 @@
+# JRDB-Pose validation videos of the initial training and of the lambda tuning, activelearning/val (2 videos).
+00
+01

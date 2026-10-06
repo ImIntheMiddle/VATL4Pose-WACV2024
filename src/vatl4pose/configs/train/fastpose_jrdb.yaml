@@ -1,0 +1,27 @@
+# @package _global_
+# Training of FastPose on JRDB-Pose (spec 13.3), starting from the FastPose retrained on PoseTrack21
+# (run `train=fastpose_posetrack21` first). Paper: 10 training videos, lr 5e-4, 40 epochs.
+# Legacy configs/jrdb-pose/fastpose_jrdb22.yaml: BATCH_SIZE 240 (line 60) on 2 GPUs (WORLD_SIZE 2, line 59;
+#   scripts/jrdbpose_train.py:7 uses GPUs 0 and 1) = 480, END_EPOCH 100 (62), LR 0.0005 (64), LR_FACTOR 0.1 (65),
+#   LR_STEP 90, 120 (66-68; never reached in 40 epochs).
+defaults:
+  - override /dataset: jrdb_pose
+  - override /estimator: fastpose
+
+run:
+  name: fastpose_jrdb
+
+estimator:
+  weights: null
+
+train:
+  target: estimator
+  train_split: train
+  train_ids_file: ${splits:jrdb_pose_train.txt}
+  val_split: val
+  val_ids_file: ${splits:jrdb_pose_val.txt}
+  init_weights: ${abspath:${paths.output_root}/train/fastpose_posetrack21/best.pth}
+  lr: 5.0e-4
+  milestones: [90, 120]
+  epochs: 40
+  batch_size: 480

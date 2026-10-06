@@ -1,0 +1,6 @@
+# TPC: temporal pose consistency across neighboring frames (baseline).
+name: TPC
+scorers: [tpc]
+combiner: single
+selector: topk
+params: {}

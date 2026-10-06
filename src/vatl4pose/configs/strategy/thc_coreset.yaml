@@ -1,0 +1,7 @@
+# THC with the DUW Core-Set selection (ablation).
+name: THC_Coresetfilter
+scorers: [thc]
+combiner: single
+selector: coreset_duw
+params:
+  lam: ${lam}

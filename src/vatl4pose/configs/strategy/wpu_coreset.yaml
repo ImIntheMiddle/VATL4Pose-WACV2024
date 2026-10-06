@@ -1,0 +1,7 @@
+# WPU with the DUW Core-Set selection (ablation).
+name: WPU_Coresetfilter
+scorers: [wpu]
+combiner: single
+selector: coreset_duw
+params:
+  lam: ${lam}

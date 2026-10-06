@@ -1,0 +1,30 @@
+# @package _global_
+# WACV 2024, PoseTrack21 (paper Table 2): SimpleBaseline on the 170 validation videos.
+# Run with `strategy=<name>`; the proposed method is `strategy=thc_wpu_duw` (the default).
+defaults:
+  - override /dataset: posetrack21
+  - override /estimator: simplebaseline
+
+run:
+  name: wacv2024_posetrack21
+
+dataset:
+  split: val
+  ids_file: ${splits:posetrack21_val.txt}
+
+estimator:
+  weights: posetrack21/simplebaseline_256x192.pth
+
+ae:
+  checkpoint: wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth
+
+# weight of the uncertainty term of the DUW selector (strategy.params.lam of the DUW strategies)
+lam: 0.01
+
+retrain:
+  batch_size: 120
+
+# `vatl4pose-tune`: the 14 validation videos of PoseTrack21 (2023: configs/posetrack21/trainval_video_list.txt)
+tune:
+  split: train_val
+  ids_file: ${splits:posetrack21_train_val.txt}

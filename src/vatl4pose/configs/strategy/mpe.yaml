@@ -1,0 +1,6 @@
+# MPE: entropy of the heatmap peaks (baseline).
+name: MPE
+scorers: [mpe]
+combiner: single
+selector: topk
+params: {}
