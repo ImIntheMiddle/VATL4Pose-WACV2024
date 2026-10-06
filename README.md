@@ -126,6 +126,8 @@ With `oracle=coco_file` the keypoints of this file are not used as labels. They 
 'dataset.keypoints={name:three,joint_names:[a,b,c],flip_pairs:[[0,1]],skeleton:[[0,2]],oks_sigmas:[0.05,0.05,0.05],redundant_joints:[],angle_triplets:[[0,2,1]]}'
 ```
 
+`dataset.keypoints` also works for `dataset=posetrack21` and `dataset=jrdb_pose`, where it replaces the preset (for example to test other flip pairs or OKS sigmas). The annotation files must have the joint count of the spec. A cache belongs to one spec, so build it again with `vatl4pose-prepare` and another `paths.output_root`, and give each spec its own `run.name`.
+
 The released estimators and autoencoders fit the layouts `posetrack21` and `jrdb_pose`. For another layout, train an estimator with `vatl4pose-train train.target=estimator` (see `vatl4pose-train --help` and `src/vatl4pose/configs/train/`). Train an autoencoder with `train.target=ae` as well, unless you use a strategy without WPU such as `strategy=thc_coreset`. The result of `vatl4pose-train` is `outputs/train/<run.name>/best.pth`, which you give as `estimator.weights` or `ae.checkpoint`.
 
 The example below uses the PoseTrack21 layout and weights on two videos, `clip1` and `clip2`, and ends at 20 % labeled people. `loop.query_ratio` lists the share of labeled people after each round, and the default `[0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0]` ends with all people.

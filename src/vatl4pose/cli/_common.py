@@ -204,7 +204,7 @@ def read_video(
             if dataset.name == "posetrack21"
             else read_jrdb_pose_video
         )
-        return reader(root, video_id, split)
+        return reader(root, video_id, split, keypoint_spec(dataset))
     if dataset.name == "coco_custom":
         if split:
             raise ValueError(

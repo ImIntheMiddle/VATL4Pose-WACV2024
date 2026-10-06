@@ -92,9 +92,13 @@ class DatasetSection:
         ids: The video ids themselves; if set they replace ``ids_file``, so that
             ``dataset.ids=[000342]`` selects one video of an experiment. An id with leading zeros
             stays a string.
-        keypoints: ``coco_custom`` only: the name of a keypoint preset (``coco17``,
-            ``posetrack21``, ``jrdb_pose``) or a mapping with the seven fields of
-            :class:`~vatl4pose.keypoints.KeypointSpec`.
+        keypoints: The name of a keypoint preset (``coco17``, ``posetrack21``, ``jrdb_pose``) or a
+            mapping with the seven fields of :class:`~vatl4pose.keypoints.KeypointSpec`. Required
+            for ``coco_custom``. ``posetrack21`` and ``jrdb_pose`` use their own preset when it is
+            ``null``; set it to swap the joint definitions (flip pairs, OKS sigmas, angle triplets)
+            of the paper datasets, for example in an A/B run. The annotation files must have the
+            joint count of the spec, and a cache is bound to the spec (build it again with the new
+            spec, in another ``paths.output_root``).
     """
 
     name: str = MISSING
@@ -394,28 +398,24 @@ def resolve_path(base: str, value: str) -> pathlib.Path:
 def keypoint_spec(dataset: DatasetSection) -> KeypointSpec:
     """The keypoint spec of a dataset config.
 
-    ``posetrack21`` and ``jrdb_pose`` have their own preset and take no ``keypoints``;
-    ``coco_custom`` names a preset or describes its own.
+    ``dataset.keypoints`` names a preset (``coco17``, ``posetrack21``, ``jrdb_pose``) or holds the
+    seven fields of a spec. ``posetrack21`` and ``jrdb_pose`` use their own preset when it is not
+    set (the paper layouts); ``coco_custom`` has no default and needs it.
     """
-    if dataset.name in ("posetrack21", "jrdb_pose"):
-        if dataset.keypoints is not None:
-            raise ValueError(
-                f"dataset.keypoints is set to {dataset.keypoints!r}, but dataset {dataset.name!r} "
-                f"has the fixed keypoint spec {dataset.name!r}; only coco_custom takes keypoints"
-            )
-        return get_spec(dataset.name)
-    if dataset.name == "coco_custom":
-        keypoints = dataset.keypoints
-        if isinstance(keypoints, str):
-            return get_spec(keypoints)
-        if isinstance(keypoints, dict):
-            return spec_from_mapping(keypoints)
+    if dataset.name not in DATASETS:
         raise ValueError(
-            "dataset.keypoints must name a preset (coco17, posetrack21, jrdb_pose) or hold the "
-            f"seven fields of a keypoint spec, got {keypoints!r}"
+            f"unknown dataset {dataset.name!r}; expected one of {', '.join(DATASETS)}"
         )
+    keypoints = dataset.keypoints
+    if keypoints is None and dataset.name in ("posetrack21", "jrdb_pose"):
+        return get_spec(dataset.name)
+    if isinstance(keypoints, str):
+        return get_spec(keypoints)
+    if isinstance(keypoints, dict):
+        return spec_from_mapping(keypoints)
     raise ValueError(
-        f"unknown dataset {dataset.name!r}; expected one of {', '.join(DATASETS)}"
+        "dataset.keypoints must name a preset (coco17, posetrack21, jrdb_pose) or hold the "
+        f"seven fields of a keypoint spec, got {keypoints!r}"
     )
 
 

@@ -7,12 +7,13 @@ therefore writes ``settings.json``, and every later start (a resume, or a check 
 finished video) compares the settings it was given with that file. A difference raises an error that
 names the keys and tells the user to pick a new ``run.name``.
 
-The fingerprint holds the package version, the dataset, split and video id, the seed, the estimator
-architecture, its weights file (path and SHA-256), the autoencoder checkpoint (path and SHA-256), the
-oracle, the strategy (name, parts and parameters, ``lam`` included), the loop settings and the
-retraining settings. Settings that do not change what a round computes are left out, the same ones
-the loop leaves out when it resumes: the inference batch size, ``save_final_model`` and the number of
-data-loader workers. The device is left out as well, so that a run may continue on another device.
+The fingerprint holds the package version, the dataset, split and video id, the keypoint spec (name and
+SHA-256 of all its fields), the seed, the estimator architecture, its weights file (path and SHA-256),
+the autoencoder checkpoint (path and SHA-256), the oracle, the strategy (name, parts and parameters,
+``lam`` included), the loop settings and the retraining settings. Settings that do not change what a
+round computes are left out, the same ones the loop leaves out when it resumes: the inference batch
+size, ``save_final_model`` and the number of data-loader workers. The device is left out as well, so
+that a run may continue on another device.
 """
 
 from __future__ import annotations
@@ -25,7 +26,8 @@ import pathlib
 from typing import TYPE_CHECKING, Any, Optional
 
 import vatl4pose
-from vatl4pose.config import resolve_path
+from vatl4pose.config import keypoint_spec, resolve_path
+from vatl4pose.data.cache import spec_sha256
 from vatl4pose.loop import is_done
 from vatl4pose.loop.results import RESULT_NAME
 from vatl4pose.train._common import write_atomic
@@ -84,11 +86,13 @@ def fingerprint(job: "Job", video_id: str, split: Optional[str]) -> dict[str, An
         for k, v in dataclasses.asdict(job.retrain).items()
         if k not in _RETRAIN_NEUTRAL
     }
+    spec = keypoint_spec(job.dataset)
     data = {
         "package_version": vatl4pose.__version__,
         "dataset": job.dataset.name,
         "split": split,
         "video_id": video_id,
+        "keypoints": {"name": spec.name, "sha256": spec_sha256(spec)},
         "seed": job.run.seed,
         "estimator": {
             "arch": job.estimator.arch,

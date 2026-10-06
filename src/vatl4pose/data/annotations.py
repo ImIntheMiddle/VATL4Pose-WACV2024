@@ -420,7 +420,10 @@ def _legacy_sort_key(digits: int) -> Callable[[_Raw], int]:
 
 
 def read_posetrack21_video(
-    root: pathlib.Path, video_id: str, split: str = "val"
+    root: pathlib.Path,
+    video_id: str,
+    split: str = "val",
+    spec: KeypointSpec | None = None,
 ) -> VideoAnnotation:
     """Read one PoseTrack21 video.
 
@@ -430,13 +433,16 @@ def read_posetrack21_video(
             ``root/<file_name>``.
         video_id: Video id such as ``"000342"``.
         split: Sub-directory of ``activelearning``.
+        spec: Joint layout; the ``posetrack21`` preset if omitted. A spec with another joint
+            count than the annotation files raises.
 
     Raises:
-        ValueError: If the annotation file is not unique or the JSON is malformed.
+        ValueError: If the annotation file is not unique, the JSON is malformed or its keypoints
+            do not match the joint count of ``spec``.
         FileNotFoundError: If an image listed in the JSON does not exist.
     """
     root = pathlib.Path(root).resolve()
-    spec = get_spec("posetrack21")
+    spec = get_spec("posetrack21") if spec is None else spec
     json_path = _find_annotation_file(root / "activelearning" / split, video_id)
     raws = _collect(
         json_path,
@@ -458,7 +464,10 @@ def read_posetrack21_video(
 
 
 def read_jrdb_pose_video(
-    root: pathlib.Path, video_id: str, split: str = "test"
+    root: pathlib.Path,
+    video_id: str,
+    split: str = "test",
+    spec: KeypointSpec | None = None,
 ) -> VideoAnnotation:
     """Read one JRDB-Pose video.
 
@@ -468,13 +477,16 @@ def read_jrdb_pose_video(
             ``root/<file_name>`` (for example ``images/image_stitched/<scene>/000001.jpg``).
         video_id: Video id such as ``"00"``.
         split: Sub-directory of ``activelearning``.
+        spec: Joint layout; the ``jrdb_pose`` preset if omitted. A spec with another joint
+            count than the annotation files raises.
 
     Raises:
-        ValueError: If the annotation file is not unique or the JSON is malformed.
+        ValueError: If the annotation file is not unique, the JSON is malformed or its keypoints
+            do not match the joint count of ``spec``.
         FileNotFoundError: If an image listed in the JSON does not exist.
     """
     root = pathlib.Path(root).resolve()
-    spec = get_spec("jrdb_pose")
+    spec = get_spec("jrdb_pose") if spec is None else spec
     json_path = _find_annotation_file(root / "activelearning" / split, video_id)
     raws = _collect(
         json_path,
