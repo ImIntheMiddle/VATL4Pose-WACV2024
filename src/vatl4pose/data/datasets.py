@@ -52,23 +52,26 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     is read in the same epoch, whatever the order of reads, the batch size or the number of
     loader workers.
 
-    The epoch is set with :meth:`set_epoch`. A :class:`~torch.utils.data.DataLoader` with
-    ``num_workers > 0`` copies the dataset into its worker processes when an iteration starts
-    (default ``persistent_workers=False``); call :meth:`set_epoch` before the iteration starts.
+    The epoch is set with :meth:`set_epoch`. It is held in a shared-memory tensor, so the worker
+    processes of a :class:`~torch.utils.data.DataLoader` see it, also when the loader keeps its
+    workers between epochs (``persistent_workers=True``). Call :meth:`set_epoch` between two
+    epochs, not while an iteration is running: a worker may already have prefetched items with
+    the previous epoch.
 
     Args:
         cache: The cache of the video; the original frames and the ground-truth boxes come from
             it. The cached crops are not used.
         indices: ``(M,)`` int64 sample indices of the training set.
-        labels: ``(M, K, 3)`` float array of x, y (image pixels) and visibility, one row per entry
-            of ``indices``; the answers of the oracle.
+        labels: ``(M, K, 3)`` float array of x, y (image pixels) and visibility (0 or 1), one row
+            per entry of ``indices``; the answers of the oracle.
         spec: Keypoint spec, ``K`` joints.
         augment: Augmentation strengths and probabilities.
         seed: Seed of the run; non-negative.
         round_index: Active-learning round; non-negative.
 
     Raises:
-        ValueError: If an argument has a wrong shape, dtype or range.
+        ValueError: If an argument has a wrong shape, dtype or range, or a label visibility is
+            not 0 or 1.
     """
 
     def __init__(
@@ -111,6 +114,11 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
                 f"got {getattr(labels, 'dtype', type(labels).__name__)} "
                 f"{getattr(labels, 'shape', '')}"
             )
+        if not np.isin(labels[..., 2], (0.0, 1.0)).all():
+            raise ValueError(
+                "labels: the visibility (last column) must be 0 or 1, got "
+                f"{np.unique(labels[..., 2]).tolist()}"
+            )
         if seed < 0:
             raise ValueError(f"seed must be non-negative, got {seed}")
         if round_index < 0:
@@ -122,7 +130,8 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         self._augment = augment
         self._seed = seed
         self._round_index = round_index
-        self._epoch = 0
+        # shared memory: the worker processes of a loader read the epoch that the main process sets
+        self._epoch = torch.zeros((), dtype=torch.int64).share_memory_()
 
     def set_epoch(self, epoch: int) -> None:
         """Set the epoch whose augmentation draws the following reads use.
@@ -132,7 +141,7 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         """
         if epoch < 0:
             raise ValueError(f"epoch must be non-negative, got {epoch}")
-        self._epoch = epoch
+        self._epoch.fill_(epoch)
 
     def __len__(self) -> int:
         return len(self._indices)
@@ -150,7 +159,8 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
             raise IndexError(f"index {i} out of range [0, {len(self)})")
         sample = int(self._indices[i])
         arrays = self._cache.arrays
-        rng = np.random.default_rng((self._seed, self._round_index, self._epoch, i))
+        epoch = int(self._epoch)
+        rng = np.random.default_rng((self._seed, self._round_index, epoch, i))
         image = read_image_rgb(pathlib.Path(arrays.image_path[sample]))
         crop, joints, _ = augment_and_crop(
             image,

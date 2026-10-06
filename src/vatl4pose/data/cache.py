@@ -17,23 +17,29 @@ File layout (``N`` samples, ``K`` joints, ``T`` angles of the keypoint spec)::
     track_id, image_path                      variable-length strings (N,); paths are absolute
     hybrid_gt       float64 (N, 2K + T)       hybrid feature of the ground truth (see below)
 
-Attributes: ``cache_version``, ``dataset``, ``video_id``, ``spec_name``, ``annotation_sha256``
-(of the annotation file), ``created_utc`` and ``vatl4pose_version``.
+Attributes: ``cache_version``, ``dataset``, ``video_id``, ``spec_name``, ``spec_sha256`` (of all
+fields of the keypoint spec, see :func:`spec_sha256`), ``annotation_sha256`` (of the annotation
+file, see :func:`annotation_sha256`), ``created_utc`` and ``vatl4pose_version``. ``VideoCache``
+compares the spec digest, so a cache is refused for a spec that differs in any field, for example
+in the angle triplets that ``hybrid_gt`` depends on.
 
 ``hybrid_gt`` is :func:`~vatl4pose.models.wholebody_ae.compute_hybrid` of ``bbox_json_xywh`` and
 ``keypoints_gt``, with the visibility as the weight of every joint. It is the training target of
 the autoencoder fine-tuning.
 
 Building decodes and crops the frames in a thread pool (OpenCV releases the interpreter lock).
-The results are consumed in sample order and only the calling thread touches the HDF5 file, so
-the file does not depend on the number of workers. The file is written under
-``<path>.partial`` and moved to ``<path>`` after it is closed, so a reader never sees a
+One task handles one frame: it decodes the frame once and crops every person in it. The calling
+thread collects the crops, writes them to the file in sample order and is the only thread that
+touches the HDF5 file, so the file does not depend on the number of workers. The file is written
+under ``<path>.partial`` and moved to ``<path>`` after it is closed, so a reader never sees a
 half-written cache.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
+import json
 import os
 import pathlib
 from concurrent.futures import ThreadPoolExecutor
@@ -55,9 +61,9 @@ from .geometry import INPUT_SIZE, crop_person
 CACHE_VERSION: int = 1
 """Version of the file layout; a cache of another version is refused."""
 
-# Samples cropped per round of parallel work, per worker. A round holds this many crops in memory
-# (147 kB each) before the main thread writes them.
-_SAMPLES_PER_WORKER = 4
+# Frames handled per round of parallel work, per worker. The crops of a round wait in memory
+# (147 kB each) until the main thread has written them.
+_FRAMES_PER_WORKER = 4
 
 _CROP_SHAPE = (*INPUT_SIZE, 3)
 
@@ -82,16 +88,39 @@ def read_image_rgb(path: pathlib.Path) -> np.ndarray:
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 
-def _crop_sample(person: PersonRecord) -> tuple[np.ndarray, np.ndarray]:
-    """Read the frame of ``person`` and crop the person (runs in a worker thread)."""
-    image = read_image_rgb(person.image_path)
+def spec_sha256(spec: KeypointSpec) -> str:
+    """SHA-256 of a keypoint spec: the canonical JSON of all its fields.
+
+    The JSON has sorted keys, no whitespace and tuples as lists. The digest changes when any field
+    changes, including ones that only the cached features depend on, such as ``angle_triplets``.
+    """
+    text = json.dumps(dataclasses.asdict(spec), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def annotation_sha256(video: VideoAnnotation) -> str:
+    """SHA-256 of the annotation file ``video`` was read from."""
+    return hashlib.sha256(video.annotation_path.read_bytes()).hexdigest()
+
+
+def _crop_frame(frame: list[PersonRecord]) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Decode one frame and crop every person of ``frame`` from it (runs in a worker thread).
+
+    Args:
+        frame: Samples that all show the same image file; at least one.
+
+    Returns:
+        ``(crop, bbox_crop)`` of every sample, in the order of ``frame``.
+    """
+    image = read_image_rgb(frame[0].image_path)
     height, width = image.shape[:2]
-    if (width, height) != person.image_size:
-        raise ValueError(
-            f"image {person.image_path} has size (width, height) = {(width, height)}, "
-            f"but the annotation of sample {person.sample_index} says {person.image_size}"
-        )
-    return crop_person(image, person.bbox_xyxy)
+    for person in frame:
+        if (width, height) != person.image_size:
+            raise ValueError(
+                f"image {person.image_path} has size (width, height) = {(width, height)}, "
+                f"but the annotation of sample {person.sample_index} says {person.image_size}"
+            )
+    return [crop_person(image, person.bbox_xyxy) for person in frame]
 
 
 def _create_strings(handle: h5py.File, name: str, values: list[str]) -> None:
@@ -114,9 +143,8 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
         handle.attrs["dataset"] = video.dataset
         handle.attrs["video_id"] = video.video_id
         handle.attrs["spec_name"] = spec.name
-        handle.attrs["annotation_sha256"] = hashlib.sha256(
-            video.annotation_path.read_bytes()
-        ).hexdigest()
+        handle.attrs["spec_sha256"] = spec_sha256(spec)
+        handle.attrs["annotation_sha256"] = annotation_sha256(video)
         handle.attrs["created_utc"] = datetime.now(timezone.utc).isoformat(
             timespec="seconds"
         )
@@ -129,15 +157,33 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
             chunks=(1, *_CROP_SHAPE),
             compression="lzf",
         )
-        step = _SAMPLES_PER_WORKER * num_workers
+        # Samples of one frame are spread over the video (the sample order is not the frame
+        # order), so the crops are collected and written as soon as the next sample in order is
+        # complete. That keeps the crops in the file in sample order, which is the order of
+        # every full read.
+        samples_of_frame: dict[pathlib.Path, list[int]] = {}
+        for position, person in enumerate(people):
+            samples_of_frame.setdefault(person.image_path, []).append(position)
+        frames = list(samples_of_frame.values())
+        waiting: dict[int, np.ndarray] = {}
+        written = 0
+        step = _FRAMES_PER_WORKER * num_workers
         with ThreadPoolExecutor(max_workers=num_workers) as pool:
-            for start in range(0, n, step):
+            for start in range(0, len(frames), step):
+                batch = frames[start : start + step]
                 # ``map`` yields the results in the order of its input, whatever the order in
                 # which the workers finish.
-                results = list(pool.map(_crop_sample, people[start : start + step]))
-                stop = start + len(results)
-                crops[start:stop] = np.stack([crop for crop, _ in results])
-                bbox_crop[start:stop] = np.stack([box for _, box in results])
+                results = pool.map(
+                    _crop_frame, ([people[i] for i in frame] for frame in batch)
+                )
+                for frame, frame_results in zip(batch, results, strict=True):
+                    for position, (crop, box) in zip(frame, frame_results, strict=True):
+                        waiting[position] = crop
+                        bbox_crop[position] = box
+                while written in waiting:
+                    crops[written] = waiting.pop(written)
+                    written += 1
+        assert written == n and not waiting, (written, n, len(waiting))
 
         handle.create_dataset("bbox_crop", data=bbox_crop)
         handle.create_dataset("bbox_gt", data=np.stack([p.bbox_xyxy for p in people]))
@@ -165,8 +211,8 @@ def build_video_cache(
 ) -> None:
     """Crop every person of ``video`` and write the cache file ``out_path``.
 
-    The frames are decoded and cropped by ``num_workers`` threads. The file is the same for every
-    ``num_workers``. It is written to ``<out_path>.partial`` and renamed after it is closed; if
+    The frames are decoded and cropped by ``num_workers`` threads, each frame once however many
+    people it shows. The file is the same for every ``num_workers``. It is written to ``<out_path>.partial`` and renamed after it is closed; if
     anything fails, the partial file is removed and ``out_path`` stays as it was. An existing
     ``out_path`` is replaced.
 
@@ -248,7 +294,9 @@ class VideoCache:
     Raises:
         FileNotFoundError: If ``path`` does not exist.
         ValueError: If the file is not a cache, has another cache version, was built for another
-            spec, or (when ``expected_annotation_sha256`` is given) from another annotation file.
+            spec (another name, joint count or any other spec field, see :func:`spec_sha256`), or
+            (when ``expected_annotation_sha256`` is given) from another annotation file, or if a
+            dataset of the file has an unexpected shape or dtype.
     """
 
     def __init__(
@@ -309,7 +357,7 @@ class VideoCache:
         self,
         handle: h5py.File,
         spec: KeypointSpec,
-        annotation_sha256: str | None,
+        expected_annotation_sha256: str | None,
     ) -> None:
         def attribute(name: str) -> object:
             if name not in handle.attrs:
@@ -329,12 +377,27 @@ class VideoCache:
             raise ValueError(
                 f"{self._path} was built for spec {built_for!r}, expected {spec.name!r}"
             )
-        if annotation_sha256 is not None:
+        num_joints = int(handle["keypoints_gt"].shape[1])
+        if num_joints != spec.num_joints:
+            raise ValueError(
+                f"{self._path} holds {num_joints} joints per sample, spec {spec.name!r} "
+                f"has {spec.num_joints}"
+            )
+        built_hash = str(attribute("spec_sha256"))
+        expected_hash = spec_sha256(spec)
+        if built_hash != expected_hash:
+            raise ValueError(
+                f"{self._path} was built for a spec {spec.name!r} with SHA-256 {built_hash}, "
+                f"but the spec given has SHA-256 {expected_hash}; a field of the spec changed "
+                "(for example the angle triplets), rebuild the cache"
+            )
+        if expected_annotation_sha256 is not None:
             digest = str(attribute("annotation_sha256"))
-            if digest != annotation_sha256:
+            if digest != expected_annotation_sha256:
                 raise ValueError(
                     f"{self._path} was built from an annotation file with SHA-256 {digest}, "
-                    f"expected {annotation_sha256}; the annotation file changed, rebuild the cache"
+                    f"expected {expected_annotation_sha256}; the annotation file changed, "
+                    "rebuild the cache"
                 )
 
     def _load_arrays(self, handle: h5py.File, spec: KeypointSpec) -> CacheArrays:
@@ -355,19 +418,23 @@ class VideoCache:
                     f"expected {(n, *tail)}"
                 )
             if kind == "str":
+                if h5py.check_string_dtype(dataset.dtype) is None:
+                    raise ValueError(
+                        f"{self._path}: {name} has dtype {dataset.dtype}, expected strings"
+                    )
                 values = dataset.asstr()[()]
-                assert values.dtype == object
+                if values.dtype != object:
+                    raise ValueError(
+                        f"{self._path}: {name} did not load as str objects, got {values.dtype}"
+                    )
                 return values
-            values = dataset[()]
-            assert values.dtype == np.dtype(kind), (name, values.dtype)
-            return values
+            if dataset.dtype != np.dtype(kind):
+                raise ValueError(
+                    f"{self._path}: {name} has dtype {dataset.dtype}, expected {kind}"
+                )
+            return dataset[()]
 
-        num_joints = int(handle["keypoints_gt"].shape[1])
-        if num_joints != spec.num_joints:
-            raise ValueError(
-                f"{self._path} holds {num_joints} joints per sample, spec {spec.name!r} "
-                f"has {spec.num_joints}"
-            )
+        num_joints = spec.num_joints
         arrays: dict[str, np.ndarray] = {}
         layout: dict[str, tuple[str, tuple[int, ...]]] = {
             "bbox_crop": ("float64", (4,)),
