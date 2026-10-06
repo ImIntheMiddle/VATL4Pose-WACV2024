@@ -207,8 +207,12 @@ def shard_ids(ids: list[str], run: RunSection) -> list[str]:
 
 
 def dataset_root(paths: PathsSection, dataset: DatasetSection) -> pathlib.Path:
-    """The absolute dataset directory."""
-    return resolve_path(paths.data_root, dataset.root)
+    """The absolute dataset directory with its symbolic links resolved.
+
+    The annotation readers resolve the root before they build the image paths of the cache, so the
+    COCO-file oracle must compare against the root in the same form.
+    """
+    return resolve_path(paths.data_root, dataset.root).resolve()
 
 
 def read_video(

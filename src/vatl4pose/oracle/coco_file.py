@@ -178,7 +178,9 @@ class CocoFileOracle:
         run_dir: Directory of the run; the files go to ``run_dir / "oracle"`` (created on the
             first request).
         dataset_root: Absolute directory that the exported ``file_name`` values are relative to,
-            the root of the dataset the cache was built from.
+            the root of the dataset the cache was built from. Symbolic links in it are resolved,
+            as the annotation readers resolve the root, because the cache holds the resolved
+            image paths.
 
     Raises:
         ValueError: If ``dataset_root`` is not an absolute path.
@@ -193,7 +195,7 @@ class CocoFileOracle:
         self._arrays = cache.arrays
         self._spec = cache.spec
         self._dir = pathlib.Path(run_dir) / "oracle"
-        self._dataset_root = pathlib.Path(os.path.normpath(dataset_root))
+        self._dataset_root = dataset_root.resolve()
 
     def request(
         self, indices: np.ndarray, round_index: int, predictions: np.ndarray
