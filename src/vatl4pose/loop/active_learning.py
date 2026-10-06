@@ -347,8 +347,10 @@ class ActiveLearningLoop:
             a resumed run calls it only for the rounds it finishes itself.
 
     Raises:
-        ValueError: If the finetuner does not train ``estimator`` or has another seed, or the
-            strategy needs an autoencoder and ``ae_ckpt`` is ``None``.
+        ValueError: If the finetuner does not train ``estimator`` or has another seed, the
+            strategy needs embeddings (a selector with ``needs_embeddings``, or the VL4Pose scorer)
+            and the estimator defines none (HRNet), or the strategy needs an autoencoder and
+            ``ae_ckpt`` is ``None``.
     """
 
     def __init__(
@@ -395,6 +397,18 @@ class ActiveLearningLoop:
         self._uses_vl4pose = "vl4pose" in scorers
         # the selector declares what it reads; the VL4Pose scorer is fed from the embeddings
         self._uses_embeddings = self._uses_vl4pose or strategy.needs_embeddings
+        if self._uses_embeddings and not estimator.has_embedding:
+            needs = (
+                "the VL4Pose scorer reads the backbone features"
+                if self._uses_vl4pose
+                else f"its selector {strategy.config.selector!r} reads the embeddings"
+            )
+            raise ValueError(
+                f"estimator {estimator.arch!r} does not define an embedding, but strategy "
+                f"{strategy.config.name!r} needs one ({needs}). Use the estimator simplebaseline "
+                "or fastpose, or a strategy without embeddings (strategy=random, hp, mpe, tpc, "
+                "thc, wpu or thc_wpu)"
+            )
         if self._uses_ae:
             if ae_ckpt is None:
                 raise ValueError(

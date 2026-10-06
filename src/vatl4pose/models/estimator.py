@@ -84,6 +84,8 @@ class PoseEstimator(nn.Module):
     num_joints: int
     arch: str
     """Name of the network in :class:`EstimatorConfig` and in the result files."""
+    has_embedding: bool = False
+    """Whether :meth:`forward_with_embedding` and :meth:`backbone_features` are defined."""
 
     def _check_input(self, x: torch.Tensor) -> None:
         assert x.is_floating_point(), x.dtype
@@ -131,6 +133,7 @@ class _ResNetEstimator(PoseEstimator):
     """Backbone ``preact`` plus an upsampling head; subclasses define the head in ``_decode``."""
 
     preact: ResNet50
+    has_embedding = True
 
     def _decode(self, features: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
