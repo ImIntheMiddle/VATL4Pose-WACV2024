@@ -5,8 +5,8 @@ FastPose expose their backbone, so a pass can also return the ``(B, 2048)`` embe
 diversity-based query strategies cluster. HRNet-W32 is a reference network without embeddings.
 
 The parameter names equal the keys of the released checkpoints, so those load with ``strict=True``
-through :func:`build_estimator`. Old checkpoints in another layout are converted once by a separate
-tool; this module has no key-renaming code.
+through :func:`build_estimator`. The checkpoint keys must equal the parameter names of the module;
+no key renaming happens at load time.
 """
 
 from __future__ import annotations
@@ -233,6 +233,8 @@ def _load_checkpoint(model: PoseEstimator, path: pathlib.Path) -> None:
     if not path.is_file():
         raise FileNotFoundError(f"pose estimator checkpoint not found: {path}")
     state = torch.load(path, map_location="cpu", weights_only=True)
+    if not isinstance(state, dict):
+        raise RuntimeError(f"checkpoint {path} is not a state dict")
     expected = model.state_dict()
     missing = [k for k in expected if k not in state]
     unexpected = [k for k in state if k not in expected]
