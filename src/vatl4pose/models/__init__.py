@@ -1,5 +1,12 @@
 """Neural network components of the pose pipeline."""
 
+from .auxnet import (
+    AuxNet,
+    gaussian_nll,
+    link_lengths,
+    predict_link_gaussians,
+    train_auxnet,
+)
 from .estimator import (
     EstimatorConfig,
     FastPoseEstimator,
@@ -17,6 +24,7 @@ from .wholebody_ae import (
 )
 
 __all__ = [
+    "AuxNet",
     "EstimatorConfig",
     "FastPoseEstimator",
     "HRNetEstimator",
@@ -25,7 +33,11 @@ __all__ = [
     "WholeBodyAE",
     "build_estimator",
     "compute_hybrid",
+    "gaussian_nll",
+    "link_lengths",
     "load_wholebody_ae",
+    "predict_link_gaussians",
     "read_input_dim",
+    "train_auxnet",
     "wpu_scores",
 ]

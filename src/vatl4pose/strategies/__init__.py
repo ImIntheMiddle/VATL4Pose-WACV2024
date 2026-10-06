@@ -2,8 +2,8 @@
 
 A strategy is a scorer (or several), a combiner and a selector, named in a
 :class:`StrategyConfig` and built with :func:`build_strategy`. Importing this package registers
-the baselines: scorers ``hp``, ``tpc``, ``mpe``; combiners ``single``, ``minmax_sum``, ``none``;
-selectors ``topk``, ``random``, ``kmeans``, ``coreset``.
+the baselines: scorers ``hp``, ``tpc``, ``mpe``, ``vl4pose``; combiners ``single``,
+``minmax_sum``, ``none``; selectors ``topk``, ``random``, ``kmeans``, ``coreset``.
 
 Extension point. Another method is a package that registers its components with
 :func:`register_scorer`, :func:`register_combiner` and :func:`register_selector` when it is
