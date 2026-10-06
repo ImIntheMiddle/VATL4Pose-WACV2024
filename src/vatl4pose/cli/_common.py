@@ -302,15 +302,21 @@ class Job:
     device: torch.device
 
 
+def logger_name(cfg: DictConfig) -> str:
+    """``cfg.logger``, which must be ``json`` or ``wandb``."""
+    logger = cfg.logger
+    if logger not in LOGGERS:
+        raise ValueError(f"logger must be one of {LOGGERS}, got {logger!r}")
+    return str(logger)
+
+
 def load_job(cfg: DictConfig) -> Job:
     """Read the sections the loop needs and check the choices that no section type can."""
     run = section(cfg, "run", RunSection)
     oracle = section(cfg, "oracle", OracleSection)
     if oracle.name not in ORACLES:
         raise ValueError(f"oracle.name must be one of {ORACLES}, got {oracle.name!r}")
-    logger = cfg.logger
-    if logger not in LOGGERS:
-        raise ValueError(f"logger must be one of {LOGGERS}, got {logger!r}")
+    logger = logger_name(cfg)
     return Job(
         paths=section(cfg, "paths", PathsSection),
         run=run,

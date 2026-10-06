@@ -30,7 +30,7 @@ from __future__ import annotations
 import json
 import math
 import pathlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -151,6 +151,7 @@ def train_wholebody_ae(
     out_dir: pathlib.Path,
     device: torch.device,
     seed: int,
+    on_epoch: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Train a whole-body autoencoder on the ground-truth poses of ``train_videos``.
 
@@ -170,6 +171,8 @@ def train_wholebody_ae(
             them already.
         device: Device of the training.
         seed: Seed of the run, non-negative.
+        on_epoch: Called with the log line of an epoch right after it is written to ``log.jsonl``,
+            for example to send it to W&B.
 
     Returns:
         A summary: ``epochs_run``, ``best_epoch`` (from 1), ``best_valid_loss``,
@@ -238,6 +241,8 @@ def train_wholebody_ae(
         }
         with log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(line) + "\n")
+        if on_epoch is not None:
+            on_epoch(line)
         if valid_loss < best_loss:
             best_loss, best_epoch, waited = valid_loss, epochs_run, 0
             state = {k: v.detach().cpu() for k, v in model.state_dict().items()}

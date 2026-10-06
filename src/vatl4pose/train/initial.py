@@ -41,7 +41,7 @@ import dataclasses
 import json
 import math
 import pathlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -313,6 +313,7 @@ def train_estimator(
     out_dir: pathlib.Path,
     device: torch.device,
     seed: int,
+    on_epoch: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Train an estimator on ``train_videos`` and validate it on ``val_videos`` after every epoch.
 
@@ -336,6 +337,8 @@ def train_estimator(
             them already.
         device: Device of the training.
         seed: Seed of the run, non-negative.
+        on_epoch: Called with the log line of an epoch right after it is written to ``log.jsonl``,
+            for example to send it to W&B.
 
     Returns:
         A summary: ``epochs``, ``best_epoch``, ``select_metric``, ``best_value``, ``last_loss``,
@@ -423,6 +426,8 @@ def train_estimator(
             }
             with log_path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(line) + "\n")
+            if on_epoch is not None:
+                on_epoch(line)
             if value > best_value:
                 best_value, best_epoch = value, finished
                 _save(_to_cpu(model.state_dict()), best_path)

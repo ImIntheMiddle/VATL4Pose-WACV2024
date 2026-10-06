@@ -51,6 +51,7 @@ from vatl4pose.train._common import write_atomic
 from ._common import (
     dataset_ids,
     hydra_command,
+    logger_name,
     output_root,
     read_video,
     require_unsharded,
@@ -79,7 +80,17 @@ def output_path(
 
 
 def run(cfg: DictConfig) -> None:
-    """Evaluate the estimator on the videos of the dataset config and write the JSON file."""
+    """Evaluate the estimator on the videos of the dataset config and write the JSON file.
+
+    Raises:
+        ValueError: If ``logger=wandb``; the command writes one JSON file and logs nothing else.
+    """
+    if logger_name(cfg) != "json":
+        raise ValueError(
+            "vatl4pose-eval writes its metrics to the JSON file and does not log to W&B; "
+            "use logger=json (the default). logger=wandb is read by vatl4pose-atl, "
+            "vatl4pose-tune and vatl4pose-train"
+        )
     paths = section(cfg, "paths", PathsSection)
     run_ = section(cfg, "run", RunSection)
     require_unsharded(run_, "vatl4pose-eval")

@@ -140,7 +140,7 @@ vatl4pose-train dataset=coco_custom dataset.root=mine dataset.keypoints=coco17 \
   run.name=mine_estimator run.device=cuda
 ```
 
-`estimator.imagenet_init=true` starts from the torchvision ImageNet weights, which the command downloads on first use. The command writes `best.pth` (the epoch with the best validation AP), `last.pth`, `log.jsonl` and `summary.json` to `outputs/train/mine_estimator/`, and it refuses a directory that already holds a run. The recipe of the paper is in `src/vatl4pose/configs/train/`. The autoencoder of WPU is trained with `train.target=ae`, and you can skip it if you use a strategy without WPU such as `strategy=thc_coreset`.
+`estimator.imagenet_init=true` starts from the torchvision ImageNet weights, which the command downloads on first use. The command writes `best.pth` (the epoch with the best validation AP), `last.pth`, `log.jsonl` and `summary.json` to `outputs/train/mine_estimator/`, and it refuses a directory that already holds a run. `logger=wandb` (install the extra with `uv sync --extra wandb`) also sends the loss, the learning rate, the ten AP values and the OSPA of every epoch to a W&B run named `<MMDD>_<dataset>_<run.name>`, and `vatl4pose-atl` logs its rounds the same way. `vatl4pose-eval` refuses `logger=wandb`. The recipe of the paper is in `src/vatl4pose/configs/train/`. The autoencoder of WPU is trained with `train.target=ae`, and you can skip it if you use a strategy without WPU such as `strategy=thc_coreset`.
 
 ```
 vatl4pose-train dataset=coco_custom dataset.root=mine dataset.keypoints=coco17 \
