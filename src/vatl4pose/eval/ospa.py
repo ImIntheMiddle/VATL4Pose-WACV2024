@@ -5,7 +5,8 @@ one-to-one assignment, where assigning prediction ``p`` to label ``g`` costs ``1
 divided by ``n``. A set of predictions with fewer or more poses than the labels would add the
 cardinality difference ``|n_gt - n_pred|`` to the numerator and divide by the larger count. Here
 every prediction belongs to exactly one labelled sample, so both sets have the same size in every
-image and that term is zero. The OSPA of a set of images is the mean over the images that have
+image and that term is zero. The cutoff of the OSPA metric is c = 1, because ``1 - OKS`` lies in
+[0, 1], and its order is p = 1. The OSPA of a set of images is the mean over the images that have
 labels; 0 is perfect and 1 is the worst value.
 """
 
@@ -16,7 +17,7 @@ from collections.abc import Sequence
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from .oks import as_float_array, as_pose_xy, as_sigmas, oks_matrix
+from .oks import as_float_array, as_image_id, as_pose_xy, as_sigmas, oks_matrix
 
 
 def ospa(
@@ -47,10 +48,7 @@ def ospa(
     pred = as_pose_xy("pred_kpt", pred_kpt, k)
     gt = as_float_array("gt_kpt", gt_kpt, (k, 3))
     box = as_float_array("gt_bbox_xywh", gt_bbox_xywh, (4,))
-    image = np.asarray(image_id)
-    assert np.issubdtype(image.dtype, np.integer) and image.ndim == 1, (
-        f"image_id: expected an integer array of shape (N,), got {image.dtype} {image.shape}"
-    )
+    image = as_image_id("image_id", image_id)
     n = pred.shape[0]
     assert gt.shape[0] == box.shape[0] == image.shape[0] == n, (
         f"pred_kpt, gt_kpt, gt_bbox_xywh and image_id must hold the same number of samples, "

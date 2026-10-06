@@ -49,6 +49,16 @@ def as_float_array(name: str, value: np.ndarray, shape: tuple[int, ...]) -> np.n
     return arr.astype(np.float64, copy=False)
 
 
+def as_image_id(name: str, value: np.ndarray) -> np.ndarray:
+    """Return ``value`` as an int64 vector after checking that it is an integer array of shape ``(N,)``."""
+    arr = np.asarray(value)
+    assert np.issubdtype(arr.dtype, np.integer), (
+        f"{name}: expected an integer array, got {arr.dtype}"
+    )
+    assert arr.ndim == 1, f"{name}: expected shape (N,), got {arr.shape}"
+    return arr.astype(np.int64, copy=False)
+
+
 def as_pose_xy(name: str, value: np.ndarray, num_joints: int) -> np.ndarray:
     """Return the ``(N, K, 2)`` float64 coordinates of poses given as ``(N, K, 2)`` or ``(N, K, 3)``."""
     arr = np.asarray(value)

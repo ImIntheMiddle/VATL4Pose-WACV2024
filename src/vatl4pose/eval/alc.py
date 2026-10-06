@@ -39,8 +39,8 @@ def compute_alc(percentages: Sequence[float], performance: Sequence[float]) -> f
 
     Args:
         percentages: Percentage of labelled samples after every round, from 0 to 100.
-        performance: Metric after every round on the scale ``[0, 1]`` (AP, AR, OKS or OSPA). A
-            percent value, like the 2023 summary scripts held, is multiplied by ``0.01`` first.
+        performance: Metric after every round on the scale ``[0, 1]`` (AP, AR, OKS or OSPA).
+            Callers that hold percent values divide them by 100 first.
 
     Returns:
         The area, in ``[0, 1]`` when the percentages span 0 to 100.

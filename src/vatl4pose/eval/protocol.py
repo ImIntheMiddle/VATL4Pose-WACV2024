@@ -42,8 +42,9 @@ def evaluate_predictions(
     Returns:
         :class:`RoundMetrics` with the ten values of :data:`vatl4pose.eval.METRIC_KEYS` and the OSPA.
     """
-    sigmas = np.asarray(spec.oks_sigmas, dtype=np.float64)
     return RoundMetrics(
-        ap=keypoint_ap(pred_kpt, pred_score, gt_kpt, gt_bbox_xywh, image_id, sigmas),
-        ospa=ospa(pred_kpt, gt_kpt, gt_bbox_xywh, image_id, sigmas),
+        ap=keypoint_ap(
+            pred_kpt, pred_score, gt_kpt, gt_bbox_xywh, image_id, spec.oks_sigmas
+        ),
+        ospa=ospa(pred_kpt, gt_kpt, gt_bbox_xywh, image_id, spec.oks_sigmas),
     )

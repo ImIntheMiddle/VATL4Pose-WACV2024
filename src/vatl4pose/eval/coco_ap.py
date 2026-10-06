@@ -15,8 +15,9 @@ differed from the stock evaluation in these places.
   as if it were ``[x1, y1, x2, y2]``, that is ``(w - x) * (h - y)`` for a box ``[x, y, w, h]``.
   The area is negative or wrong for most boxes, and an unmatched detection whose area lies outside
   the area range is ignored instead of counted as a false positive. The experiments of the paper
-  carry this behaviour, and :func:`keypoint_ap` keeps it (spec section 13). Stock ``loadRes`` uses
-  ``w * h``; the detections are therefore built by hand with the area set explicitly.
+  carry this behaviour, and :func:`keypoint_ap` keeps it so that the numbers stay comparable.
+  Stock ``loadRes`` uses ``w * h``; the detections are therefore built by hand with the area set
+  explicitly.
 * Summary. The 2023 copy summarised a keypoint evaluation as the ten values of
   :data:`METRIC_KEYS`. Stock ``summarize`` returns ``AP, AP50, AP75, APm, APl, AR, AR50, AR75,
   ARm, ARl`` for 20 detections, so its entries shift against the 2023 key names (the entry at
@@ -34,7 +35,7 @@ import numpy as np
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
-from .oks import as_float_array, as_pose_xy, as_sigmas
+from .oks import as_float_array, as_image_id, as_pose_xy, as_sigmas
 
 METRIC_KEYS: tuple[str, ...] = (
     "AP",
@@ -75,15 +76,6 @@ def _as_score(name: str, value: np.ndarray) -> np.ndarray:
     )
     assert arr.ndim == 1, f"{name}: expected shape (N,), got {arr.shape}"
     return arr.astype(np.float64, copy=False)
-
-
-def _as_image_id(name: str, value: np.ndarray) -> np.ndarray:
-    arr = np.asarray(value)
-    assert np.issubdtype(arr.dtype, np.integer), (
-        f"{name}: expected an integer array, got {arr.dtype}"
-    )
-    assert arr.ndim == 1, f"{name}: expected shape (N,), got {arr.shape}"
-    return arr.astype(np.int64, copy=False)
 
 
 def _mean_over_valid(values: np.ndarray) -> float:
@@ -143,10 +135,10 @@ def coco_keypoint_ap(
     d_xy = as_pose_xy("det_xy", det_xy, k)
     d_score = _as_score("det_score", det_score)
     d_box = as_float_array("det_bbox_xywh", det_bbox_xywh, (4,))
-    d_img = _as_image_id("det_image_id", det_image_id)
+    d_img = as_image_id("det_image_id", det_image_id)
     g_kpt = as_float_array("gt_kpt", gt_kpt, (k, 3))
     g_box = as_float_array("gt_bbox_xywh", gt_bbox_xywh, (4,))
-    g_img = _as_image_id("gt_image_id", gt_image_id)
+    g_img = as_image_id("gt_image_id", gt_image_id)
     n_det, n_gt = d_xy.shape[0], g_kpt.shape[0]
     assert d_score.shape[0] == d_box.shape[0] == d_img.shape[0] == n_det, (
         f"det_xy, det_score, det_bbox_xywh and det_image_id must hold the same number of "
@@ -262,8 +254,8 @@ def keypoint_ap(
     """Keypoint AP of one prediction per labelled person (the active-learning evaluation).
 
     Prediction ``i`` belongs to label ``i``: it lies in the same image and carries the box of
-    the label, so its area is ``(w - x) * (h - y)`` of that box (see :func:`coco_keypoint_ap`
-    and the spec section 13). The labels have the area ``w * h``.
+    the label, so its area is ``(w - x) * (h - y)`` of that box (see :func:`coco_keypoint_ap`).
+    The labels have the area ``w * h``.
 
     Args:
         pred_kpt: ``(N, K, 2)`` predicted joint coordinates (``(N, K, 3)`` is accepted; the
