@@ -6,11 +6,15 @@
 Every person is cropped from its ground-truth box, as in the loop, and the metrics are computed
 over all people of all videos of the id list together (micro average, like the 2023
 ``poseestimator_eval``), with the OKS sigmas of the dataset's keypoint spec. The result goes to
-``eval.output`` or ``<output_root>/eval/<dataset>_<split>_<estimator>_<weights file>.json``.
+``eval.output`` or to ``<output_root>/eval/<name>.json``, where the name holds the dataset, split,
+estimator, the directory and the stem of the weights file, and the first 8 hex digits of the
+SHA-256 of the sorted video ids, so that evaluations of other weights or other videos never share
+a file. An existing file is not overwritten unless ``eval.overwrite=true``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 from typing import Any
@@ -49,17 +53,19 @@ def output_path(
     dataset: DatasetSection,
     estimator: EstimatorSection,
     eval_: EvalSection,
+    ids: list[str],
 ) -> pathlib.Path:
     """The JSON file of the evaluation: ``eval.output``, or a name made from the settings."""
     if eval_.output is not None:
         return resolve_path(".", eval_.output)
-    stem = (
-        "random-init"
-        if estimator.weights is None
-        else pathlib.Path(estimator.weights).stem
-    )
-    name = "_".join(p for p in (dataset.name, dataset.split, estimator.arch, stem) if p)
-    return output_root(paths) / "eval" / f"{name}.json"
+    if estimator.weights is None:
+        weights = ["random-init"]
+    else:
+        file = pathlib.Path(estimator.weights)
+        weights = [file.parent.name, file.stem]
+    digest = hashlib.sha256("\n".join(sorted(ids)).encode("utf-8")).hexdigest()[:8]
+    parts = [dataset.name, dataset.split, estimator.arch, *weights, digest]
+    return output_root(paths) / "eval" / f"{'_'.join(p for p in parts if p)}.json"
 
 
 def run(cfg: DictConfig) -> None:
@@ -72,6 +78,12 @@ def run(cfg: DictConfig) -> None:
     eval_ = section(cfg, "eval", EvalSection)
     device = torch_device(run_)
     ids = dataset_ids(dataset)
+    out = output_path(paths, dataset, estimator, eval_, ids)
+    if out.exists() and not eval_.overwrite:
+        raise FileExistsError(
+            f"the evaluation file {out} exists; set eval.overwrite=true to replace it, or "
+            "give another eval.output"
+        )
     videos = [read_video(paths, dataset, i, dataset.split) for i in ids]
     est_cfg = estimator_config(estimator, keypoint_spec(dataset), paths.weights_root)
     # the initial weights of a network without a checkpoint follow run.seed
@@ -97,7 +109,6 @@ def run(cfg: DictConfig) -> None:
             "OSPA": float(metrics.ospa),
         },
     }
-    out = output_path(paths, dataset, estimator, eval_)
     out.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(document, indent=2, allow_nan=False) + "\n"
     write_atomic(out, lambda f: f.write(text.encode("utf-8")))

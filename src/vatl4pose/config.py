@@ -22,6 +22,7 @@ one.
 import dataclasses
 import os
 import pathlib
+import socket
 from dataclasses import dataclass, field
 from typing import Any, Optional, TypeVar
 
@@ -254,11 +255,15 @@ class PrepareSection:
 
 @dataclass
 class EvalSection:
-    """``vatl4pose-eval``: ``output`` is the JSON file (default below ``paths.output_root``/eval)."""
+    """``vatl4pose-eval``: ``output`` is the JSON file (default below ``paths.output_root``/eval).
+
+    An existing output file is replaced only with ``overwrite=true``.
+    """
 
     batch_size: int = 64
     num_workers: int = 4
     output: Optional[str] = None
+    overwrite: bool = False
 
 
 @dataclass
@@ -341,10 +346,13 @@ def _abspath(value: str) -> str:
 
 
 def register_configs() -> None:
-    """Register the schema and the resolvers ``splits``, ``abspath`` and ``pid`` (safe to repeat)."""
+    """Register the schema and the resolvers ``splits``, ``abspath``, ``hostname`` and ``pid`` (safe to repeat)."""
     ConfigStore.instance().store(name=SCHEMA_NAME, node=Config)
     OmegaConf.register_new_resolver("splits", split_file, replace=True)
     OmegaConf.register_new_resolver("abspath", _abspath, replace=True)
+    OmegaConf.register_new_resolver(
+        "hostname", socket.gethostname, use_cache=False, replace=True
+    )
     OmegaConf.register_new_resolver("pid", os.getpid, use_cache=False, replace=True)
 
 

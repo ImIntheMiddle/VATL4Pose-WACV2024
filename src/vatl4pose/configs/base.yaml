@@ -30,5 +30,6 @@ hydra:
       vatl4pose ${hydra.job.name}: set values with key=value and choose a group option with
       group=option. The module vatl4pose.cli.${hydra.job.name} documents the command.
   run:
-    # one directory per process, so that parallel shards never write the same Hydra files
-    dir: ${paths.output_root}/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}_${hydra.job.name}_${pid:}
+    # one directory per process (host and pid; the output root may be shared between hosts), so that
+    # parallel shards never write the same Hydra files
+    dir: ${paths.output_root}/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}_${hydra.job.name}_${hostname:}_${pid:}

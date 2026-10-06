@@ -27,8 +27,6 @@ import numpy as np
 from omegaconf import DictConfig
 
 from vatl4pose.config import (
-    DatasetSection,
-    EstimatorSection,
     PathsSection,
     RunSection,
     SummarizeSection,
@@ -40,7 +38,6 @@ from vatl4pose.train._common import write_atomic
 
 from ._common import (
     alc_percent,
-    dataset_ids,
     hydra_command,
     load_result,
     metric_curve,
@@ -185,23 +182,30 @@ def run(cfg: DictConfig) -> None:
     paths = section(cfg, "paths", PathsSection)
     run_ = section(cfg, "run", RunSection)
     require_unsharded(run_, "vatl4pose-summarize")
-    estimator = section(cfg, "estimator", EstimatorSection)
+    # only the architecture names the result directory; the weights are not needed here
+    arch: str = cfg.estimator.arch
     summarize = section(cfg, "summarize", SummarizeSection)
     if summarize.ids_file is not None:
         ids = read_ids(None, summarize.ids_file, "summarize.ids_file")
         suffix = "_" + pathlib.Path(summarize.ids_file).stem
     else:
-        ids = dataset_ids(section(cfg, "dataset", DatasetSection))
+        # the ids only: the dataset root is not needed to read results
+        listed = cfg.dataset.ids
+        ids = read_ids(
+            None if listed is None else [str(i) for i in listed],
+            cfg.dataset.ids_file,
+            "dataset.ids / dataset.ids_file",
+        )
         suffix = ""
     name = run_name(run_)
-    base = output_root(paths) / name / estimator.arch
+    base = output_root(paths) / name / arch
     summary = collect(base, ids)
-    out_dir = output_root(paths) / name / "summary" / f"{estimator.arch}{suffix}"
+    out_dir = output_root(paths) / name / "summary" / f"{arch}{suffix}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    title = f"{name} / {estimator.arch}"
+    title = f"{name} / {arch}"
     document = {
         "run": name,
-        "estimator": estimator.arch,
+        "estimator": arch,
         "n_ids": len(ids),
         "metrics": list(METRICS),
         "strategies": {

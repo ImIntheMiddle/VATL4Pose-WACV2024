@@ -7,12 +7,12 @@ Directory layout below ``paths.output_root``::
                                                         different video in train, val and test
     cache/<dataset>[/<split>]/.locks/<video>/.lock      the lock of the cache build of one video
     <run.name>/<estimator>/<strategy>/<video>/          atl: result.json, state/, log.jsonl,
-                                                        .done.json, .lock, oracle/
+                                                        settings.json, .done.json, .lock, oracle/
     <run.name>/tune/<estimator>/<strategy>/lam_<lam>/<video>/   tune: the same files per lambda
     <run.name>/summary/<estimator>[_<ids>]/             summarize
     train/<run.name>/                                   train: best.pth, last.pth, log.jsonl
     eval/<name>.json                                    eval
-    hydra/<date>/<time>_<command>_<pid>/                Hydra's own files of one process
+    hydra/<date>/<time>_<command>_<host>_<pid>/         Hydra's own files of one process
 
 Every directory that one process writes has one writer: the per-video lock (``VideoLock``) guards
 the cache build and the loop run, so a second process on the same video stops with the path of the
@@ -80,6 +80,7 @@ from vatl4pose.strategies import StrategyConfig, build_strategy
 from vatl4pose.train import Finetuner, RetrainConfig
 
 from ._runlog import open_round_log, wandb_run_name
+from ._settings import check_settings, fingerprint, write_settings
 
 LOCKS_DIR = ".locks"
 LOGGERS = ("json", "wandb")
@@ -373,9 +374,11 @@ def run_video(
     """Run the loop on one video under its lock, unless it is done.
 
     Takes ``<run_dir>/.lock`` (a second process on the same ``run_dir`` fails with the path of the
-    lock in its error), returns ``skipped`` if ``.done.json`` exists, otherwise runs or resumes the
-    loop, and writes ``.done.json`` when ``result.json`` is complete. A loop whose oracle waits
-    for annotations returns ``pending`` and leaves its state for the next call.
+    lock in its error), compares the settings with ``settings.json`` of the directory (see
+    :mod:`._settings`; a difference raises, also for a finished video), returns ``skipped`` if
+    ``.done.json`` exists, otherwise runs or resumes the loop, and writes ``.done.json`` when
+    ``result.json`` is complete. The first start of a run writes ``settings.json``. A loop whose
+    oracle waits for annotations returns ``pending`` and leaves its state for the next call.
 
     Args:
         job: The settings of the run.
@@ -386,6 +389,9 @@ def run_video(
     """
     run_dir.mkdir(parents=True, exist_ok=True)
     with VideoLock(run_dir):
+        # a run directory belongs to one set of settings, also when its video is finished
+        settings = fingerprint(job, video_id, split)
+        known = check_settings(run_dir, settings)
         if is_done(run_dir):
             return VideoOutcome("skipped", f"{video_id}: already done ({run_dir})")
         video = read_video(job.paths, job.dataset, video_id, split)
@@ -397,6 +403,8 @@ def run_video(
                 "same dataset, split and paths.output_root"
             )
         cache = VideoCache(path, spec, annotation_sha256(video))
+        if not known:
+            write_settings(run_dir, settings)
         name = wandb_run_name(
             datetime.date.today(), job.dataset.name, job.strategy.name, video_id, tag
         )

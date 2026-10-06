@@ -101,7 +101,8 @@ def open_round_log(
         name: Name of the W&B run.
         group: Group of the W&B run (the experiment name).
         config: Settings stored with the W&B run, including the git commit of the package.
-        output_root: ``paths.output_root``; W&B keeps its files in ``<output_root>/wandb``.
+        output_root: ``paths.output_root``; W&B keeps its files in ``<output_root>/wandb``
+            (it makes the ``wandb`` directory below the directory it is given).
         video_id: Written into every line of the log.
 
     Raises:
@@ -113,8 +114,8 @@ def open_round_log(
     run = None
     if logger == "wandb":
         wandb = _import_wandb()
-        wandb_dir = output_root / "wandb"
-        wandb_dir.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(parents=True, exist_ok=True)
+        # W&B puts its files in <dir>/wandb, that is <output_root>/wandb
         run = wandb.init(
             project=wandb_cfg.project,
             entity=wandb_cfg.entity,
@@ -122,7 +123,7 @@ def open_round_log(
             group=group,
             config=config,
             mode=wandb_cfg.mode,
-            dir=str(wandb_dir),
+            dir=str(output_root),
         )
     path = run_dir / LOG_NAME
 

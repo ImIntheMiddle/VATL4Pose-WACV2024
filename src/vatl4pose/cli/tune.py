@@ -7,14 +7,22 @@ For every lambda the loop runs on the validation videos of the config (``tune.sp
 the schedule ``tune.query_ratio`` and the simulated oracle. The objective is the one of the 2023
 tuning: the ALC of ``tune.metric`` (default ``AP .95``) on ``performances_ann``, averaged over the
 videos, on the 0 to 100 scale. The runs go to
-``<output_root>/<run.name>/tune/<estimator>/<strategy>/lam_<lam>/<video>/``, and the table to
-``tune.json`` and ``tune.md`` next to the ``lam_*`` directories. A finished run is not repeated.
+``<output_root>/<run.name>/tune/<estimator>/<strategy>/lam_<lam>/<video>/``. A finished run is not
+repeated.
+
+The table (``tune.json`` and ``tune.md`` next to the ``lam_*`` directories) is rebuilt after every
+call from all ``lam_*`` directories that exist, so that successive or concurrent calls with
+different ``tune.lams`` give one table. A directory made with other settings than this call (see
+:mod:`._settings`, for example another schedule) raises instead of entering the table. A lambda
+whose videos are not all finished is listed but cannot be the best.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import json
+import pathlib
+import re
 from typing import Any
 
 import numpy as np
@@ -22,9 +30,11 @@ from omegaconf import DictConfig
 
 from vatl4pose.config import TuneSection, section
 from vatl4pose.eval import METRIC_KEYS
+from vatl4pose.loop.results import RESULT_NAME
 from vatl4pose.train._common import write_atomic
 
 from ._common import (
+    Job,
     alc_percent,
     hydra_command,
     load_job,
@@ -35,6 +45,62 @@ from ._common import (
     run_name,
     run_video,
 )
+from ._settings import check_settings, fingerprint
+
+
+def lam_dirs(base: pathlib.Path) -> list[tuple[float, pathlib.Path]]:
+    """The ``lam_<number>`` directories of ``base`` as ``(lam, directory)``, sorted by lam."""
+    found = []
+    for path in base.glob("lam_*"):
+        if not path.is_dir():
+            continue
+        text = re.fullmatch(r"lam_(.+)", path.name)
+        assert text is not None
+        try:
+            lam = float(text.group(1))
+        except ValueError as error:
+            raise ValueError(
+                f"{path} is in the tuning directory but its name is not lam_<number>"
+            ) from error
+        found.append((lam, path))
+    return sorted(found)
+
+
+def collect_rows(
+    job: Job, tune: TuneSection, base: pathlib.Path, ids: list[str]
+) -> list[dict[str, Any]]:
+    """One row per ``lam_*`` directory: the mean ALC of the metric over the finished videos.
+
+    Raises:
+        ValueError: If a run directory was made with other settings than ``job`` has for its lambda.
+    """
+    rows = []
+    for lam, directory in lam_dirs(base):
+        strategy = dataclasses.replace(
+            job.strategy, params={**job.strategy.params, "lam": lam}
+        )
+        trial = dataclasses.replace(job, strategy=strategy)
+        per_video: dict[str, float | None] = {}
+        missing = 0
+        for video_id in ids:
+            run_dir = directory / video_id
+            if not (run_dir / RESULT_NAME).is_file():
+                missing += 1
+                continue
+            check_settings(run_dir, fingerprint(trial, video_id, tune.split))
+            per_video[video_id] = alc_percent(load_result(run_dir), tune.metric)
+        valid = [a for a in per_video.values() if a is not None]
+        rows.append(
+            {
+                "lam": lam,
+                "alc_mean": float(np.mean(valid)) if valid else None,
+                "n_videos": len(valid),
+                "n_skipped": len(per_video) - len(valid),
+                "n_missing": missing,
+                "alc_per_video": per_video,
+            }
+        )
+    return rows
 
 
 def run(cfg: DictConfig) -> None:
@@ -69,32 +135,20 @@ def run(cfg: DictConfig) -> None:
         / job.estimator.arch
         / job.strategy.name
     )
-    rows: list[dict[str, Any]] = []
     for lam in tune.lams:
         strategy = dataclasses.replace(
             job.strategy, params={**job.strategy.params, "lam": float(lam)}
         )
         trial = dataclasses.replace(job, strategy=strategy, loop=loop)
-        per_video: dict[str, float | None] = {}
         for video_id in ids:
             run_dir = base / f"lam_{float(lam)!r}" / video_id
             outcome = run_video(
                 trial, video_id, tune.split, run_dir, tag=f"lam{float(lam)!r}"
             )
             print(f"lam {lam}: {outcome.message}", flush=True)
-            per_video[video_id] = alc_percent(load_result(run_dir), tune.metric)
-        valid = [a for a in per_video.values() if a is not None]
-        rows.append(
-            {
-                "lam": float(lam),
-                "alc_mean": float(np.mean(valid)) if valid else None,
-                "n_videos": len(valid),
-                "n_skipped": len(per_video) - len(valid),
-                "alc_per_video": per_video,
-            }
-        )
-    scored = [r for r in rows if r["alc_mean"] is not None]
-    best = max(scored, key=lambda r: r["alc_mean"])["lam"] if scored else None
+    rows = collect_rows(dataclasses.replace(job, loop=loop), tune, base, ids)
+    complete = [r for r in rows if r["n_missing"] == 0 and r["alc_mean"] is not None]
+    best = max(complete, key=lambda r: r["alc_mean"])["lam"] if complete else None
     document = {
         "run": job.run.name,
         "estimator": job.estimator.arch,
@@ -111,7 +165,7 @@ def run(cfg: DictConfig) -> None:
         f"# lambda tuning: {job.run.name} / {job.estimator.arch} / {job.strategy.name}",
         "",
         f"ALC of `{tune.metric}` (`performances_ann`, 0 to 100), mean over {len(ids)} video(s); "
-        f"schedule {list(loop.query_ratio)}.",
+        f"schedule {list(loop.query_ratio)}. All `lam_*` directories of this run are listed.",
         "",
         "| lam | mean ALC | videos |",
         "|---|---|---|",
@@ -119,6 +173,13 @@ def run(cfg: DictConfig) -> None:
     for row in rows:
         value = "-" if row["alc_mean"] is None else f"{row['alc_mean']:.2f}"
         table.append(f"| {row['lam']:g} | {value} | {row['n_videos']} / {len(ids)} |")
+    unfinished = [f"{r['lam']:g}" for r in rows if r["n_missing"]]
+    if unfinished:
+        table += [
+            "",
+            f"Not all videos are finished for lam {', '.join(unfinished)}; "
+            "these cannot be the best.",
+        ]
     if best is not None:
         table += ["", f"Best lam: {best:g}"]
     markdown = "\n".join(table) + "\n"
