@@ -546,7 +546,10 @@ def metric_curve(result: dict[str, Any], metric: str) -> list[float]:
 
 
 def alc_percent(result: dict[str, Any], metric: str) -> Optional[float]:
-    """ALC of ``metric`` on the 0 to 100 scale, or ``None`` if the curve has no defined value.
+    """100 times the ALC of ``metric``, or ``None`` if the curve has no defined value.
+
+    The area covers the range of labeled people of the result, so a run that ends below 100 %
+    labeled people has an ALC of at most that range (a perfect curve up to 20 % gives 20).
 
     A value of ``-1`` (the metric has no ground truth in its area range) makes the curve undefined,
     as in the 2023 summaries.

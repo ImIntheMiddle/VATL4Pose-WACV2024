@@ -7,8 +7,12 @@ directory and every video of the id list (the dataset's, or ``summarize.ids_file
 ``<output_root>/<run.name>/summary/<estimator>[_<ids file name>]/``:
 
 * ``summary.json`` and ``summary.md``: for each strategy the mean ALC over its videos of ``AP .6``
-  and ``AP .75`` (``performances_ann``) and of the OSPA (``ospa_ann``), all on the 0 to 100 scale,
-  and the number of videos. A video without ``result.json`` is counted as missing; a video whose
+  and ``AP .75`` (``performances_ann``) and of the OSPA (``ospa_ann``), the number of videos, and
+  ``percent_range``, the range of labeled people in percent that the curves of all its videos
+  cover. The ALC is 100 times the area under the curve over the share of labeled people, so it is
+  at most 100 for a run that labels all people. A run that stops at 20 % labeled people (a budget
+  run, ``loop.query_ratio`` ending below 1) covers only that range, and the ALC of a perfect curve
+  is 20; compare ALC values of runs with the same range only. A video without ``result.json`` is counted as missing; a video whose
   curve of a metric holds ``-1`` (no ground truth in the area range) is left out of that metric and
   counted as skipped, as in the 2023 summaries. A video whose metrics are ``null`` (some person has
   no ground-truth keypoints, so the loop computed no AP and no OSPA) is listed as "no ground truth"
@@ -23,7 +27,7 @@ from __future__ import annotations
 
 import json
 import pathlib
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 from omegaconf import DictConfig
@@ -58,9 +62,11 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
     """Summarize every strategy directory of ``base``.
 
     Returns:
-        ``{strategy: {"n_videos", "n_missing", "no_ground_truth", metric: {"alc_mean", "n",
-        "n_skipped"}, "curves": {metric: (percent grid, mean curve)}}}``. ``no_ground_truth`` lists
-        the ids of the videos whose result has no metrics; the means cover the other videos.
+        ``{strategy: {"n_videos", "n_missing", "no_ground_truth", "percent_range", metric:
+        {"alc_mean", "n", "n_skipped"}, "curves": {metric: (percent grid, mean curve)}}}``.
+        ``no_ground_truth`` lists the ids of the videos whose result has no metrics; the means
+        cover the other videos. ``percent_range`` is ``[low, high]``, the range of labeled people
+        in percent that the results of all found videos cover (``None`` without a result).
         ``curves`` is for the plots and is dropped from the JSON.
     """
     if not base.is_dir():
@@ -81,6 +87,7 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
             "n_videos": len(found),
             "n_missing": len(ids) - len(found),
             "no_ground_truth": no_ground_truth,
+            "percent_range": _covered_range(list(found.values())),
             "curves": {},
         }
         for metric in METRICS:
@@ -96,6 +103,16 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
                 entry["curves"][metric] = _mean_curve(usable, metric)
         summary[strategy] = entry
     return summary
+
+
+def _covered_range(results: list[dict[str, Any]]) -> Optional[list[float]]:
+    """``[low, high]``: the largest first and the smallest last label percentage of ``results``."""
+    if not results:
+        return None
+    return [
+        float(max(r["percentages"][0] for r in results)),
+        float(min(r["percentages"][-1] for r in results)),
+    ]
 
 
 def _mean_curve(
@@ -119,14 +136,23 @@ def _markdown(title: str, summary: dict[str, dict[str, Any]], n_ids: int) -> str
         value = entry[metric]["alc_mean"]
         return "-" if value is None else f"{value:.2f}"
 
+    def covered(entry: dict[str, Any]) -> str:
+        if entry["percent_range"] is None:
+            return "-"
+        low, high = entry["percent_range"]
+        return f"{low:.4g}-{high:.4g}"
+
     lines = [
         f"# {title}",
         "",
-        "Mean ALC over the videos on the 0 to 100 scale (`performances_ann` for AP, `ospa_ann` for "
-        "the OSPA, so a lower OSPA is better).",
+        "Mean ALC over the videos: 100 times the area under the curve of the metric over the share "
+        "of labeled people (`performances_ann` for AP, `ospa_ann` for the OSPA, so a lower OSPA is "
+        "better). `labeled %` is the range of labeled people that the curves cover. The ALC is at "
+        "most the range, which is 100 for a run that labels all people and less for a budget run "
+        "that stops earlier, so compare ALC values of runs with the same range only.",
         "",
-        "| strategy | videos | " + " | ".join(f"ALC {m}" for m in METRICS) + " |",
-        "|---|---|" + "---|" * len(METRICS),
+        "| strategy | videos | labeled % | " + " | ".join(f"ALC {m}" for m in METRICS) + " |",
+        "|---|---|---|" + "---|" * len(METRICS),
     ]
     for strategy, entry in summary.items():
         # a video without ground truth has a result but no metrics, so it is not evaluated
@@ -134,7 +160,7 @@ def _markdown(title: str, summary: dict[str, dict[str, Any]], n_ids: int) -> str
         evaluated = f"{entry['n_videos'] - without} / {n_ids}"
         if without:
             evaluated += f" ({without} no GT)"
-        row = [strategy, evaluated] + [cell(entry, m) for m in METRICS]
+        row = [strategy, evaluated, covered(entry)] + [cell(entry, m) for m in METRICS]
         lines.append("| " + " | ".join(row) + " |")
     notes = []
     for strategy, entry in summary.items():
