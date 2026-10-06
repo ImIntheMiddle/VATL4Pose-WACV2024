@@ -7,6 +7,7 @@ with ``min`` and ``max`` taken over the unlabeled entries. The total score of a 
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 
 import numpy as np
@@ -14,24 +15,32 @@ import numpy as np
 from .base import RoundContext
 from .registry import register_combiner
 
+logger = logging.getLogger(__name__)
+
 
 def minmax_over_unlabeled(
-    score: np.ndarray, labeled: np.ndarray, label: str
+    score: np.ndarray, labeled: np.ndarray, label: str, round_index: int
 ) -> np.ndarray:
     """Min-max normalise ``score`` over the unlabeled samples.
+
+    A score without spread over the unlabeled samples (all values equal, or fewer than two
+    unlabeled samples) normalises to zeros, and one ``logging.WARNING`` names the scorer and the
+    round. The legacy code divided by zero there: every normalised score became NaN, the sort over
+    NaN kept the samples in index order, and the query took the lowest indices. Zeros give the
+    same order through the stable top-k, without NaN.
 
     Args:
         score: ``(N,)`` scores of all samples.
         labeled: ``(N,)`` bool, True for labeled samples.
-        label: What the scores belong to, for the error message (e.g. ``"scorer 'thc'"``).
+        label: What the scores belong to, for the log message (e.g. ``"scorer 'thc'"``).
+        round_index: Index of the round, for the log message.
 
     Returns:
-        ``(N,)`` float64 array, 0.0 at labeled samples. With fewer than two unlabeled samples the
-        range is undefined and the result is all zeros, as in the legacy code.
+        ``(N,)`` float64 array, 0.0 at labeled samples.
 
     Raises:
-        ValueError: If an unlabeled score is not finite, or if all unlabeled scores are equal
-            (the legacy code divided by zero there and continued with NaN).
+        ValueError: If an unlabeled score is not finite (NaN or infinity is an error of the
+            scorer, not a property of the data).
     """
     assert score.shape == labeled.shape and score.ndim == 1, (
         f"{label}: expected one score per sample, got {score.shape} for {labeled.shape} samples"
@@ -39,16 +48,18 @@ def minmax_over_unlabeled(
     out = np.zeros(score.shape, dtype=np.float64)
     unlabeled = ~labeled
     values = score[unlabeled].astype(np.float64)
-    if values.shape[0] < 2:
-        return out
     if not np.isfinite(values).all():
         raise ValueError(f"{label} has non-finite scores for unlabeled samples")
-    low, high = values.min(), values.max()
-    if high == low:
-        raise ValueError(
-            f"{label} is constant ({low:g}) over the {values.shape[0]} unlabeled samples; "
-            "min-max normalisation is undefined"
+    if values.shape[0] < 2 or values.max() == values.min():
+        logger.warning(
+            "%s has no spread over the %d unlabeled samples in round %d; "
+            "its normalised score is 0",
+            label,
+            values.shape[0],
+            round_index,
         )
+        return out
+    low, high = values.min(), values.max()
     out[unlabeled] = (values - low) / (high - low)
     return out
 
@@ -65,7 +76,9 @@ class SingleCombiner:
                 f"combiner 'single' needs exactly one score, got {sorted(scores)}"
             )
         ((name, score),) = scores.items()
-        return minmax_over_unlabeled(score, ctx.labeled, f"scorer {name!r}")
+        return minmax_over_unlabeled(
+            score, ctx.labeled, f"scorer {name!r}", ctx.round_index
+        )
 
 
 @register_combiner("minmax_sum")
@@ -79,10 +92,15 @@ class MinMaxSumCombiner:
             raise ValueError("combiner 'minmax_sum' needs at least one score")
         total = np.zeros(ctx.num_samples, dtype=np.float64)
         for name, score in scores.items():
-            total += minmax_over_unlabeled(score, ctx.labeled, f"scorer {name!r}")
+            total += minmax_over_unlabeled(
+                score, ctx.labeled, f"scorer {name!r}", ctx.round_index
+            )
         names = ", ".join(repr(name) for name in scores)
         return minmax_over_unlabeled(
-            total, ctx.labeled, f"the sum of the normalised scores of {names}"
+            total,
+            ctx.labeled,
+            f"the sum of the normalised scores of {names}",
+            ctx.round_index,
         )
 
 

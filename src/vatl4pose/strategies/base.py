@@ -258,17 +258,24 @@ class Strategy:
     ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
         """Choose ``k`` unlabeled samples to query.
 
+        When ``k`` is at least the number of unlabeled samples, every choice is forced: the
+        method returns all unlabeled samples in index order, calls neither the scorers nor the
+        selector, and the score dictionary is empty.
+
         Returns:
             ``(selected, raw)``: the selected sample indices (int64, shape ``(k,)``, in the
             selector's order) and the raw ``(N,)`` score of every scorer, by scorer name, for
             logging.
 
         Raises:
-            ValueError: If ``k`` is not between 1 and the number of unlabeled samples, or if a
-                component returns an invalid selection.
+            ValueError: If ``k`` is below 1, or if a component returns an invalid selection.
         """
+        if k < 1:
+            raise ValueError(f"cannot query k={k} samples: k must be at least 1")
+        unlabeled = ctx.unlabeled_index
+        if k >= unlabeled.shape[0]:
+            return unlabeled, {}
         n = ctx.num_samples
-        unlabeled_for_query(ctx, k)
         raw: dict[str, np.ndarray] = {}
         for scorer in self.scorers:
             score = np.asarray(scorer.score(ctx))
