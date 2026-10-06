@@ -129,9 +129,12 @@ def _markdown(title: str, summary: dict[str, dict[str, Any]], n_ids: int) -> str
         "|---|---|" + "---|" * len(METRICS),
     ]
     for strategy, entry in summary.items():
-        row = [strategy, f"{entry['n_videos']} / {n_ids}"] + [
-            cell(entry, m) for m in METRICS
-        ]
+        # a video without ground truth has a result but no metrics, so it is not evaluated
+        without = len(entry["no_ground_truth"])
+        evaluated = f"{entry['n_videos'] - without} / {n_ids}"
+        if without:
+            evaluated += f" ({without} no GT)"
+        row = [strategy, evaluated] + [cell(entry, m) for m in METRICS]
         lines.append("| " + " | ".join(row) + " |")
     notes = []
     for strategy, entry in summary.items():

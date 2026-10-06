@@ -106,7 +106,7 @@ data/mine/annotations/<video>.json
 - `images`: `id`, `file_name` (relative to `dataset.root`, unique in the file), `width`, `height`.
 - `annotations`: `id` (integer, unique in the file), `image_id`, `track_id` (all integers or all strings in a file), `bbox` as `[x, y, w, h]`, and optionally `keypoints` as a flat list of `x, y, visibility` for every joint.
 
-The boxes and the track ids come from your own detector and tracker, and boxes alone are enough. An annotation with an empty box is skipped. An annotation without `keypoints`, or without a visible joint, is a person without ground truth.
+The boxes and the track ids come from your own detector and tracker, and boxes alone are enough. An annotation with an empty box is skipped. An annotation without `keypoints`, or without a visible joint, is a person without ground truth. Only a missing `keypoints` key means no keypoints; `"keypoints": []` or `null` raises an error.
 
 With `oracle=coco_file` the keypoints of this file are not used as labels. They only give the AP and OSPA that the loop reports. If every person has a visible joint, the loop reports both as for the paper datasets. If one person or more have none, the loop computes no AP and no OSPA. It logs one warning at each start of a run, `result.json` holds `null` for `performances`, `performances_ann`, `ospa` and `ospa_ann` in every round, and `vatl4pose-summarize` lists the video as "no ground truth" and leaves it out of the means. The selection, the annotation rounds and the retraining do not read the ground truth and run as usual. `oracle=simulated`, `vatl4pose-tune`, `vatl4pose-eval` and `vatl4pose-train` answer or score with the keypoints, so they stop with an error for a video that has a person without them.
 

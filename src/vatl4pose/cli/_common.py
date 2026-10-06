@@ -443,27 +443,42 @@ def run_video(
 # ------------------------------------------------------------------ results
 
 
+METRIC_FIELDS = ("performances_ann", "ospa_ann")
+"""The fields of ``result.json`` that :func:`metric_curve` reads."""
+
+
 def load_result(run_dir: pathlib.Path) -> dict[str, Any]:
-    """Read ``<run_dir>/result.json``."""
-    with (run_dir / RESULT_NAME).open(encoding="utf-8") as handle:
-        return json.load(handle)
+    """Read ``<run_dir>/result.json``.
+
+    Raises:
+        ValueError: If the file lacks ``performances_ann`` or ``ospa_ann``, which every summary
+            and the tuning read (they are ``null`` lists for a video without ground truth, not
+            missing). The message names the file.
+    """
+    path = run_dir / RESULT_NAME
+    with path.open(encoding="utf-8") as handle:
+        result = json.load(handle)
+    missing = [field for field in METRIC_FIELDS if field not in result]
+    if missing:
+        raise ValueError(
+            f"{path}: the result lacks {', '.join(missing)}; it is not a result.json of "
+            "vatl4pose-atl"
+        )
+    return result
 
 
 def has_ground_truth(result: dict[str, Any]) -> bool:
     """``False`` for the result of a video without ground truth, where every metric is ``null``.
 
-    The loop gives ``null`` to ``performances``, ``performances_ann``, ``ospa`` and ``ospa_ann`` in
-    every round when some person of the video has no ground-truth keypoints.
+    The loop gives ``null`` to the metrics in every round when some person of the video has no
+    ground-truth keypoints. This reads the two fields that :func:`metric_curve` reads
+    (``performances_ann`` and ``ospa_ann``); :func:`load_result` has checked that they exist.
 
     Raises:
+        KeyError: If ``result`` lacks one of the two fields.
         ValueError: If the metrics are ``null`` in some rounds only; no run writes such a file.
     """
-    missing = [
-        value is None
-        for field in ("performances", "performances_ann", "ospa", "ospa_ann")
-        if field in result
-        for value in result[field]
-    ]
+    missing = [value is None for field in METRIC_FIELDS for value in result[field]]
     if missing and all(missing):
         return False
     if any(missing):

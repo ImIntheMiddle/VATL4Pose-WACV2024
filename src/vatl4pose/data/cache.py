@@ -143,8 +143,8 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
     bbox_crop = np.empty((n, 4), dtype=np.float64)
     keypoints_gt = np.stack([p.keypoints for p in people])
     bbox_json_xywh = np.stack([p.bbox_json_xywh for p in people])
-    has_gt = (keypoints_gt[:, :, 2] > 0).any(axis=1)
-    assert has_gt.shape == (n,) and has_gt.dtype == np.bool_
+    has_gt = np.array([p.has_gt for p in people], dtype=np.bool_)
+    assert has_gt.shape == (n,)
     # the feature of a person without a visible joint does not exist: NaN, not a made-up value
     hybrid_gt = np.full((n, spec.ae_input_dim), np.nan, dtype=np.float64)
     if has_gt.any():

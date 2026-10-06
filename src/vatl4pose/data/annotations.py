@@ -104,6 +104,16 @@ class PersonRecord:
     keypoints: np.ndarray
     bbox_json_xywh: np.ndarray
 
+    @property
+    def has_gt(self) -> bool:
+        """True if the person has a visible ground-truth joint.
+
+        False for a ``coco_custom`` box without keypoints, whose keypoints are all zeros. The
+        cache, the loop, ``vatl4pose-tune`` and the training and evaluation of an estimator all
+        use this one definition.
+        """
+        return bool(self.keypoints[:, 2].any())
+
     def __post_init__(self) -> None:
         where = f"PersonRecord(ann_id={self.ann_id})"
         if not self.image_path.is_absolute():

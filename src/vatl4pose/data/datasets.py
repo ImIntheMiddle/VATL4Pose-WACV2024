@@ -60,7 +60,7 @@ def collect_people(
     if not people:
         raise ValueError(f"the {len(videos)} video(s) hold no person")
     for video in videos:
-        without = [p.ann_id for p in video.people if not p.keypoints[:, 2].any()]
+        without = [p.ann_id for p in video.people if not p.has_gt]
         if without:
             raise ValueError(
                 f"video {video.video_id!r}: {len(without)} of {len(video.people)} people have no "

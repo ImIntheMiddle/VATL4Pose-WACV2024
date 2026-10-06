@@ -108,8 +108,9 @@ def hybrid_features(
         spec: Keypoint spec that defines the angles of the feature.
 
     Returns:
-        ``(N, spec.ae_input_dim)`` float64 array, the people video after video. The readers drop
-        people without a visible joint; any other person that has no feature raises an error.
+        ``(N, spec.ae_input_dim)`` float64 array, the people video after video. A person without a
+        visible joint (a ``coco_custom`` box without keypoints) has no feature:
+        :func:`~vatl4pose.data.datasets.collect_people` raises for it.
 
     Raises:
         ValueError: If the videos hold no person, or their keypoint spec differs from ``spec``,

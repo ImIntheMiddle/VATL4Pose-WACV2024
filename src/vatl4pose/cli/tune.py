@@ -143,7 +143,7 @@ def run(cfg: DictConfig) -> None:
     ids = read_ids(None, tune.ids_file, "tune.ids_file")
     for video_id in ids:
         people = read_video(job.paths, job.dataset, video_id, tune.split).people
-        without = [p.ann_id for p in people if not p.keypoints[:, 2].any()]
+        without = [p.ann_id for p in people if not p.has_gt]
         if without:
             raise ValueError(
                 f"video {video_id!r}: {len(without)} of {len(people)} people have no ground-truth "
