@@ -114,7 +114,7 @@ def git_commit(package_dir: pathlib.Path | None = None) -> str | None:
     except FileNotFoundError as error:
         _warn_once(root, f"the program 'git' cannot be started ({error})")
         return None
-    lines = done.stdout.split()
+    lines = done.stdout.splitlines()
     if done.returncode != 0 or len(lines) != 2 or not _COMMIT.fullmatch(lines[1]):
         reason = done.stderr.strip() or done.stdout.strip()
         _warn_once(root, f"`git rev-parse HEAD` failed (exit code {done.returncode}): {reason}")

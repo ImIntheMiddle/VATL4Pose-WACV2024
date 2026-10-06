@@ -105,7 +105,8 @@ def hydra_command(task: Callable[[DictConfig], None]) -> Callable[[], None]:
     so that both unwind the task the way ``SIGINT`` does through ``KeyboardInterrupt``. The
     ``with`` blocks of the task then run, a stopped ``vatl4pose-atl`` releases the lock of its
     video and the next start resumes it. ``SIGKILL`` cannot be caught; it leaves the lock behind,
-    and the user removes it by hand (see ``VideoLock``).
+    and the user removes it by hand (see ``VideoLock``). A signal that the parent set to be
+    ignored stays ignored, so a run started with ``nohup`` survives the logout.
     """
     main = hydra.main(
         version_base="1.3", config_path="pkg://vatl4pose.configs", config_name="base"
@@ -114,7 +115,8 @@ def hydra_command(task: Callable[[DictConfig], None]) -> Callable[[], None]:
     @functools.wraps(main)
     def stoppable(*args: Any, **kwargs: Any) -> None:
         for signum in STOP_SIGNALS:
-            signal.signal(signum, _stop)
+            if signal.getsignal(signum) is not signal.SIG_IGN:
+                signal.signal(signum, _stop)
         main(*args, **kwargs)
 
     return stoppable
