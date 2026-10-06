@@ -144,6 +144,7 @@ class VideoAnnotation:
             annotated frame, or ``-1``.
         next_index: ``(N,)`` int64. Sample of the same track in the nearest later
             annotated frame, or ``-1``.
+        annotation_path: Absolute path of the JSON file the samples were read from.
     """
 
     dataset: str
@@ -152,8 +153,13 @@ class VideoAnnotation:
     people: tuple[PersonRecord, ...]
     prev_index: np.ndarray
     next_index: np.ndarray
+    annotation_path: pathlib.Path
 
     def __post_init__(self) -> None:
+        if not self.annotation_path.is_absolute():
+            raise ValueError(
+                f"VideoAnnotation.annotation_path: {self.annotation_path} is not absolute"
+            )
         n = len(self.people)
         for name in ("prev_index", "next_index"):
             value = getattr(self, name)
@@ -345,6 +351,7 @@ def _build(
     dataset: str,
     video_id: str,
     spec: KeypointSpec,
+    json_path: pathlib.Path,
     raws: Sequence[_Raw],
     track_id_of: Callable[[_Raw], str],
 ) -> VideoAnnotation:
@@ -371,6 +378,7 @@ def _build(
         people=people,
         prev_index=prev_index,
         next_index=next_index,
+        annotation_path=json_path,
     )
 
 
@@ -416,7 +424,12 @@ def read_posetrack21_video(
     raws = _collect(json_path, root, spec, skip_empty_box=True, skip_without_bbox=False)
     raws.sort(key=_legacy_sort_key(2))
     return _build(
-        "posetrack21", video_id, spec, raws, lambda raw: f"{video_id}{raw.track}"
+        "posetrack21",
+        video_id,
+        spec,
+        json_path,
+        raws,
+        lambda raw: f"{video_id}{raw.track}",
     )
 
 
@@ -441,7 +454,9 @@ def read_jrdb_pose_video(
     json_path = _find_annotation_file(root / "activelearning" / split, video_id)
     raws = _collect(json_path, root, spec, skip_empty_box=False, skip_without_bbox=True)
     raws.sort(key=_legacy_sort_key(3))
-    return _build("jrdb_pose", video_id, spec, raws, lambda raw: str(raw.track))
+    return _build(
+        "jrdb_pose", video_id, spec, json_path, raws, lambda raw: str(raw.track)
+    )
 
 
 def read_coco_custom_video(
@@ -469,4 +484,6 @@ def read_coco_custom_video(
             f"{sorted(kind.__name__ for kind in kinds)}"
         )
     raws.sort(key=lambda raw: (raw.track, raw.frame_index))
-    return _build("coco_custom", video_id, spec, raws, lambda raw: str(raw.track))
+    return _build(
+        "coco_custom", video_id, spec, json_path, raws, lambda raw: str(raw.track)
+    )
