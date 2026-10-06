@@ -1,0 +1,349 @@
+"""The COCO-file oracle: a human annotates the queries of a round in CVAT or Label Studio.
+
+Every round has two files in ``<run_dir>/oracle/``, named with the round number in two digits::
+
+    round_03_queries.json    written by this oracle
+    round_03_answers.json    written by the annotation tool, put in place by the human
+
+``request`` writes the queries file and returns ``ready=False``; the loop stops, the human
+annotates, and the next ``request`` of the same round reads the answers file.
+
+Queries file (COCO keypoints, the format CVAT and Label Studio import)
+----------------------------------------------------------------------
+* ``images``: the distinct frames of the queried people, ``file_name`` relative to ``dataset_root``,
+  with ``width`` and ``height``.
+* ``annotations``: one per queried person, in ascending order of the sample index, so the file
+  lists a set of people and does not depend on the order of the request. ``id`` is the annotation
+  id of the source data, ``bbox`` is the raw ``[x, y, w, h]`` box of the source annotation (the
+  box an annotator sees in the original data), and ``attributes.vatl_sample_index`` is the sample
+  index in the video cache. ``keypoints`` is the prediction of the model as the starting point
+  for the annotator: each joint is ``x, y, 2`` where the predicted confidence is above 0 and
+  ``x, y, 0`` (not labelled, position kept) otherwise.
+* ``categories``: one ``person`` category with ``keypoints`` (the joint names of the keypoint
+  spec) and ``skeleton`` (the limbs of the spec, 1-based as COCO requires).
+
+Answers file
+------------
+The same format, as the annotation tool exports it. Only ``annotations[*].id`` and
+``annotations[*].keypoints`` are read; ``bbox``, ``images`` and the rest are ignored. Every
+requested annotation id must appear exactly once and no other id may appear. ``keypoints`` holds
+``3 K`` finite numbers; the visibility of each joint is 0, 1 or 2 and is mapped to 0 (not
+labelled) or 1 (labelled; COCO's 1 "occluded" and 2 "visible" both become 1, as in the cache).
+The answer keeps the positions the annotator left, also for joints with visibility 0.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+from typing import Any
+
+import numpy as np
+
+from vatl4pose.data.cache import VideoCache, read_image_rgb
+
+from .base import OracleResult, check_request
+
+_CATEGORY_ID = 1
+_CATEGORY_NAME = "person"
+_MAX_IDS_SHOWN = 10
+
+
+def _show(ids: list[int]) -> str:
+    shown = ", ".join(str(i) for i in ids[:_MAX_IDS_SHOWN])
+    if len(ids) > _MAX_IDS_SHOWN:
+        shown += f" and {len(ids) - _MAX_IDS_SHOWN} more"
+    return shown
+
+
+def _write_atomic(path: pathlib.Path, data: bytes) -> None:
+    """Write ``data`` to ``path`` so that a reader sees no file or the complete file.
+
+    The bytes go to ``<path>.tmp``, are ``fsync``-ed and moved with ``os.replace``; the directory is
+    ``fsync``-ed last. A failure removes the temporary file.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
+class CocoFileOracle:
+    """Exports the queries of a round as a COCO keypoints file and imports the human answers.
+
+    See the module docstring for the two file formats.
+
+    Args:
+        cache: Cache of the video. Its arrays give the boxes, images and annotation ids and its
+            keypoint spec gives the joint names and the skeleton.
+        run_dir: Directory of the run; the files go to ``run_dir / "oracle"`` (created on the
+            first request).
+        dataset_root: Absolute directory that the exported ``file_name`` values are relative to,
+            the root of the dataset the cache was built from.
+
+    Raises:
+        ValueError: If ``dataset_root`` is not an absolute path.
+    """
+
+    def __init__(
+        self, cache: VideoCache, run_dir: pathlib.Path, dataset_root: pathlib.Path
+    ) -> None:
+        dataset_root = pathlib.Path(dataset_root)
+        if not dataset_root.is_absolute():
+            raise ValueError(f"dataset_root: {dataset_root} is not an absolute path")
+        self._arrays = cache.arrays
+        self._spec = cache.spec
+        self._dir = pathlib.Path(run_dir) / "oracle"
+        self._dataset_root = pathlib.Path(os.path.normpath(dataset_root))
+
+    def request(
+        self, indices: np.ndarray, round_index: int, predictions: np.ndarray
+    ) -> OracleResult:
+        """Write the queries of the round if needed, then read the answers if they exist.
+
+        The first call of a round writes the queries file and returns ``ready=False``. Later calls
+        return ``ready=False`` again until the answers file exists, then the answers in the order
+        of ``indices``. An existing queries file that equals this request is kept as it is.
+
+        Args:
+            indices: ``(k,)`` distinct sample indices to annotate.
+            round_index: Round number; it names the files.
+            predictions: ``(N, K, 3)`` predictions (x, y, confidence); the rows of ``indices``
+                prefill the keypoints of the queries file and must be finite.
+
+        Returns:
+            The result described above; ``keypoints`` is ``(k, K, 3)`` float64 with visibility
+            in ``{0, 1}``.
+
+        Raises:
+            ValueError: If the request is invalid, an image lies outside ``dataset_root``, the
+                queries file of the round exists with other content (a stale answers file could
+                be imported), or the answers file is invalid. The message names the problem and,
+                for answers, the annotation id.
+            FileNotFoundError: If an image file of a query does not exist.
+        """
+        check_request(self._arrays, indices, round_index, predictions)
+        queries = self._dir / f"round_{round_index:02d}_queries.json"
+        answers = self._dir / f"round_{round_index:02d}_answers.json"
+        content = self._export(np.sort(indices), predictions, round_index)
+        if queries.exists():
+            if queries.read_bytes() != content:
+                raise ValueError(
+                    f"round {round_index:02d}: the queries file {queries} differs from the "
+                    "queries of this request. The queried people or the predictions prefilled "
+                    "in it have changed since the file was written, so an answers file made "
+                    "for the old queries could be imported for the new ones. Check that the "
+                    f"run is the same (config, seed, checkpoints). To start the round over, "
+                    f"move {queries} and {answers} away."
+                )
+        else:
+            _write_atomic(queries, content)
+        if not answers.exists():
+            return OracleResult(
+                ready=False,
+                keypoints=None,
+                message=f"round {round_index:02d}: {len(indices)} queries are in {queries}. "
+                "Annotate them (COCO keypoints, for example in CVAT or Label Studio) and save "
+                f"the result as {answers}; then run again.",
+            )
+        keypoints = self._import(answers, indices)
+        return OracleResult(
+            ready=True,
+            keypoints=keypoints,
+            message=f"round {round_index:02d}: read {len(indices)} answers from {answers}",
+        )
+
+    # ------------------------------------------------------------------ export
+
+    def _export(
+        self, samples: np.ndarray, predictions: np.ndarray, round_index: int
+    ) -> bytes:
+        """The queries file of ``samples`` (ascending sample indices) as UTF-8 JSON bytes."""
+        a = self._arrays
+        prefill = predictions[samples]
+        if not np.isfinite(prefill).all():
+            raise ValueError(
+                f"round {round_index:02d}: predictions of the requested samples must be "
+                "finite, they are written to the queries file"
+            )
+        ann_ids = a.ann_id[samples]
+        ids, counts = np.unique(ann_ids, return_counts=True)
+        if (counts > 1).any():
+            raise ValueError(
+                f"the cache holds annotation ids {ids[counts > 1].tolist()} more than once "
+                "among the requested samples, so answers could not be told apart"
+            )
+
+        frames: dict[int, pathlib.Path] = {}
+        for sample in samples:
+            image_id = int(a.image_id[sample])
+            path = pathlib.Path(a.image_path[sample])
+            if frames.setdefault(image_id, path) != path:
+                raise ValueError(
+                    f"the cache gives image id {image_id} two files: {frames[image_id]} "
+                    f"and {path}"
+                )
+        images = [
+            self._image_entry(image_id, path) for image_id, path in frames.items()
+        ]
+
+        annotations: list[dict[str, Any]] = []
+        for row, sample in enumerate(samples):
+            confidence = prefill[row, :, 2]
+            visibility = np.where(confidence > 0, 2, 0).tolist()
+            flat = [
+                value
+                for x, y, v in zip(
+                    prefill[row, :, 0].tolist(),
+                    prefill[row, :, 1].tolist(),
+                    visibility,
+                    strict=True,
+                )
+                for value in (x, y, v)
+            ]
+            bbox = a.bbox_json_xywh[sample].tolist()
+            annotations.append(
+                {
+                    "id": int(a.ann_id[sample]),
+                    "image_id": int(a.image_id[sample]),
+                    "category_id": _CATEGORY_ID,
+                    "bbox": bbox,
+                    "area": bbox[2] * bbox[3],
+                    "iscrowd": 0,
+                    "num_keypoints": sum(v > 0 for v in visibility),
+                    "keypoints": flat,
+                    "attributes": {"vatl_sample_index": int(sample)},
+                }
+            )
+
+        spec = self._spec
+        categories = [
+            {
+                "id": _CATEGORY_ID,
+                "name": _CATEGORY_NAME,
+                "supercategory": _CATEGORY_NAME,
+                "keypoints": list(spec.joint_names),
+                "skeleton": [[a_ + 1, b_ + 1] for a_, b_ in spec.skeleton],
+            }
+        ]
+        payload = {
+            "images": images,
+            "annotations": annotations,
+            "categories": categories,
+        }
+        text = json.dumps(payload, separators=(",", ":"), allow_nan=False)
+        return (text + "\n").encode("utf-8")
+
+    def _image_entry(self, image_id: int, path: pathlib.Path) -> dict[str, Any]:
+        normalised = pathlib.Path(os.path.normpath(path))
+        try:
+            relative = normalised.relative_to(self._dataset_root)
+        except ValueError:
+            raise ValueError(
+                f"image {path} lies outside dataset_root {self._dataset_root}; the exported "
+                "file_name must be relative to dataset_root"
+            ) from None
+        height, width = read_image_rgb(path).shape[:2]
+        return {
+            "id": image_id,
+            "file_name": relative.as_posix(),
+            "width": int(width),
+            "height": int(height),
+        }
+
+    # ------------------------------------------------------------------ import
+
+    def _import(self, path: pathlib.Path, indices: np.ndarray) -> np.ndarray:
+        """Read and check the answers file; return ``(k, K, 3)`` rows in the order of ``indices``."""
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{path}: not valid JSON ({error})") from error
+        annotations = payload.get("annotations") if isinstance(payload, dict) else None
+        if not isinstance(annotations, list):
+            raise ValueError(
+                f"{path}: expected a COCO file, a JSON object with an 'annotations' list"
+            )
+        by_id: dict[int, dict[str, Any]] = {}
+        for position, annotation in enumerate(annotations):
+            if not isinstance(annotation, dict):
+                raise ValueError(
+                    f"{path}: annotations[{position}] is not a JSON object"
+                )
+            ann_id = annotation.get("id")
+            if isinstance(ann_id, bool) or not isinstance(ann_id, int):
+                raise ValueError(
+                    f"{path}: annotations[{position}] has no integer 'id', got {ann_id!r}"
+                )
+            if ann_id in by_id:
+                raise ValueError(
+                    f"{path}: annotation id {ann_id} appears more than once"
+                )
+            by_id[ann_id] = annotation
+
+        requested = self._arrays.ann_id[indices].tolist()
+        missing = [i for i in requested if i not in by_id]
+        if missing:
+            raise ValueError(
+                f"{path}: annotation id(s) missing from the answers: {_show(missing)}"
+            )
+        unexpected = sorted(set(by_id) - set(requested))
+        if unexpected:
+            raise ValueError(
+                f"{path}: annotation id(s) that were not requested: {_show(unexpected)}"
+            )
+        rows = [self._keypoints_of(path, i, by_id[i]) for i in requested]
+        keypoints = np.stack(rows)
+        assert keypoints.shape == (len(indices), self._spec.num_joints, 3), (
+            keypoints.shape
+        )
+        assert keypoints.dtype == np.float64, keypoints.dtype
+        return keypoints
+
+    def _keypoints_of(
+        self, path: pathlib.Path, ann_id: int, annotation: dict[str, Any]
+    ) -> np.ndarray:
+        """Check the keypoints of one answer; return ``(K, 3)`` float64 with visibility 0 or 1."""
+        num_joints = self._spec.num_joints
+        values = annotation.get("keypoints")
+        if not isinstance(values, list):
+            raise ValueError(f"{path}: annotation {ann_id} has no 'keypoints' list")
+        if len(values) != 3 * num_joints:
+            raise ValueError(
+                f"{path}: annotation {ann_id}: keypoints has {len(values)} values, expected "
+                f"{3 * num_joints} (x, y, visibility for each of the {num_joints} joints)"
+            )
+        for position, value in enumerate(values):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"{path}: annotation {ann_id}: keypoints[{position}] is not a number, "
+                    f"got {value!r}"
+                )
+        keypoints = np.array(values, dtype=np.float64).reshape(num_joints, 3)
+        if not np.isfinite(keypoints).all():
+            raise ValueError(
+                f"{path}: annotation {ann_id}: keypoints must be finite numbers"
+            )
+        invalid = ~np.isin(keypoints[:, 2], (0.0, 1.0, 2.0))
+        if invalid.any():
+            joint = int(np.flatnonzero(invalid)[0])
+            raise ValueError(
+                f"{path}: annotation {ann_id}: joint {joint} "
+                f"({self._spec.joint_names[joint]!r}) has visibility {keypoints[joint, 2]}, "
+                "expected 0, 1 or 2"
+            )
+        keypoints[:, 2] = np.minimum(keypoints[:, 2], 1.0)
+        return keypoints
