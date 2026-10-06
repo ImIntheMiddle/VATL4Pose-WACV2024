@@ -8,6 +8,12 @@ Every round has two files in ``<run_dir>/oracle/``, named with the round number 
 ``request`` writes the queries file and returns ``ready=False``; the loop stops, the human
 annotates, and the next ``request`` of the same round reads the answers file.
 
+An existing queries file is kept as it is if it lists the same queries as the request: the same
+``images`` and, for every annotation id, the same ``image_id``, ``file_name`` and ``bbox``. The
+prefilled keypoints are not compared, because a rerun of the model can change them by float noise
+while the people to annotate stay the same. If the queries differ, ``request`` raises, because an
+answers file made for the old queries could otherwise be imported for the new ones.
+
 Queries file (COCO keypoints, the format CVAT and Label Studio import)
 ----------------------------------------------------------------------
 * ``images``: the distinct frames of the queried people, ``file_name`` relative to ``dataset_root``,
@@ -81,6 +87,86 @@ def _write_atomic(path: pathlib.Path, data: bytes) -> None:
         os.close(dir_fd)
 
 
+def _serialise(payload: dict[str, Any]) -> bytes:
+    """The queries file as compact strict JSON (no NaN or infinity) in UTF-8, ending in a newline."""
+    text = json.dumps(payload, separators=(",", ":"), allow_nan=False)
+    return (text + "\n").encode("utf-8")
+
+
+def _read_queries(path: pathlib.Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{path}: not valid JSON ({error})") from error
+
+
+def _identity(
+    payload: Any, path: pathlib.Path
+) -> tuple[list[Any], dict[Any, dict[str, Any]]]:
+    """The images and, per annotation id, the ``image_id``, ``file_name`` and ``bbox`` of a queries file.
+
+    Raises:
+        ValueError: If ``payload`` is not a queries file (a JSON object with an ``images`` list of
+            objects and an ``annotations`` list of objects).
+    """
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("images"), list)
+        or not isinstance(payload.get("annotations"), list)
+        or not all(isinstance(x, dict) for x in payload["images"] + payload["annotations"])
+    ):
+        raise ValueError(
+            f"{path}: not a queries file written by this oracle, expected a JSON object with "
+            "an 'images' list and an 'annotations' list of objects"
+        )
+    file_name = {image.get("id"): image.get("file_name") for image in payload["images"]}
+    annotations = {
+        ann.get("id"): {
+            "image_id": ann.get("image_id"),
+            "file_name": file_name.get(ann.get("image_id")),
+            "bbox": ann.get("bbox"),
+        }
+        for ann in payload["annotations"]
+    }
+    return payload["images"], annotations
+
+
+def _first_difference(
+    existing: Any, requested: dict[str, Any], path: pathlib.Path
+) -> str | None:
+    """Describe the first difference between the queries of two queries files, or return ``None``.
+
+    The queries are the annotation ids with their ``image_id``, ``file_name`` and ``bbox``, and the
+    ``images`` list. The order of the annotations and the prefilled keypoints do not count. The
+    annotation ids are compared first, then the fields of each annotation in the order of
+    ``requested``, then the images.
+    """
+    old_images, old = _identity(existing, path)
+    new_images, new = _identity(requested, path)
+    only_old = [i for i in old if i not in new]
+    only_new = [i for i in new if i not in old]
+    if only_old or only_new:
+        parts = []
+        if only_old:
+            parts.append(f"annotation id(s) only in the file: {_show(only_old)}")
+        if only_new:
+            parts.append(f"annotation id(s) only in the request: {_show(only_new)}")
+        return "; ".join(parts)
+    for ann_id, fields in new.items():
+        for name, value in fields.items():
+            if old[ann_id][name] != value:
+                return (
+                    f"annotation {ann_id}: {name} is {old[ann_id][name]!r} in the file but "
+                    f"{value!r} in the request"
+                )
+    if old_images != new_images:
+        for position, (before, after) in enumerate(zip(old_images, new_images)):
+            if before != after:
+                return f"images[{position}] is {before!r} in the file but {after!r} in the request"
+        return f"images has {len(old_images)} entries in the file but {len(new_images)} in the request"
+    return None
+
+
 class CocoFileOracle:
     """Exports the queries of a round as a COCO keypoints file and imports the human answers.
 
@@ -116,7 +202,8 @@ class CocoFileOracle:
 
         The first call of a round writes the queries file and returns ``ready=False``. Later calls
         return ``ready=False`` again until the answers file exists, then the answers in the order
-        of ``indices``. An existing queries file that equals this request is kept as it is.
+        of ``indices``. An existing queries file with the same queries as this request (see the
+        module docstring) is kept as it is, whatever predictions it was prefilled with.
 
         Args:
             indices: ``(k,)`` distinct sample indices to annotate.
@@ -130,24 +217,26 @@ class CocoFileOracle:
 
         Raises:
             ValueError: If the request is invalid, an image lies outside ``dataset_root``, the
-                queries file of the round exists with other content (a stale answers file could
-                be imported), or the answers file is invalid. The message names the problem and,
-                for answers, the annotation id.
+                queries file of the round exists but lists other queries (a stale answers file
+                could be imported) or is not a queries file, or the answers file is invalid. The
+                message names the problem and the first differing annotation id or field.
             FileNotFoundError: If an image file of a query does not exist.
         """
         check_request(self._arrays, indices, round_index, predictions)
         queries = self._dir / f"round_{round_index:02d}_queries.json"
         answers = self._dir / f"round_{round_index:02d}_answers.json"
-        content = self._export(np.sort(indices), predictions, round_index)
+        payload = self._payload(np.sort(indices), predictions, round_index)
+        content = _serialise(payload)
         if queries.exists():
-            if queries.read_bytes() != content:
+            difference = _first_difference(_read_queries(queries), payload, queries)
+            if difference is not None:
                 raise ValueError(
                     f"round {round_index:02d}: the queries file {queries} differs from the "
-                    "queries of this request. The queried people or the predictions prefilled "
-                    "in it have changed since the file was written, so an answers file made "
-                    "for the old queries could be imported for the new ones. Check that the "
-                    f"run is the same (config, seed, checkpoints). To start the round over, "
-                    f"move {queries} and {answers} away."
+                    f"queries of this request: {difference}. The queried people have changed "
+                    "since the file was written, so an answers file made for the old queries "
+                    "could be imported for the new ones. Check that the run is the same "
+                    f"(config, seed, checkpoints). To start the round over, move {queries} "
+                    f"and {answers} away."
                 )
         else:
             _write_atomic(queries, content)
@@ -168,10 +257,10 @@ class CocoFileOracle:
 
     # ------------------------------------------------------------------ export
 
-    def _export(
+    def _payload(
         self, samples: np.ndarray, predictions: np.ndarray, round_index: int
-    ) -> bytes:
-        """The queries file of ``samples`` (ascending sample indices) as UTF-8 JSON bytes."""
+    ) -> dict[str, Any]:
+        """The queries file of ``samples`` (ascending sample indices) as a JSON-ready dict."""
         a = self._arrays
         prefill = predictions[samples]
         if not np.isfinite(prefill).all():
@@ -239,13 +328,11 @@ class CocoFileOracle:
                 "skeleton": [[a_ + 1, b_ + 1] for a_, b_ in spec.skeleton],
             }
         ]
-        payload = {
+        return {
             "images": images,
             "annotations": annotations,
             "categories": categories,
         }
-        text = json.dumps(payload, separators=(",", ":"), allow_nan=False)
-        return (text + "\n").encode("utf-8")
 
     def _image_entry(self, image_id: int, path: pathlib.Path) -> dict[str, Any]:
         normalised = pathlib.Path(os.path.normpath(path))
