@@ -181,14 +181,16 @@ def train_auxnet(
         features: ``(N, C, H, W)`` float backbone features of the labeled samples, already
             detached from the pose estimator (stop-gradient).
         gt_coords_hm: ``(N, K, 2)`` float32 ground-truth joint positions in heatmap cells.
-        links: The ``aux.num_links`` skeleton links ``(u, v)``.
+        links: The ``aux.num_links`` links ``(u, v)``; the loop passes
+            ``vl4pose_links(spec)`` (:mod:`vatl4pose.strategies.baselines.vl4pose`).
         epochs: Number of passes over the samples.
         lr: Learning rate of Adam.
         batch_size: Samples per step.
         seed: Seed of the batch order.
-        joint_exist: ``(N, K)`` bool, False for joints without a ground-truth position. A link
-            enters the loss of a sample only when both of its joints exist. ``None`` means that
-            every joint exists.
+        joint_exist: ``(N, K)`` bool, False for joints without a ground-truth position (not
+            annotated or not visible). The loop passes the ground-truth visibility of the labeled
+            samples. A link enters the loss of a sample only when both of its joints exist.
+            ``None`` means that every joint exists.
 
     Returns:
         The mean negative log-likelihood per sample of every epoch (``epochs`` floats), measured
