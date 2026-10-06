@@ -37,6 +37,12 @@ from pycocotools.cocoeval import COCOeval
 
 from .oks import as_float_array, as_image_id, as_pose_xy, as_sigmas
 
+AP_PROTOCOL = "wacv2024-detection-area"
+"""Name of the AP protocol of this package, written next to every AP in ``result.json`` and in the
+``vatl4pose-eval`` file. It is the 2023 protocol of the paper, which differs from the standard COCO
+keypoint AP in the area of a detection (see the module docstring), so the values are comparable with
+the paper and not with another COCO evaluation."""
+
 METRIC_KEYS: tuple[str, ...] = (
     "AP",
     "AP .5",

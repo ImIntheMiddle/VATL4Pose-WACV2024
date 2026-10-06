@@ -93,6 +93,8 @@ The table gives the paper values of the ALC of AP@0.6 in percent, the mean over 
 
 The last row is the mean over the 15 JRDB-Pose test videos of FastPose with the released weights. The value of one video is `performances[0]["AP .6"]` in its `result.json`. The 2023 code evaluated JRDB-Pose with the OKS sigmas of COCO, and this version uses the OKS sigmas of JRDB-Pose. The JRDB-Pose sigmas raise the round-0 AP@0.6 of video 00 from 0.592 to 0.602.
 
+The AP of this package is the AP of the paper, not the standard COCO keypoint AP. The 2023 evaluation gives a detection the area `(w - x) * (h - y)` of its box `[x, y, w, h]`, so a detection that no label matches and whose area lies outside the area range counts as ignored and not as a false positive. This version keeps that rule so that its numbers stay comparable with the paper. With the standard area `w * h`, the round-0 AP@0.6 of JRDB-Pose video 00 is 0.458 instead of 0.592 on the same predictions. Every AP of this package follows the rule, in `result.json`, in `vatl4pose-eval` and in the validation of `vatl4pose-train`, and `result.json` and the file of `vatl4pose-eval` name it in `"ap_protocol": "wacv2024-detection-area"`. An AP from another COCO keypoint evaluation is therefore not comparable. This package computes the ten values itself, because the summary of the stock `pycocotools` lists AP75 at the position of the key `AP .6`, which caused issue #40.
+
 ## Using your own data
 
 Extract the frames of each video to image files first, and put the frames and one annotation file per video in this layout. `dataset.root` is the dataset directory, relative to `paths.data_root` unless it is an absolute path.

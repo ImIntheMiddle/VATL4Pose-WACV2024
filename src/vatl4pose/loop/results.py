@@ -30,6 +30,11 @@ model) and has ``null`` where the round computed nothing:
     Seconds per step: ``infer``, ``eval``, ``select`` (the extras and the strategy), ``oracle``,
     ``retrain``, ``ae`` (the fine-tuning of the autoencoder) and ``total`` (the round without the
     write of its state). A step that did not run is 0.
+``ap_protocol``
+    The name of the AP protocol (:data:`vatl4pose.eval.AP_PROTOCOL`): the 2023 protocol of the
+    paper, whose detection area differs from the standard COCO keypoint AP. The AP values of
+    ``performances`` and ``performances_ann`` are comparable with the paper, not with another COCO
+    evaluation.
 ``git_commit``
     The commit that the package was run from, or ``null`` when it was not run from its own git
     checkout (an installed wheel carries no commit) or git could not name the commit (one warning
@@ -53,6 +58,7 @@ from typing import Any
 
 import vatl4pose
 
+from ..eval import AP_PROTOCOL
 from ..train._common import write_atomic
 from .state import RoundRecord
 
@@ -161,6 +167,7 @@ def build_result(
         "timings": [r.timings for r in rounds],
         "n_samples": identity["n_samples"],
         "vatl4pose_version": vatl4pose.__version__,
+        "ap_protocol": AP_PROTOCOL,
         "git_commit": git_commit(),
     }
 
