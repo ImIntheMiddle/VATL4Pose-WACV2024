@@ -13,6 +13,11 @@ model) and has ``null`` where the round computed nothing:
     the same predictions after the labeled samples were replaced by their labels.
 ``ospa``, ``ospa_ann``
     The OSPA of both.
+
+    These four lists are ``null`` in every round when some person of the video has no ground
+    truth (boxes without keypoints, see :mod:`vatl4pose.data.annotations`). The video has no AP and
+    no OSPA then, and ``vatl4pose-summarize`` lists it as "no ground truth". All other lists are
+    computed as usual.
 ``query_list``
     ``{"Round0": [...], ...}``: the sorted sample indices queried in each round that has a query
     (every round but the last); ``[]`` for a query of size 0.

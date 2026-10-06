@@ -21,8 +21,9 @@ PoseTrack21 and JRDB-Pose (per-video files made by the dataset preparation scrip
 The ``coco_custom`` JSON holds ``images`` (``id``, ``file_name`` relative to ``<root>``,
 ``width``, ``height``), ``annotations`` (``id``, ``image_id``, ``track_id``, ``bbox`` as
 xywh, ``keypoints`` as a flat list of ``3 * K`` values, ``num_keypoints``, ``category_id``)
-and ``categories``. All track ids of a file are ints or all are strings. The PoseTrack21
-and JRDB-Pose files follow the same COCO structure.
+and ``categories``. ``keypoints`` is optional in ``coco_custom`` (see Keypoints below). All
+track ids of a file are ints or all are strings. The PoseTrack21 and JRDB-Pose files follow the
+same COCO structure.
 
 Conventions
 -----------
@@ -32,9 +33,13 @@ Conventions
   ``ymax <= ymin``. JRDB-Pose keeps such boxes: its legacy test (``xmax < xmin``) cannot
   fire after clipping, because ``xmax >= xmin`` holds by construction. JRDB-Pose skips
   annotations without a ``bbox``.
-* Keypoints. ``(K, 3)`` array of x, y, visibility with visibility ``min(1, v)``. An
-  annotation without a visible keypoint is skipped. This covers the legacy test for an
-  all-zero annotation, which has no visible keypoint either.
+* Keypoints. ``(K, 3)`` array of x, y, visibility with visibility ``min(1, v)``. PoseTrack21 and
+  JRDB-Pose skip an annotation without a visible keypoint (this covers the legacy test for an
+  all-zero annotation, which has no visible keypoint either) and require the ``keypoints`` key.
+  ``coco_custom`` keeps every annotation with a valid box: an annotation without a ``keypoints``
+  key, or without a visible keypoint, becomes a person whose keypoints are all zeros (positions
+  and visibility). Such a person has no ground truth: the cache marks it (``has_gt``) and the loop
+  reports no metrics for a video that has one.
 * ``frame_index``. Position of the image among the images of the annotation file when
   they are sorted by ``file_name``.
 * Sample order. PoseTrack21 and JRDB-Pose use the legacy sort key
@@ -83,7 +88,8 @@ class PersonRecord:
         image_path: Absolute path of the frame image.
         image_size: ``(width, height)`` of the image in pixels.
         bbox_xyxy: ``(4,)`` float64 box, converted and clipped by the legacy convention.
-        keypoints: ``(K, 3)`` float64 array of x, y and visibility in ``{0, 1}``.
+        keypoints: ``(K, 3)`` float64 array of x, y and visibility in ``{0, 1}``. All zeros for a
+            ``coco_custom`` person without a visible keypoint (no ground truth).
         bbox_json_xywh: ``(4,)`` float64 raw ``bbox`` of the annotation, unclipped.
     """
 
@@ -261,8 +267,14 @@ def _collect(
     *,
     skip_empty_box: bool,
     skip_without_bbox: bool,
+    require_keypoints: bool,
 ) -> list[_Raw]:
-    """Read the people of one annotation file, ordered by image id and then by file order."""
+    """Read the people of one annotation file, ordered by image id and then by file order.
+
+    With ``require_keypoints`` (the paper datasets) an annotation needs the ``keypoints`` key and
+    is skipped without a visible keypoint. Without it (``coco_custom``) the annotation is kept and
+    gets all-zero keypoints if the key is missing or no keypoint is visible.
+    """
     with json_path.open(encoding="utf-8") as handle:
         data = json.load(handle)
     images = _require(data, "images", json_path.name)
@@ -320,16 +332,21 @@ def _collect(
             ):
                 continue
 
-            flat = np.asarray(_require(ann, "keypoints", owner), dtype=np.float64)
-            if flat.shape != (num_values,):
-                raise ValueError(
-                    f"{owner}: keypoints has {flat.size} values, expected {num_values} "
-                    f"for spec {spec.name!r} ({spec.num_joints} joints)"
-                )
-            keypoints = flat.reshape(spec.num_joints, 3).copy()
-            keypoints[:, 2] = np.minimum(1.0, keypoints[:, 2])
+            if require_keypoints or "keypoints" in ann:
+                flat = np.asarray(_require(ann, "keypoints", owner), dtype=np.float64)
+                if flat.shape != (num_values,):
+                    raise ValueError(
+                        f"{owner}: keypoints has {flat.size} values, expected {num_values} "
+                        f"for spec {spec.name!r} ({spec.num_joints} joints)"
+                    )
+                keypoints = flat.reshape(spec.num_joints, 3).copy()
+                keypoints[:, 2] = np.minimum(1.0, keypoints[:, 2])
+            else:
+                keypoints = np.zeros((spec.num_joints, 3), dtype=np.float64)
             if keypoints[:, 2].sum() < 1.0:
-                continue
+                if require_keypoints:
+                    continue
+                keypoints[:] = 0.0  # no ground truth: all zeros, whatever positions the file holds
 
             raws.append(
                 _Raw(
@@ -421,7 +438,14 @@ def read_posetrack21_video(
     root = pathlib.Path(root).resolve()
     spec = get_spec("posetrack21")
     json_path = _find_annotation_file(root / "activelearning" / split, video_id)
-    raws = _collect(json_path, root, spec, skip_empty_box=True, skip_without_bbox=False)
+    raws = _collect(
+        json_path,
+        root,
+        spec,
+        skip_empty_box=True,
+        skip_without_bbox=False,
+        require_keypoints=True,
+    )
     raws.sort(key=_legacy_sort_key(2))
     return _build(
         "posetrack21",
@@ -452,7 +476,14 @@ def read_jrdb_pose_video(
     root = pathlib.Path(root).resolve()
     spec = get_spec("jrdb_pose")
     json_path = _find_annotation_file(root / "activelearning" / split, video_id)
-    raws = _collect(json_path, root, spec, skip_empty_box=False, skip_without_bbox=True)
+    raws = _collect(
+        json_path,
+        root,
+        spec,
+        skip_empty_box=False,
+        skip_without_bbox=True,
+        require_keypoints=True,
+    )
     raws.sort(key=_legacy_sort_key(3))
     return _build(
         "jrdb_pose", video_id, spec, json_path, raws, lambda raw: str(raw.track)
@@ -464,11 +495,16 @@ def read_coco_custom_video(
 ) -> VideoAnnotation:
     """Read one video of a ``coco_custom`` dataset (layout in the module docstring).
 
+    Every annotation with a valid box becomes a person. An annotation without a ``keypoints`` key,
+    or with no visible keypoint, becomes a person with all-zero keypoints, which has no ground
+    truth.
+
     Args:
         root: Dataset root; the annotation file is ``root/annotations/<video_id>.json``
             and image paths are ``root/<file_name>``.
         video_id: Video identifier.
-        spec: Joint layout; every annotation needs ``3 * spec.num_joints`` keypoint values.
+        spec: Joint layout; a ``keypoints`` list that is given needs ``3 * spec.num_joints``
+            values.
 
     Raises:
         ValueError: If the JSON is malformed or the track ids are not all ints or all strings.
@@ -476,7 +512,14 @@ def read_coco_custom_video(
     """
     root = pathlib.Path(root).resolve()
     json_path = root / "annotations" / f"{video_id}.json"
-    raws = _collect(json_path, root, spec, skip_empty_box=True, skip_without_bbox=False)
+    raws = _collect(
+        json_path,
+        root,
+        spec,
+        skip_empty_box=True,
+        skip_without_bbox=False,
+        require_keypoints=False,
+    )
     kinds = {type(raw.track) for raw in raws}
     if len(kinds) > 1 or not kinds <= {int, str}:
         raise ValueError(

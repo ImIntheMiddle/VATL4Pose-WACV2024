@@ -67,11 +67,12 @@ class RoundRecord:
 
     Attributes:
         percentage: Share of labeled samples in percent when the round evaluated, before its query.
-        performance: The ten AP and AR values of the predictions of all samples.
+        performance: The ten AP and AR values of the predictions of all samples; ``None`` in a video
+            in which some person has no ground truth.
         performance_ann: The same after the labeled samples' predictions were replaced by their
-            labels.
-        ospa: OSPA of the predictions.
-        ospa_ann: OSPA after the replacement.
+            labels; ``None`` as ``performance``.
+        ospa: OSPA of the predictions; ``None`` as ``performance``.
+        ospa_ann: OSPA after the replacement; ``None`` as ``performance``.
         combine_weight: Mean local peak of the heatmaps of the unlabeled samples; ``None`` when
             nobody is unlabeled.
         score_means: Mean raw score of every scorer over the unlabeled samples; ``None`` when the
@@ -87,10 +88,10 @@ class RoundRecord:
     """
 
     percentage: float
-    performance: dict[str, float]
-    performance_ann: dict[str, float]
-    ospa: float
-    ospa_ann: float
+    performance: dict[str, float] | None
+    performance_ann: dict[str, float] | None
+    ospa: float | None
+    ospa_ann: float | None
     combine_weight: float | None
     score_means: dict[str, float | None]
     queried: list[int] | None

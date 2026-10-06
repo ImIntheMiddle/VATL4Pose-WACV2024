@@ -15,6 +15,10 @@ call from all ``lam_*`` directories that exist, so that successive or concurrent
 different ``tune.lams`` give one table. A directory made with other settings than this call (see
 :mod:`._settings`, for example another schedule) raises instead of entering the table. A lambda
 whose videos are not all finished is listed but cannot be the best.
+
+The objective is an AP on the ground truth, so tuning has no objective for a video in which some
+person has no ground-truth keypoints. The command raises before it runs anything, and it raises when
+a finished run directory holds a result whose metrics are ``null``.
 """
 
 from __future__ import annotations
@@ -36,11 +40,13 @@ from vatl4pose.train._common import write_atomic
 from ._common import (
     Job,
     alc_percent,
+    has_ground_truth,
     hydra_command,
     load_job,
     load_result,
     output_root,
     read_ids,
+    read_video,
     require_unsharded,
     run_name,
     run_video,
@@ -72,7 +78,8 @@ def collect_rows(
     """One row per ``lam_*`` directory: the mean ALC of the metric over the finished videos.
 
     Raises:
-        ValueError: If a run directory was made with other settings than ``job`` has for its lambda.
+        ValueError: If a run directory was made with other settings than ``job`` has for its lambda,
+            or a finished run has no metrics because its video has no ground-truth keypoints.
     """
     rows = []
     for lam, directory in lam_dirs(base):
@@ -88,7 +95,14 @@ def collect_rows(
                 missing += 1
                 continue
             check_settings(run_dir, fingerprint(trial, video_id, tune.split))
-            per_video[video_id] = alc_percent(load_result(run_dir), tune.metric)
+            result = load_result(run_dir)
+            if not has_ground_truth(result):
+                raise ValueError(
+                    f"{run_dir}: video {video_id!r} has no ground-truth keypoints, so its result "
+                    "has no metrics and there is no ALC to tune; vatl4pose-tune needs ground "
+                    "truth for every person of the validation videos"
+                )
+            per_video[video_id] = alc_percent(result, tune.metric)
         valid = [a for a in per_video.values() if a is not None]
         rows.append(
             {
@@ -127,6 +141,15 @@ def run(cfg: DictConfig) -> None:
             "vatl4pose-tune needs oracle=simulated: the ground truth answers"
         )
     ids = read_ids(None, tune.ids_file, "tune.ids_file")
+    for video_id in ids:
+        people = read_video(job.paths, job.dataset, video_id, tune.split).people
+        without = [p.ann_id for p in people if not p.keypoints[:, 2].any()]
+        if without:
+            raise ValueError(
+                f"video {video_id!r}: {len(without)} of {len(people)} people have no ground-truth "
+                "keypoints, so there is no AP to tune on; vatl4pose-tune needs the ground truth of "
+                "every person of the validation videos"
+            )
     loop = dataclasses.replace(job.loop, query_ratio=tuple(tune.query_ratio))
     base = (
         output_root(job.paths)

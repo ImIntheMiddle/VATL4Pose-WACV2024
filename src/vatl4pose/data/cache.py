@@ -16,6 +16,7 @@ File layout (``N`` samples, ``K`` joints, ``T`` angles of the keypoint spec)::
     ann_id, image_id, frame_index, prev_index, next_index    int64 (N,)
     track_id, image_path                      variable-length strings (N,); paths are absolute
     hybrid_gt       float64 (N, 2K + T)       hybrid feature of the ground truth (see below)
+    has_gt          bool    (N,)              True where the person has a visible ground-truth joint
 
 Attributes: ``cache_version``, ``dataset``, ``video_id``, ``spec_name``, ``spec_sha256`` (of all
 fields of the keypoint spec, see :func:`spec_sha256`), ``annotation_sha256`` (of the annotation
@@ -24,8 +25,14 @@ compares the spec digest, so a cache is refused for a spec that differs in any f
 in the angle triplets that ``hybrid_gt`` depends on.
 
 ``hybrid_gt`` is :func:`~vatl4pose.models.wholebody_ae.compute_hybrid` of ``bbox_json_xywh`` and
-``keypoints_gt``, with the visibility as the weight of every joint. It is the training target of
-the autoencoder fine-tuning.
+``keypoints_gt``, with the visibility as the weight of every joint. With the simulated oracle the
+labels are the ground truth, so the autoencoder fine-tuning sees these features. No code of the
+loop reads the array: the loop computes the feature from the labels that the oracle returned.
+
+``has_gt`` is True where ``keypoints_gt`` holds at least one visible joint. A person without one
+(a box from a detector and a tracker, see :func:`~vatl4pose.data.annotations.read_coco_custom_video`)
+has all-zero ``keypoints_gt`` and ``NaN`` in its row of ``hybrid_gt``, because the feature of a person
+without joints does not exist. The simulated oracle and the metrics of the loop need ``has_gt``.
 
 Building decodes and crops the frames in a thread pool (OpenCV releases the interpreter lock).
 One task handles one frame: it decodes the frame once and crops every person in it. The calling
@@ -58,8 +65,8 @@ from vatl4pose.models.wholebody_ae import compute_hybrid
 from .annotations import PersonRecord, VideoAnnotation
 from .geometry import INPUT_SIZE, crop_person
 
-CACHE_VERSION: int = 1
-"""Version of the file layout; a cache of another version is refused."""
+CACHE_VERSION: int = 2
+"""Version of the file layout; a cache of another version is refused (version 2 added ``has_gt``)."""
 
 # Frames handled per round of parallel work, per worker. The crops of a round wait in memory
 # (147 kB each) until the main thread has written them.
@@ -136,7 +143,14 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
     bbox_crop = np.empty((n, 4), dtype=np.float64)
     keypoints_gt = np.stack([p.keypoints for p in people])
     bbox_json_xywh = np.stack([p.bbox_json_xywh for p in people])
-    hybrid_gt = compute_hybrid(bbox_json_xywh, keypoints_gt, spec)
+    has_gt = (keypoints_gt[:, :, 2] > 0).any(axis=1)
+    assert has_gt.shape == (n,) and has_gt.dtype == np.bool_
+    # the feature of a person without a visible joint does not exist: NaN, not a made-up value
+    hybrid_gt = np.full((n, spec.ae_input_dim), np.nan, dtype=np.float64)
+    if has_gt.any():
+        hybrid_gt[has_gt] = compute_hybrid(
+            bbox_json_xywh[has_gt], keypoints_gt[has_gt], spec
+        )
 
     with h5py.File(path, "w") as handle:
         handle.attrs["cache_version"] = CACHE_VERSION
@@ -204,6 +218,7 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
         handle.create_dataset("next_index", data=video.next_index)
         _create_strings(handle, "image_path", [str(p.image_path) for p in people])
         handle.create_dataset("hybrid_gt", data=hybrid_gt)
+        handle.create_dataset("has_gt", data=has_gt)
 
 
 def build_video_cache(
@@ -261,7 +276,10 @@ class CacheArrays:
             or ``-1``.
         next_index: ``(N,)`` int64, likewise for the next annotated frame.
         image_path: ``(N,)`` object array of absolute path strings.
-        hybrid_gt: ``(N, 2K + T)`` float64 hybrid feature of the ground truth.
+        hybrid_gt: ``(N, 2K + T)`` float64 hybrid feature of the ground truth; ``NaN`` in the rows of
+            the people without ground truth.
+        has_gt: ``(N,)`` bool, True where ``keypoints_gt`` has a visible joint. A person without
+            one has all-zero ``keypoints_gt``.
     """
 
     bbox_crop: np.ndarray
@@ -276,6 +294,7 @@ class CacheArrays:
     image_path: np.ndarray
     hybrid_gt: np.ndarray
     bbox_json_xywh: np.ndarray
+    has_gt: np.ndarray
 
 
 class VideoCache:
@@ -474,6 +493,7 @@ class VideoCache:
             "next_index": ("int64", ()),
             "image_path": ("str", ()),
             "hybrid_gt": ("float64", (spec.ae_input_dim,)),
+            "has_gt": ("bool", ()),
         }
         for name, (kind, tail) in layout.items():
             arrays[name] = read(name, kind, tail)

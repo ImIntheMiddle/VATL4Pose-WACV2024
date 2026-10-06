@@ -10,7 +10,9 @@ directory and every video of the id list (the dataset's, or ``summarize.ids_file
   and ``AP .75`` (``performances_ann``) and of the OSPA (``ospa_ann``), all on the 0 to 100 scale,
   and the number of videos. A video without ``result.json`` is counted as missing; a video whose
   curve of a metric holds ``-1`` (no ground truth in the area range) is left out of that metric and
-  counted as skipped, as in the 2023 summaries.
+  counted as skipped, as in the 2023 summaries. A video whose metrics are ``null`` (some person has
+  no ground-truth keypoints, so the loop computed no AP and no OSPA) is listed as "no ground truth"
+  and left out of every mean and curve; it still counts in ``n_videos``.
 * ``learning_curves_<metric>.png``: the mean over the videos on the 0 to 100 % label grid, one line
   per strategy.
 
@@ -38,6 +40,7 @@ from vatl4pose.train._common import write_atomic
 
 from ._common import (
     alc_percent,
+    has_ground_truth,
     hydra_command,
     load_result,
     metric_curve,
@@ -55,9 +58,10 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
     """Summarize every strategy directory of ``base``.
 
     Returns:
-        ``{strategy: {"n_videos", "n_missing", metric: {"alc_mean", "n", "n_skipped"}, "curves":
-        {metric: (percent grid, mean curve)}}}``; ``curves`` is for the plots and is dropped from
-        the JSON.
+        ``{strategy: {"n_videos", "n_missing", "no_ground_truth", metric: {"alc_mean", "n",
+        "n_skipped"}, "curves": {metric: (percent grid, mean curve)}}}``. ``no_ground_truth`` lists
+        the ids of the videos whose result has no metrics; the means cover the other videos.
+        ``curves`` is for the plots and is dropped from the JSON.
     """
     if not base.is_dir():
         raise FileNotFoundError(f"no results below {base}; run vatl4pose-atl first")
@@ -66,14 +70,17 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
         raise FileNotFoundError(f"{base} holds no strategy directory")
     summary: dict[str, dict[str, Any]] = {}
     for strategy in strategies:
-        results = []
+        found: dict[str, dict[str, Any]] = {}
         for video_id in ids:
             run_dir = base / strategy / video_id
             if (run_dir / RESULT_NAME).is_file():
-                results.append(load_result(run_dir))
+                found[video_id] = load_result(run_dir)
+        no_ground_truth = [v for v, r in found.items() if not has_ground_truth(r)]
+        results = [r for v, r in found.items() if v not in no_ground_truth]
         entry: dict[str, Any] = {
-            "n_videos": len(results),
-            "n_missing": len(ids) - len(results),
+            "n_videos": len(found),
+            "n_missing": len(ids) - len(found),
+            "no_ground_truth": no_ground_truth,
             "curves": {},
         }
         for metric in METRICS:
@@ -131,6 +138,11 @@ def _markdown(title: str, summary: dict[str, dict[str, Any]], n_ids: int) -> str
         if entry["n_missing"]:
             notes.append(
                 f"- {strategy}: {entry['n_missing']} video(s) have no result.json"
+            )
+        if entry["no_ground_truth"]:
+            notes.append(
+                f"- {strategy}: {len(entry['no_ground_truth'])} video(s) have no ground truth "
+                f"({', '.join(entry['no_ground_truth'])}); they are left out of the means"
             )
         for metric in METRICS:
             if entry[metric]["n_skipped"]:

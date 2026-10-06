@@ -5,7 +5,10 @@ A round of :class:`ActiveLearningLoop` is the procedure of the paper. One method
 1. :meth:`~ActiveLearningLoop._infer`: the model predicts the heatmaps (and the embeddings, if the
    selector clusters them) of all people of the video.
 2. :meth:`~ActiveLearningLoop._evaluate`: AP and OSPA of the predictions against the ground truth,
-   and the same after the labeled people's predictions are replaced by their labels.
+   and the same after the labeled people's predictions are replaced by their labels. A video in
+   which some person has no ground truth (boxes without keypoints) has no AP and no OSPA: the
+   metrics are ``None`` in every round and ``run`` logs one warning. The other steps do not
+   read the ground truth, so the selection, the oracle and the retraining are the same.
 3. :meth:`~ActiveLearningLoop._extras`: the inputs that WPU (the autoencoder) and VL4Pose (the link
    Gaussians) need.
 4. :meth:`~ActiveLearningLoop._select`: the strategy chooses the people to annotate.
@@ -223,11 +226,13 @@ class _Pool:
 
 @dataclass
 class _Evaluation:
+    """The evaluation of a round; the four metrics are ``None`` without ground truth for everybody."""
+
     percentage: float
-    performance: dict[str, float]
-    performance_ann: dict[str, float]
-    ospa: float
-    ospa_ann: float
+    performance: dict[str, float] | None
+    performance_ann: dict[str, float] | None
+    ospa: float | None
+    ospa_ann: float | None
     combine_weight: float | None
 
 
@@ -401,6 +406,8 @@ class ActiveLearningLoop:
         arrays = cache.arrays
         self._arrays = arrays
         self.n = len(cache)
+        # AP and OSPA compare with the ground truth of every person, or they are not computed
+        self._has_ground_truth = bool(arrays.has_gt.all())
         self._query_sizes = [int(self.n * ratio) for ratio in cfg.query_ratio]
         self._boxes_xywh = xyxy_to_xywh(arrays.bbox_gt)
         self._sigmas = np.asarray(self.spec.oks_sigmas, dtype=np.float64)
@@ -445,6 +452,16 @@ class ActiveLearningLoop:
         """
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self._restore()
+        if not self._has_ground_truth:
+            missing = self.n - int(self._arrays.has_gt.sum())
+            logger.warning(
+                "video %r: %d of %d people have no ground-truth keypoints, so AP and OSPA are not "
+                "computed and the metrics in result.json are null. The loop selects, asks the "
+                "oracle and retrains as usual.",
+                self._identity["video_id"],
+                missing,
+                self.n,
+            )
         for round_index in range(
             self._state.rounds_done, len(self.cfg.query_ratio) + 1
         ):
@@ -497,15 +514,24 @@ class ActiveLearningLoop:
             timings=clock.timings(),
         )
         self._save(record)
-        logger.info(
-            "%s round %d: %.1f %% labeled, AP %.3f (with labels %.3f), %.1f s",
-            self._identity["video_id"],
-            round_index,
-            record.percentage,
-            record.performance["AP"],
-            record.performance_ann["AP"],
-            record.timings["total"],
-        )
+        if record.performance is None or record.performance_ann is None:
+            logger.info(
+                "%s round %d: %.1f %% labeled, no ground truth, %.1f s",
+                self._identity["video_id"],
+                round_index,
+                record.percentage,
+                record.timings["total"],
+            )
+        else:
+            logger.info(
+                "%s round %d: %.1f %% labeled, AP %.3f (with labels %.3f), %.1f s",
+                self._identity["video_id"],
+                round_index,
+                record.percentage,
+                record.performance["AP"],
+                record.performance_ann["AP"],
+                record.timings["total"],
+            )
         if self._on_round is not None:
             self._on_round(round_index, record)
         return None
@@ -730,7 +756,10 @@ class ActiveLearningLoop:
         )
 
     def _evaluate(self, pool: _Pool) -> _Evaluation:
-        """AP and OSPA against the ground truth, with and without the labels of the labeled people."""
+        """AP and OSPA against the ground truth, with and without the labels of the labeled people.
+
+        The four metrics are ``None`` unless every person of the video has ground truth.
+        """
         arrays = self._arrays
         score = pool.pose_score
 
@@ -745,11 +774,13 @@ class ActiveLearningLoop:
             )
             return {key: float(v) for key, v in metrics.ap.items()}, float(metrics.ospa)
 
-        performance, ospa = measure(pool.coords)
         labeled = np.flatnonzero(self._labeled)
-        replaced = pool.coords.astype(np.float64)
-        replaced[labeled] = self._labels[labeled, :, :2]
-        performance_ann, ospa_ann = measure(replaced)
+        performance = performance_ann = ospa = ospa_ann = None
+        if self._has_ground_truth:
+            performance, ospa = measure(pool.coords)
+            replaced = pool.coords.astype(np.float64)
+            replaced[labeled] = self._labels[labeled, :, :2]
+            performance_ann, ospa_ann = measure(replaced)
 
         unlabeled = np.flatnonzero(~self._labeled)
         combine_weight = None
@@ -895,9 +926,9 @@ class ActiveLearningLoop:
         """The pretrained autoencoder, tuned on the hybrid features of the labels of the labeled people.
 
         The features are those of the answers of the oracle, with the label visibility as weights
-        (with the simulated oracle: the cached ``hybrid_gt``). The result depends on the
-        checkpoint, the labels and the seed only, so a resume gets the autoencoder the
-        uninterrupted run had.
+        (with the simulated oracle they equal the cached ``hybrid_gt``, which this method does not
+        read). The result depends on the checkpoint, the labels and the seed only, so a resume gets
+        the autoencoder the uninterrupted run had.
         """
         ae = self._pretrained_ae()
         labeled = np.flatnonzero(self._labeled)

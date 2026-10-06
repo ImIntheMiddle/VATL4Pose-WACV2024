@@ -43,8 +43,12 @@ def collect_people(
 ) -> tuple[KeypointSpec, tuple[PersonRecord, ...]]:
     """The people of all ``videos`` in order (video after video), and their keypoint spec.
 
+    The training and the evaluation of an estimator read the keypoints of every person as labels,
+    so a person without a visible keypoint (a ``coco_custom`` box without keypoints) is refused.
+
     Raises:
-        ValueError: If the videos do not share one keypoint spec or hold no person.
+        ValueError: If the videos do not share one keypoint spec, hold no person, or hold a person
+            without a visible keypoint.
     """
     specs = {video.spec for video in videos}
     if len(specs) > 1:
@@ -55,6 +59,14 @@ def collect_people(
     people = tuple(person for video in videos for person in video.people)
     if not people:
         raise ValueError(f"the {len(videos)} video(s) hold no person")
+    for video in videos:
+        without = [p.ann_id for p in video.people if not p.keypoints[:, 2].any()]
+        if without:
+            raise ValueError(
+                f"video {video.video_id!r}: {len(without)} of {len(video.people)} people have no "
+                f"visible keypoint (annotation ids {without[:10]}); training and evaluation need "
+                "ground-truth keypoints for every person"
+            )
     return next(iter(specs)), people
 
 

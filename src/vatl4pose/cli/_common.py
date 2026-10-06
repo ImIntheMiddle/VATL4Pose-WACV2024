@@ -449,12 +449,46 @@ def load_result(run_dir: pathlib.Path) -> dict[str, Any]:
         return json.load(handle)
 
 
+def has_ground_truth(result: dict[str, Any]) -> bool:
+    """``False`` for the result of a video without ground truth, where every metric is ``null``.
+
+    The loop gives ``null`` to ``performances``, ``performances_ann``, ``ospa`` and ``ospa_ann`` in
+    every round when some person of the video has no ground-truth keypoints.
+
+    Raises:
+        ValueError: If the metrics are ``null`` in some rounds only; no run writes such a file.
+    """
+    missing = [
+        value is None
+        for field in ("performances", "performances_ann", "ospa", "ospa_ann")
+        if field in result
+        for value in result[field]
+    ]
+    if missing and all(missing):
+        return False
+    if any(missing):
+        raise ValueError(
+            "the metrics of the result are null in some rounds and set in others; the loop "
+            "writes either all of them or none"
+        )
+    return True
+
+
 def metric_curve(result: dict[str, Any], metric: str) -> list[float]:
     """The value of ``metric`` after every round, on the scale ``[0, 1]``.
 
     ``AP`` and ``AR`` keys are read from ``performances_ann`` (the predictions of the labeled people
     replaced by their labels); ``OSPA`` is read from ``ospa_ann``.
+
+    Raises:
+        ValueError: If the video of the result has no ground-truth keypoints (the metrics are
+            ``null``), so that there is no curve.
     """
+    if not has_ground_truth(result):
+        raise ValueError(
+            "the result has no metrics because its video has no ground-truth keypoints "
+            "(every metric is null); there is no curve of " + repr(metric)
+        )
     if metric == "OSPA":
         return [float(v) for v in result["ospa_ann"]]
     return [float(round_[metric]) for round_ in result["performances_ann"]]
