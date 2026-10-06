@@ -46,7 +46,9 @@ def parse_shard(spec: str) -> tuple[int, int]:
     """
     match = _SHARD_RE.fullmatch(spec)
     if match is None:
-        raise ValueError(f"shard must look like 'i/n' with integers i and n, got {spec!r}")
+        raise ValueError(
+            f"shard must look like 'i/n' with integers i and n, got {spec!r}"
+        )
     shard, num_shards = int(match.group(1)), int(match.group(2))
     _check_shard(shard, num_shards)
     return shard, num_shards
@@ -54,7 +56,9 @@ def parse_shard(spec: str) -> tuple[int, int]:
 
 def _check_shard(shard: int, num_shards: int) -> None:
     if num_shards < 1 or not 0 <= shard < num_shards:
-        raise ValueError(f"shard {shard}/{num_shards} is invalid: need n >= 1 and 0 <= i < n")
+        raise ValueError(
+            f"shard {shard}/{num_shards} is invalid: need n >= 1 and 0 <= i < n"
+        )
 
 
 def _duplicates(ids: list[str]) -> list[str]:
@@ -75,7 +79,9 @@ def read_id_list(path: pathlib.Path) -> list[str]:
             ids.append(line)
     duplicates = _duplicates(ids)
     if duplicates:
-        raise ValueError(f"{path} lists video ids more than once: {', '.join(duplicates)}")
+        raise ValueError(
+            f"{path} lists video ids more than once: {', '.join(duplicates)}"
+        )
     return ids
 
 
@@ -193,7 +199,9 @@ class VideoLock:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
-        assert self._text is not None, "VideoLock.__exit__ called without a successful __enter__"
+        assert self._text is not None, (
+            "VideoLock.__exit__ called without a successful __enter__"
+        )
         own, self._text = self._text, None
         try:
             found = self.path.read_text(encoding="utf-8")
