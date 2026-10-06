@@ -151,26 +151,36 @@ def write_annotation(
     """Write ``data`` as JSON to ``path`` atomically; returns the status of the file.
 
     The status is ``written`` (there was no file), ``up to date`` (the file holds equal data and is
-    left untouched) or ``replaced``.
+    left untouched) or ``replaced`` (a file with other data, or one that is not valid JSON, was
+    replaced).
 
     Raises:
-        ValueError: If a file with other data exists and ``overwrite`` is false. The message names
-            the first difference; the file is not changed.
+        ValueError: If a file with other data, or one that does not parse, exists and
+            ``overwrite`` is false. The message names the file and, for other data, the first
+            difference; the file is not changed.
     """
     text = json.dumps(data)
     status = "written"
     if path.exists():
-        with path.open(encoding="utf-8") as handle:
-            existing = json.load(handle)
-        difference = first_difference(existing, json.loads(text))
-        if difference is None:
-            return "up to date"
-        if not overwrite:
-            raise ValueError(
-                f"{path} exists and differs from the file made from the official release "
-                f"(first difference, existing != new: {difference}). The file is kept; run with "
-                "prepare.overwrite=true to replace it."
-            )
+        try:
+            with path.open(encoding="utf-8") as handle:
+                existing = json.load(handle)
+        except ValueError as error:  # JSONDecodeError and UnicodeDecodeError
+            if not overwrite:
+                raise ValueError(
+                    f"{path} exists but is not valid JSON ({error}). The file is kept; run with "
+                    "prepare.overwrite=true to replace it."
+                ) from error
+        else:
+            difference = first_difference(existing, json.loads(text))
+            if difference is None:
+                return "up to date"
+            if not overwrite:
+                raise ValueError(
+                    f"{path} exists and differs from the file made from the official release "
+                    f"(first difference, existing != new: {difference}). The file is kept; run "
+                    "with prepare.overwrite=true to replace it."
+                )
         status = "replaced"
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
@@ -206,20 +216,26 @@ def build_posetrack21_video(
         num_workers: Threads that read the image headers.
 
     Raises:
-        ValueError: If the video has no images.
+        ValueError: If the video has no images, or (with ``dense_window``) an ``is_labeled`` is not a
+            boolean.
         FileNotFoundError: If a kept image does not exist.
     """
     images = list(raw["images"])
     if not images:
         raise ValueError("the raw annotation file lists no images")
     if dense_window:
+        for image in images:
+            if not isinstance(image["is_labeled"], bool):
+                raise ValueError(
+                    f"image {image['file_name']}: is_labeled must be true or false, got "
+                    f"{image['is_labeled']!r}"
+                )
         nframes = int(images[0]["nframes"])
         middle = int(f"1{images[0]['vid_id']}{nframes // 2:04d}")
         images = [
             image
             for image in images
-            if image["is_labeled"] is True
-            and abs(image["image_id"] - middle) <= DENSE_RADIUS
+            if image["is_labeled"] and abs(image["image_id"] - middle) <= DENSE_RADIUS
         ]
     sizes = read_image_sizes(
         [image_root / image["file_name"] for image in images], num_workers
@@ -320,11 +336,12 @@ def build_jrdb_pose_video(
         num_workers: Threads that read the image headers.
 
     Raises:
-        ValueError: If an annotation refers to an image that the pose file does not list, or a
-            frame has no entry in the detection file.
+        ValueError: If an annotation refers to an image id that is not the id of the image at
+            position ``image_id - 1`` of the pose file's images, or a frame has no entry in the
+            detection file.
         FileNotFoundError: If a kept image does not exist.
     """
-    image_by_id = {image["id"]: image for image in pose["images"]}
+    pose_images = pose["images"]
     labels = detections["labels"]
     people_of: dict[str, dict[str, Mapping[str, Any]]] = {}
     images: dict[int, dict[str, Any]] = {}
@@ -334,12 +351,19 @@ def build_jrdb_pose_video(
         image_id = annotation["image_id"]
         if image_id >= JRDB_IMAGE_ID_LIMIT:
             continue
-        source = image_by_id.get(image_id)
-        if source is None:
+        # the legacy script took the image at position image_id - 1; v1 requires that this image
+        # has the id image_id, so that reading by position and by id give the same image
+        position = image_id - 1
+        if (
+            not 0 <= position < len(pose_images)
+            or pose_images[position]["id"] != image_id
+        ):
             raise ValueError(
                 f"video {video_id}: annotation {annotation.get('id')} refers to image id "
-                f"{image_id}, which the pose file does not list"
+                f"{image_id}, but the image at position {position} of the pose file's images "
+                "does not have that id"
             )
+        source = pose_images[position]
         new_image_id = int(f"1{video_id}{image_id:05d}")
         if image_id not in images:
             images[image_id] = {

@@ -12,9 +12,11 @@ the rules of the conversion are in :mod:`vatl4pose.data.prepare_annotations`.
 ``dataset.split`` is ``train``, ``train_val`` or ``val`` for PoseTrack21 and ``train``, ``val`` or
 ``test`` for JRDB-Pose; the dataset config's own split is the default. The videos of a split are
 fixed by the id lists packaged with vatl4pose (``vatl4pose/data/splits``), and ``dataset.ids=[...]``
-selects some of them. ``dataset.ids_file`` is not read: the split decides the list.
+selects some of them. ``dataset.ids_file`` is never read, so ``dataset.split`` alone selects the
+list, whatever list the dataset config names.
 
-A file that already exists is kept if it holds the same data. One with other data raises, and
+A file that already exists is kept if it holds the same data. One with other data, or one that is
+not valid JSON, raises, and
 ``prepare.overwrite=true`` replaces it. ``prepare.num_workers`` is the number of threads that read
 the image headers.
 """
@@ -29,7 +31,6 @@ from typing import Optional
 from omegaconf import DictConfig
 
 from vatl4pose.config import (
-    SPLITS_DIR,
     DatasetSection,
     PathsSection,
     PrepareSection,
@@ -97,13 +98,6 @@ def prepare_split(
     if split not in SPLITS[name]:
         raise ValueError(
             f"dataset.split must be one of {', '.join(SPLITS[name])} for {name}, got {split!r}"
-        )
-    if dataset.ids_file is not None and pathlib.Path(
-        dataset.ids_file
-    ).resolve().parent != (SPLITS_DIR):
-        raise ValueError(
-            f"dataset.ids_file={dataset.ids_file} is not read by {COMMAND}: the split fixes the "
-            "list of videos. Select some of them with dataset.ids=[...]."
         )
     if name == "posetrack21":
         source = f"posetrack21_{split}.txt"
