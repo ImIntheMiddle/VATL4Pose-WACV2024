@@ -1,0 +1,5 @@
+# JRDB-Pose validation videos of the initial training and of the lambda tuning, activelearning/val (2 scenes).
+# One scene of the JRDB-Pose release per line. The position of a scene in this list (counted from 0)
+# is its two-digit video id in this split (00, 01, ...), the ids listed in jrdb_pose_val.txt.
+bytes-cafe-2019-02-07_0
+hewlett-packard-intersection-2019-01-24_0

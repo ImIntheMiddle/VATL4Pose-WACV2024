@@ -247,7 +247,12 @@ class TrainSection:
 
 @dataclass
 class PrepareSection:
-    """``vatl4pose-prepare``: ``overwrite`` rebuilds a cache that does not match its video."""
+    """``vatl4pose-prepare`` and ``vatl4pose-prepare-annotations``.
+
+    ``overwrite`` rebuilds a cache that does not match its video, or replaces an annotation file
+    that differs from the one made from the official release. ``num_workers`` is the number of
+    threads of the cache build, or of the image-header reads of the annotation preparation.
+    """
 
     overwrite: bool = False
     num_workers: int = 8

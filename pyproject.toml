@@ -17,6 +17,7 @@ dependencies = [
   "tqdm>=4.66",
   "optuna>=4.0",
   "matplotlib>=3.9",
+  "pillow>=10.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,7 @@ wandb = ["wandb>=0.18"]
 [project.scripts]
 vatl4pose-download-weights = "vatl4pose.cli.download_weights:main"
 vatl4pose-doctor = "vatl4pose.cli.doctor:main"
+vatl4pose-prepare-annotations = "vatl4pose.cli.prepare_annotations:main"
 vatl4pose-prepare = "vatl4pose.cli.prepare:main"
 vatl4pose-train = "vatl4pose.cli.train:main"
 vatl4pose-eval = "vatl4pose.cli.evaluate:main"
