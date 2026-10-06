@@ -31,7 +31,10 @@ SCORERS: dict[str, Callable[..., Scorer]] = {}
 COMBINERS: dict[str, Callable[..., Combiner]] = {}
 SELECTORS: dict[str, Callable[..., Selector]] = {}
 
-PLUGIN_MODULES: list[str] = ["vatl4pose.strategies.baselines"]
+PLUGIN_MODULES: list[str] = [
+    "vatl4pose.strategies.baselines",
+    "vatl4pose.strategies.vatl",
+]
 """Modules whose import registers components. A method with its own components appends its
 package here; the entries are imported on the first lookup of a name that is not registered."""
 
