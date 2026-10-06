@@ -926,9 +926,9 @@ class ActiveLearningLoop:
         """The pretrained autoencoder, tuned on the hybrid features of the labels of the labeled people.
 
         The features are those of the answers of the oracle, with the label visibility as weights
-        (with the simulated oracle they equal the cached ``hybrid_gt``, which this method does not
-        read). The result depends on the checkpoint, the labels and the seed only, so a resume gets
-        the autoencoder the uninterrupted run had.
+        (with the simulated oracle the answers are the ground truth). The result depends on the
+        checkpoint, the labels and the seed only, so a resume gets the autoencoder the
+        uninterrupted run had.
         """
         ae = self._pretrained_ae()
         labeled = np.flatnonzero(self._labeled)

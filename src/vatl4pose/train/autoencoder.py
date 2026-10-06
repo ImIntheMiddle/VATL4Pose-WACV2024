@@ -16,7 +16,7 @@ labeled people of one video. The recipe is that of the 2023 script:
 
 The features are the hybrid features of the ground truth, one row per person: the raw ``bbox``
 of the annotation (height only), the keypoints with the visibility as the weight of every joint.
-They are the features of the ``hybrid_gt`` array of the cache and of the fine-tuning in the loop.
+The fine-tuning in the loop builds its features the same way, from the labels of the oracle.
 The 2023 script built them with one dictionary that it reused for every person, so all rows of its
 training set were copies of the last person (an aliasing bug). Here every row is its own person.
 
