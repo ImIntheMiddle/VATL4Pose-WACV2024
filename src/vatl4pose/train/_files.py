@@ -1,13 +1,9 @@
-"""Output files of the training runs of this package."""
+"""Output directory of the training runs of this package."""
 
 from __future__ import annotations
 
-import os
 import pathlib
 from collections.abc import Sequence
-from typing import Any
-
-import torch
 
 
 def prepare_output_dir(
@@ -27,10 +23,3 @@ def prepare_output_dir(
         )
     out_dir.mkdir(parents=True, exist_ok=True)
     return tuple(out_dir / name for name in names)
-
-
-def save_atomic(obj: Any, path: pathlib.Path) -> None:
-    """``torch.save`` through a temporary file, so that a stopped run leaves no partial file."""
-    tmp = path.with_name(path.name + ".tmp")
-    torch.save(obj, tmp)
-    os.replace(tmp, path)

@@ -68,13 +68,14 @@ import torch
 from ..data.cache import VideoCache
 from ..data.datasets import FinetuneDataset
 from ..data.geometry import HEATMAP_SIZE, heatmaps_to_coords, to_input_tensor
-from ..eval import evaluate_predictions, oks_per_sample
+from ..eval import evaluate_predictions, oks_per_sample, pose_score, xyxy_to_xywh
 from ..models.estimator import PoseEstimator
 from ..models.wholebody_ae import WholeBodyAE, compute_hybrid
 from ..oracle import Oracle
 from ..strategies import RoundContext, Strategy, local_peak_mean
 from ..strategies.baselines.vl4pose import EXTRAS_KEY as VL4POSE_KEY
 from ..train import Finetuner
+from ..train._common import write_atomic
 from . import extras
 from .results import build_result, write_result
 from .runs import video_seed
@@ -86,7 +87,6 @@ from .state import (
     load_state,
     save_pending,
     save_state,
-    write_atomic,
 )
 
 logger = logging.getLogger(__name__)
@@ -218,8 +218,7 @@ class _Pool:
     @property
     def pose_score(self) -> np.ndarray:
         """``(N,)`` float64 score of every pose: mean plus 1.25 times the maximum of its peaks."""
-        peaks = self.maxvals.astype(np.float64)
-        return peaks.mean(axis=1) + 1.25 * peaks.max(axis=1)
+        return pose_score(self.maxvals)
 
 
 @dataclass
@@ -313,17 +312,12 @@ class _Clock:
         }
 
 
-def _derived_seed(base: int, *parts: int | str) -> int:
+def _loop_seed(base: int, *parts: int | str) -> int:
     """A 63-bit seed from ``base`` and ``parts`` through SHA-256; equal on every run and machine."""
     text = "/".join(["vatl4pose.loop", str(base), *map(str, parts)])
     return (
         int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "little") >> 1
     )
-
-
-def _xyxy_to_xywh(boxes: np.ndarray) -> np.ndarray:
-    """``x1, y1, x2, y2`` to ``x, y, w, h`` with width and height counting both end pixels."""
-    return np.hstack((boxes[:, :2], boxes[:, 2:4] - boxes[:, :2] + 1.0))
 
 
 class ActiveLearningLoop:
@@ -403,7 +397,7 @@ class ActiveLearningLoop:
         self._arrays = arrays
         self.n = len(cache)
         self._query_sizes = [int(self.n * ratio) for ratio in cfg.query_ratio]
-        self._boxes_xywh = _xyxy_to_xywh(arrays.bbox_gt)
+        self._boxes_xywh = xyxy_to_xywh(arrays.bbox_gt)
         self._sigmas = np.asarray(self.spec.oks_sigmas, dtype=np.float64)
         self._identity: dict[str, Any] = {
             "dataset": cache.dataset,
@@ -787,8 +781,8 @@ class ActiveLearningLoop:
                 epochs=self.cfg.vl4pose_epochs,
                 lr=self.cfg.vl4pose_lr,
                 batch_size=self.cfg.vl4pose_batch_size,
-                init_seed=_derived_seed(self.seed, "auxnet-init", round_index),
-                train_seed=_derived_seed(self.seed, "auxnet-train", round_index),
+                init_seed=_loop_seed(self.seed, "auxnet-init", round_index),
+                train_seed=_loop_seed(self.seed, "auxnet-train", round_index),
             )
         return inputs
 
@@ -910,7 +904,7 @@ class ActiveLearningLoop:
                 epochs=self.cfg.ae_finetune_epochs,
                 lr=self.cfg.ae_finetune_lr,
                 batch_size=self.cfg.ae_finetune_batch,
-                seed=_derived_seed(self.seed, "ae", int(labeled.size)),
+                seed=_loop_seed(self.seed, "ae", int(labeled.size)),
             )
         return ae
 

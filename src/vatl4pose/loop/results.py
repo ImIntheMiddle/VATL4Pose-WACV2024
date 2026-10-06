@@ -46,7 +46,8 @@ from typing import Any
 
 import vatl4pose
 
-from .state import RoundRecord, write_atomic
+from ..train._common import write_atomic
+from .state import RoundRecord
 
 RESULT_SCHEMA = "vatl4pose.result/1"
 RESULT_NAME = "result.json"

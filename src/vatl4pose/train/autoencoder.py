@@ -21,7 +21,7 @@ The 2023 script built them with one dictionary that it reused for every person, 
 training set were copies of the last person (an aliasing bug). Here every row is its own person.
 
 Reproducibility: the order of the rows in an epoch comes from
-:func:`~vatl4pose.train.finetune.shuffle_order`, and the initial weights are drawn with a generator
+:func:`~vatl4pose.train._common.shuffle_order`, and the initial weights are drawn with a generator
 seeded from ``seed``. Neither reads or changes the global random state.
 """
 
@@ -42,8 +42,8 @@ from vatl4pose.data.annotations import VideoAnnotation
 from vatl4pose.data.datasets import collect_people
 from vatl4pose.keypoints import KeypointSpec
 from vatl4pose.models.wholebody_ae import WholeBodyAE, compute_hybrid
-from vatl4pose.train._files import prepare_output_dir, save_atomic
-from vatl4pose.train.finetune import _derived_seed, shuffle_order
+from vatl4pose.train._common import derived_seed, shuffle_order, write_atomic
+from vatl4pose.train._files import prepare_output_dir
 
 # Rows per batch of the validation loss; the 2023 script used 8000.
 VALID_BATCH_SIZE = 8000
@@ -190,7 +190,7 @@ def train_wholebody_ae(
 
     # the global CPU state is restored afterwards, and the CUDA state is not touched
     with torch.random.fork_rng(devices=[]):
-        torch.default_generator.manual_seed(_derived_seed("ae", "model", seed))
+        torch.default_generator.manual_seed(derived_seed("ae", "model", seed))
         model = WholeBodyAE(spec.ae_input_dim, cfg.z_dim).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     rate_at = dict(cfg.lr_steps)
@@ -239,9 +239,8 @@ def train_wholebody_ae(
             handle.write(json.dumps(line) + "\n")
         if valid_loss < best_loss:
             best_loss, best_epoch, waited = valid_loss, epochs_run, 0
-            save_atomic(
-                {k: v.detach().cpu() for k, v in model.state_dict().items()}, best_path
-            )
+            state = {k: v.detach().cpu() for k, v in model.state_dict().items()}
+            write_atomic(best_path, lambda handle: torch.save(state, handle))
         else:
             waited += 1
             if waited >= cfg.patience:

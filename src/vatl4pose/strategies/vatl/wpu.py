@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ...eval import xyxy_to_xywh
 from ...models.wholebody_ae import WholeBodyAE, compute_hybrid, wpu_scores
 from ..base import RoundContext
 from ..registry import register_scorer
@@ -19,15 +20,7 @@ def crop_boxes_xywh(bbox_xyxy: np.ndarray) -> np.ndarray:
     assert box.ndim == 2 and box.shape[1] == 4, (
         f"bbox: expected (N, 4), got {box.shape}"
     )
-    return np.stack(
-        [
-            box[:, 0],
-            box[:, 1],
-            box[:, 2] - box[:, 0] + 1.0,
-            box[:, 3] - box[:, 1] + 1.0,
-        ],
-        axis=1,
-    )
+    return xyxy_to_xywh(box)
 
 
 @register_scorer("wpu")

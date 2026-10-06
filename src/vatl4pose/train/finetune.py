@@ -26,20 +26,19 @@ of loader workers.
 from __future__ import annotations
 
 import copy
-import hashlib
 import math
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import numpy as np
 import torch
 from torch.nn import functional as F
-from torch.utils.data import DataLoader, Sampler
+from torch.utils.data import DataLoader
 
 from vatl4pose.data.augment import AugmentConfig
 from vatl4pose.data.datasets import FinetuneDataset
 from vatl4pose.models.estimator import PoseEstimator
+from vatl4pose.train._common import FixedOrderSampler, derived_seed, shuffle_order
 
 # A labeled person is retrained while its OKS is at most ``finish_acc + FINISH_MARGIN``.
 FINISH_MARGIN = 0.05
@@ -141,43 +140,6 @@ def heatmap_loss(
     )
     assert tuple(weight.shape) == (*output.shape[:2], 1, 1), tuple(weight.shape)
     return 0.5 * F.mse_loss(output * weight, target * weight)
-
-
-def _derived_seed(*parts: int | str) -> int:
-    """A 63-bit seed from ``parts`` through SHA-256; equal on every run and every machine."""
-    text = "/".join(["vatl4pose.finetune", *map(str, parts)])
-    digest = hashlib.sha256(text.encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], "little") >> 1
-
-
-def shuffle_order(n: int, seed: int, round_index: int, epoch: int) -> torch.Tensor:
-    """The order in which the ``n`` items are visited in one epoch of one round.
-
-    The permutation is a function of ``(seed, round_index, epoch)`` only; it does not read or
-    change the global random state.
-
-    Returns:
-        ``(n,)`` int64 permutation of ``0 .. n - 1``.
-    """
-    generator = torch.Generator().manual_seed(
-        _derived_seed("shuffle", seed, round_index, epoch)
-    )
-    order = torch.randperm(n, generator=generator)
-    assert order.dtype == torch.int64 and tuple(order.shape) == (n,)
-    return order
-
-
-class _FixedOrderSampler(Sampler[int]):
-    """Yields ``order``; the finetuner replaces it before every epoch."""
-
-    def __init__(self, n: int) -> None:
-        self.order: list[int] = list(range(n))
-
-    def __iter__(self) -> Iterator[int]:
-        return iter(self.order)
-
-    def __len__(self) -> int:
-        return len(self.order)
 
 
 class Finetuner:
@@ -367,7 +329,7 @@ class Finetuner:
             return []
 
         n = len(dataset)
-        sampler = _FixedOrderSampler(n)
+        sampler = FixedOrderSampler(n)
         workers = self.cfg.num_workers
         loader = DataLoader(
             dataset,
@@ -378,7 +340,7 @@ class Finetuner:
             pin_memory=self.device.type == "cuda",
             # the loader draws its worker seeds from this generator, not from the global one
             generator=torch.Generator().manual_seed(
-                _derived_seed("loader", self.seed, round_index)
+                derived_seed("loader", self.seed, round_index)
             ),
         )
         history: list[float] = []

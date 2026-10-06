@@ -7,7 +7,8 @@
 """
 
 from .autoencoder import AETrainConfig, hybrid_features, train_wholebody_ae
-from .finetune import Finetuner, RetrainConfig, heatmap_loss, shuffle_order
+from ._common import shuffle_order
+from .finetune import Finetuner, RetrainConfig, heatmap_loss
 from .initial import InitialTrainConfig, evaluate_estimator, train_estimator
 
 __all__ = [

@@ -37,16 +37,16 @@ pickled code is involved.
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 import re
 import shutil
-from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, BinaryIO
+from typing import Any
 
 import numpy as np
 import torch
+
+from ..train._common import fsync_directory, write_atomic, write_file
 
 STATE_SCHEMA = "vatl4pose.state/1"
 PENDING_SCHEMA = "vatl4pose.pending/1"
@@ -59,38 +59,6 @@ PREDICTIONS_NAME = "predictions.npy"
 
 _ROUND_DIR = re.compile(r"round_(\d+)")
 _PENDING_DIR = re.compile(r"pending_(\d+)")
-
-
-def write_atomic(path: pathlib.Path, write: Callable[[BinaryIO], None]) -> None:
-    """Write a file so that a reader sees no file or the complete file.
-
-    ``write`` receives a binary file object for ``<path>.tmp``; the file is ``fsync``-ed, moved to
-    ``path`` with ``os.replace`` and the directory is ``fsync``-ed. A failure removes the temporary
-    file and leaves ``path`` as it was.
-    """
-    tmp = path.with_name(path.name + ".tmp")
-    try:
-        _write_file(tmp, write)
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-    _fsync_directory(path.parent)
-
-
-def _write_file(path: pathlib.Path, write: Callable[[BinaryIO], None]) -> None:
-    with open(path, "wb") as f:
-        write(f)
-        f.flush()
-        os.fsync(f.fileno())
-
-
-def _fsync_directory(directory: pathlib.Path) -> None:
-    fd = os.open(directory, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
 
 
 @dataclass
@@ -251,19 +219,19 @@ def save_state(
     if directory.exists():
         shutil.rmtree(directory)  # left by a run killed before the pointer moved
     directory.mkdir()
-    _write_file(
+    write_file(
         directory / FINETUNER_NAME,
         lambda f: torch.save(
             {"rounds_done": rounds_done, "finetuner": finetuner_state}, f
         ),
     )
-    _write_file(
+    write_file(
         directory / TORCH_RNG_NAME,
         lambda f: torch.save({"rounds_done": rounds_done, "cpu": torch_rng}, f),
     )
-    _write_file(directory / STATE_NAME, lambda f: f.write(text.encode("utf-8")))
-    _fsync_directory(directory)
-    _fsync_directory(state_dir)
+    write_file(directory / STATE_NAME, lambda f: f.write(text.encode("utf-8")))
+    fsync_directory(directory)
+    fsync_directory(state_dir)
     _move_pointer(
         state_dir,
         {"schema": STATE_SCHEMA, "directory": name, "rounds_done": rounds_done},
@@ -379,7 +347,7 @@ def save_pending(state_dir: pathlib.Path, pending: PendingQuery) -> None:
     text = json.dumps(document, indent=1, allow_nan=False) + "\n"
     directory = state_dir / pending_dir_name(pending.round_index)
     directory.mkdir(parents=True, exist_ok=True)
-    _fsync_directory(state_dir)
+    fsync_directory(state_dir)
     write_atomic(
         directory / PREDICTIONS_NAME,
         lambda f: np.save(f, predictions, allow_pickle=False),

@@ -18,17 +18,19 @@ The validation uses the evaluation of the active-learning loop: the person crops
 :func:`~vatl4pose.data.geometry.crop_person` from the ground-truth boxes, the decoding of
 :func:`~vatl4pose.data.geometry.heatmaps_to_coords`, the pose score ``mean + 1.25 * max`` of the
 peak values, and :func:`~vatl4pose.eval.evaluate_predictions` with the OKS sigmas of the keypoint
-spec. The validation AP of the 2023 scripts was 0.0 in every epoch, so their ``model_best.pth`` was
-not chosen by it.
+spec. The in-training validation of the 2023 JRDB-Pose script reported an AP of 0.0 in all 84
+logged epochs, so it could not select the model. The PoseTrack21 script compares a dict with an
+int (``gt_AP > best_score``) and cannot have run as it stands.
 
-Two parts of the 2023 scripts are not ported. The learning-rate restart at epoch 140 that enables
-a "DPG" augmentation did not run: that augmentation read the image size before it was assigned
-and raised an error on its first item. The scripts also multiplied the batch size by the number of
-GPUs and trained with ``DataParallel``; this module trains on one device with the batch size given.
+Two parts of the 2023 scripts are not ported. After epoch 140 they restart the learning rate and
+switch on a "DPG" augmentation. The restart ran; the augmentation read the image size before it was
+assigned and raised an error, so the epoch after it failed. The scripts also multiplied the batch
+size by the number of GPUs and trained with ``DataParallel``; this module trains on one device with
+the batch size given.
 
 Reproducibility: the augmentation of an item is drawn by the dataset from ``(seed, epoch, item)``,
 the order of the items in an epoch comes from
-:func:`~vatl4pose.train.finetune.shuffle_order`, and the initial weights of a network without a
+:func:`~vatl4pose.train._common.shuffle_order`, and the initial weights of a network without a
 checkpoint are drawn with a generator seeded from ``seed``. None of them reads or changes the
 global random state, and none depends on the number of loader workers.
 """
@@ -55,16 +57,23 @@ from vatl4pose.data.datasets import (
     collect_people,
 )
 from vatl4pose.data.geometry import heatmaps_to_coords
-from vatl4pose.eval import METRIC_KEYS, RoundMetrics, evaluate_predictions
+from vatl4pose.eval import (
+    METRIC_KEYS,
+    RoundMetrics,
+    evaluate_predictions,
+    pose_score,
+    xyxy_to_xywh,
+)
 from vatl4pose.keypoints import KeypointSpec
 from vatl4pose.models.estimator import EstimatorConfig, PoseEstimator, build_estimator
-from vatl4pose.train._files import prepare_output_dir, save_atomic
-from vatl4pose.train.finetune import (
-    _derived_seed,
-    _FixedOrderSampler,
-    heatmap_loss,
+from vatl4pose.train._common import (
+    FixedOrderSampler,
+    derived_seed,
     shuffle_order,
+    write_atomic,
 )
+from vatl4pose.train._files import prepare_output_dir
+from vatl4pose.train.finetune import heatmap_loss
 
 # Factor of the learning rate at every milestone (``LR_FACTOR`` of the 2023 configs).
 LR_GAMMA = 0.1
@@ -168,7 +177,7 @@ def ground_truth_arrays(
     )
     keypoints = np.stack([person.keypoints for person in people])
     xyxy = np.stack([person.bbox_xyxy for person in people])
-    boxes = np.hstack((xyxy[:, :2], xyxy[:, 2:4] - xyxy[:, :2] + 1.0))
+    boxes = xyxy_to_xywh(xyxy)
     assert keypoints.dtype == boxes.dtype == np.float64
     assert image_id.shape == (len(people),)
     return keypoints, boxes, image_id
@@ -235,10 +244,8 @@ def evaluate_estimator(
             maxvals[index.numpy()] = scores.numpy()
     finally:
         model.train(was_training)
-    peaks = maxvals.astype(np.float64)
-    pose_score = peaks.mean(axis=1) + 1.25 * peaks.max(axis=1)
     return evaluate_predictions(
-        coords, pose_score, keypoints_gt, boxes_xywh, image_id, spec
+        coords, pose_score(maxvals), keypoints_gt, boxes_xywh, image_id, spec
     )
 
 
@@ -251,9 +258,20 @@ def _split(name: str, videos: Sequence[VideoAnnotation]) -> tuple[KeypointSpec, 
     return spec, len(people)
 
 
-def _cpu_state(model: PoseEstimator) -> dict[str, torch.Tensor]:
-    """The state dict of ``model`` with every tensor on the CPU, in the form ``best.pth`` holds."""
-    return {k: v.detach().cpu() for k, v in model.state_dict().items()}
+def _to_cpu(value: Any) -> Any:
+    """Copy of a nested dict, list or tuple whose tensors are on the CPU and detached."""
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu()
+    if isinstance(value, dict):
+        return {k: _to_cpu(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_to_cpu(v) for v in value)
+    return value
+
+
+def _save(obj: Any, path: pathlib.Path) -> None:
+    """``torch.save`` of ``obj`` through :func:`write_atomic`."""
+    write_atomic(path, lambda handle: torch.save(obj, handle))
 
 
 def _train_epoch(
@@ -356,7 +374,7 @@ def train_estimator(
     # the initial weights of a network without a checkpoint come from a generator of the seed;
     # the global CPU state is restored afterwards, and the CUDA state is not touched
     with torch.random.fork_rng(devices=[]):
-        torch.default_generator.manual_seed(_derived_seed("initial", "model", seed))
+        torch.default_generator.manual_seed(derived_seed("initial", "model", seed))
         model = build_estimator(est_cfg, device)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
@@ -364,7 +382,7 @@ def train_estimator(
     )
 
     dataset = PersonTrainDataset(train_videos, cfg.augment, seed)
-    sampler = _FixedOrderSampler(n_train)
+    sampler = FixedOrderSampler(n_train)
     workers = cfg.num_workers
     loader = DataLoader(
         dataset,
@@ -375,7 +393,7 @@ def train_estimator(
         pin_memory=device.type == "cuda",
         # the loader draws its worker seeds from this generator, not from the global one
         generator=torch.Generator().manual_seed(
-            _derived_seed("initial", "loader", seed)
+            derived_seed("initial", "loader", seed)
         ),
     )
 
@@ -407,11 +425,11 @@ def train_estimator(
                 handle.write(json.dumps(line) + "\n")
             if value > best_value:
                 best_value, best_epoch = value, finished
-                save_atomic(_cpu_state(model), best_path)
-        save_atomic(
+                _save(_to_cpu(model.state_dict()), best_path)
+        _save(
             {
-                "model": _cpu_state(model),
-                "optimizer": optimizer.state_dict(),
+                "model": _to_cpu(model.state_dict()),
+                "optimizer": _to_cpu(optimizer.state_dict()),
                 "scheduler": scheduler.state_dict(),
                 "epoch": finished,
                 "seed": seed,
