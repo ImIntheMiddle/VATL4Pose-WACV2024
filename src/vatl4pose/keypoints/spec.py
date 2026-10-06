@@ -61,6 +61,30 @@ JRDB_ORDER_SIGMAS: tuple[float, ...] = (
 )
 """OKS per-joint sigmas, already divided by 10, in the joint order of JRDB-Pose."""
 
+LEGACY_JRDB_FLIP_SWAPS: tuple[tuple[int, int], ...] = (
+    (1, 2),
+    (0, 4),
+    (3, 4),
+    (8, 10),
+    (5, 7),
+    (10, 13),
+    (14, 16),
+    (4, 5),
+    (7, 12),
+    (4, 8),
+    (3, 6),
+    (13, 15),
+    (11, 14),
+    (6, 9),
+    (8, 11),
+)
+"""The JRDB-Pose flip list of the 2023 code, as ordered swaps (the JRDB-Pose skeleton edges).
+
+Joints appear in several pairs, so the swaps compose to a permutation that is not a left/right
+mirror. The ``jrdb_pose`` preset uses the corrected left/right pairs instead; this constant only
+serves the comparison against the legacy behavior (``dataclasses.replace(spec, flip_pairs=...)``).
+"""
+
 # Triplets (a, b, c) of the hybrid feature: the angle at joint b between the
 # segments a-b and b-c. They index joints in COCO order and are the ones the
 # released 42-dimensional autoencoder checkpoints were trained with.
@@ -115,8 +139,11 @@ class KeypointSpec:
     Attributes:
         name: Identifier of the layout.
         joint_names: One unique name per joint; the order defines the joint indices.
-        flip_pairs: Left/right joint pairs that swap under a horizontal flip. A joint
-            appears in at most one pair; joints without a partner are not listed.
+        flip_pairs: Index swaps applied to the joints on a horizontal flip. The pairs form
+            an ordered sequence: the flip helper swaps the first pair, then the second pair
+            on the result, and so on. Pairs may overlap, so a joint can be moved more than
+            once and the order of the pairs changes the result. The presets list disjoint
+            left/right pairs; joints without a partner are not listed.
         skeleton: Joint pairs connected by a limb. Used for drawing only.
         oks_sigmas: Per-joint OKS sigmas, already divided by 10.
         redundant_joints: Joints that are never annotated. They are excluded from the
@@ -170,18 +197,11 @@ class KeypointSpec:
                 )
 
         flip_pairs = _checked_index_tuples("flip_pairs", self.flip_pairs, 2, num_joints)
-        paired_in: dict[int, int] = {}
         for k, pair in enumerate(flip_pairs):
             if pair[0] == pair[1]:
                 raise ValueError(
                     f"flip_pairs[{k}]: a joint cannot be paired with itself"
                 )
-            for joint in pair:
-                if joint in paired_in:
-                    raise ValueError(
-                        f"flip_pairs[{k}]: joint {joint} already appears in flip_pairs[{paired_in[joint]}]"
-                    )
-                paired_in[joint] = k
 
         skeleton = _checked_index_tuples("skeleton", self.skeleton, 2, num_joints)
         for k, edge in enumerate(skeleton):
@@ -429,8 +449,8 @@ def spec_from_mapping(m: Mapping[str, Any]) -> KeypointSpec:
 
     Raises:
         ValueError: If a field is missing or unknown, if ``oks_sigmas`` does not have one
-            value per joint, if an index is out of range, or if a joint appears in two
-            flip pairs. The message names the offending field and entry.
+            value per joint, or if an index is out of range or a flip pair joins a joint
+            with itself. The message names the offending field and entry.
     """
     field_names = tuple(f.name for f in fields(KeypointSpec))
     missing = [f for f in field_names if f not in m]
