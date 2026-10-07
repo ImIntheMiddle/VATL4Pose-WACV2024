@@ -42,11 +42,15 @@ Conventions
     ``x + w > W`` keeps its raw coordinates, so ``xmin`` may be negative and ``xmax`` may exceed
     ``W - 1``. ``bbox_json_xywh`` is the raw box in both modes.
   - Every joint with a position is moved by a whole number of frame widths ``k * W`` to the copy
-    nearest to the centre of the box, ``k = round((cx - x) / W)`` with ``cx = (xmin + xmax) / 2``.
-    A joint that is not visible but has a position moves as well, and keeps its visibility 0. A
-    joint at ``(0, 0)`` is the "not annotated" marker of the files and stays at ``(0, 0)``,
-    whatever its visibility. A person in the middle of the frame is unchanged.
-  - The skip rules, the sample order and the links between frames do not depend on ``panorama``.
+    nearest to the centre of the box, ``k = floor((cx - x) / W + 0.5)`` with
+    ``cx = (xmin + xmax) / 2``. A joint exactly half a frame width from ``cx`` goes to the copy
+    with the larger x. A joint that is not visible but has a position moves as well, and keeps
+    its visibility 0. A joint at ``(0, 0)`` is the "not annotated" marker of the files and stays
+    at ``(0, 0)``, whatever its visibility. A person in the middle of the frame is unchanged.
+  - The skip rules are the same. The empty-box test of ``coco_custom`` reads the box that is not
+    clipped at the left and right edge, so a box that lies entirely beyond an edge is kept
+    (JRDB-Pose skips no empty box). The sample order and the links between frames follow from the
+    kept people.
 
   With ``panorama`` off the readers behave as in 2023.
 * Keypoints. ``(K, 3)`` array of x, y, visibility with visibility ``min(1, v)``. PoseTrack21 and
@@ -305,9 +309,11 @@ def unwrap_keypoints(
 ) -> np.ndarray:
     """Move every joint with a position by a whole number of frame widths next to the box.
 
-    A joint is moved by ``k * width`` with ``k = round((cx - x) / width)``, ``cx`` the centre of the
-    box, so that it lies within half a frame width of ``cx``. Joints at ``(0, 0)`` (not annotated)
-    stay. The visibility column is not touched. The readers use it on the joints of a file, and the
+    A joint is moved by ``k * width`` with ``k = floor((cx - x) / width + 0.5)``, ``cx`` the centre of
+    the box, so that it lies within half a frame width of ``cx``. A joint exactly half a frame width
+    from ``cx`` goes to the copy with the larger x (``np.round`` would round half to even, and send
+    such a joint to the left or the right by the parity of ``k``). Joints at ``(0, 0)`` (not
+    annotated) stay. The visibility column is not touched. The readers use it on the joints of a file, and the
     COCO-file oracle on the joints that a human drew in the frame.
 
     Args:
@@ -320,7 +326,7 @@ def unwrap_keypoints(
     """
     centre = 0.5 * (bbox_xyxy[0] + bbox_xyxy[2])
     has_position = (keypoints[:, 0] != 0.0) | (keypoints[:, 1] != 0.0)
-    turns = np.round((centre - keypoints[:, 0]) / width)
+    turns = np.floor((centre - keypoints[:, 0]) / width + 0.5)
     moved = keypoints.copy()
     moved[:, 0] = np.where(
         has_position, keypoints[:, 0] + turns * width, keypoints[:, 0]
