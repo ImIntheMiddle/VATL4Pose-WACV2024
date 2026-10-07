@@ -1,6 +1,6 @@
 [project]
 name = "vatl4pose"
-version = "1.0.0.dev0"
+version = "1.0.0"
 description = "Video-specific Active Transfer Learning for human pose estimation (WACV 2024), refactored."
 readme = "README.md"
 license = { file = "LICENSE" }
