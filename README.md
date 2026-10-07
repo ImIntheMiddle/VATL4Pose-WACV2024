@@ -60,7 +60,7 @@ vatl4pose-download-weights --weights-root pretrained_models
 vatl4pose-doctor paths.weights_root=pretrained_models paths.data_root=data
 ```
 
-The first command downloads the weights of the release, checks each file by SHA256 and installs six files below `pretrained_models/`. The files are the estimators SimpleBaseline, FastPose and HRNet-W32 for PoseTrack21, FastPose for JRDB-Pose, and the whole-body autoencoder (Hybrid, zdim 4) of each dataset. The autoencoders are the `WholeBodyAE_zdim4_v1.pth` files, retrained for this version because the autoencoders of the paper were pretrained on a single repeated pose. `--from-file PATH` installs from a zip that you downloaded yourself. The second command checks the whole setup and exits with status 1 if a check fails.
+The first command downloads the weights of the release, checks each file by SHA256 and installs six files below `pretrained_models/`. The files are the estimators SimpleBaseline, FastPose and HRNet-W32 for PoseTrack21, FastPose for JRDB-Pose, and the whole-body autoencoder (Hybrid, zdim 4) of each dataset. The autoencoders are the `WholeBodyAE_zdim4_v1.pth` files. The autoencoder of this version standardises the features, ignores invisible joints and is retrained, because the autoencoders of the paper were pretrained on a single repeated pose; their files do not load. `--from-file PATH` installs from a zip that you downloaded yourself. The second command checks the whole setup and exits with status 1 if a check fails.
 
 The paper evaluates SimpleBaseline on PoseTrack21 (Table 2) and FastPose on JRDB-Pose (Table 4). `strategy=thc_wpu_duw` is the proposed method and the default.
 
