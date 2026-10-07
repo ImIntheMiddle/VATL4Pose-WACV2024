@@ -11,8 +11,19 @@ where ``(c_x, c_y)`` is the centre of the joints weighted by their confidence or
 triplet from :attr:`KeypointSpec.angle_triplets`. The vector has
 :attr:`KeypointSpec.ae_input_dim` entries.
 
-The layer names of :class:`WholeBodyAE` match the released checkpoints, so those load with
-``strict=True``.
+Three things separate this autoencoder from the one of the 2023 paper, which could not
+reconstruct a pose (its decoder ended in a sigmoid although more than 40 % of the feature entries
+are negative, and joints without an annotation entered the feature at the image corner):
+
+* The network works on *standardised* features. The mean and the standard deviation of every
+  dimension, taken over the valid training entries, are the buffers ``feature_mean`` and
+  ``feature_std`` of the model and part of its state dict (:meth:`WholeBodyAE.standardise`).
+* The decoder output is linear.
+* A joint that is not visible, and an angle that has an invisible joint among its three, is
+  *invalid*. Its entry is 0 in the standardised input and takes no part in any loss or score
+  (:func:`hybrid_valid_mask`, :func:`masked_mse`, :func:`wpu_scores`).
+
+A checkpoint of the 2023 format has no ``feature_mean`` and ``feature_std``; the loaders refuse it.
 """
 
 from __future__ import annotations
@@ -30,20 +41,30 @@ _SLOPE_EPS = 1e-6
 
 # The first layer of the encoder fixes the length of the input vector.
 _FIRST_WEIGHT_KEY = "encoder.0.weight"
+# The normalisation buffers; a checkpoint of the 2023 format has neither.
+_NORMALISATION_KEYS = ("feature_mean", "feature_std")
 
 
 class WholeBodyAE(nn.Module):
-    """Fully connected autoencoder with a sigmoid output.
+    """Fully connected autoencoder on standardised hybrid features, with a linear output.
 
     The encoder is ``input_dim -> 24 -> 12 -> 7 -> z_dim`` with a ReLU after every layer except
-    the last. The decoder mirrors it, ``z_dim -> 7 -> 12 -> 24 -> input_dim``, and ends with a
-    sigmoid. The submodules are called ``encoder`` and ``decoder`` (``nn.Sequential``) as in the
-    released checkpoints.
+    the last. The decoder mirrors it, ``z_dim -> 7 -> 12 -> 24 -> input_dim``, and has no output
+    activation. The submodules are called ``encoder`` and ``decoder`` (``nn.Sequential``) as in the
+    2023 checkpoints.
+
+    The module reads and writes standardised features. The buffers ``feature_mean`` and
+    ``feature_std`` (shape ``(input_dim,)``, initially 0 and 1) hold the statistics of the training
+    features, and :meth:`standardise` applies them. They are not trained and travel with the state
+    dict.
 
     Args:
         input_dim: Length of the hybrid feature vector (:attr:`KeypointSpec.ae_input_dim`).
         z_dim: Size of the latent code.
     """
+
+    feature_mean: torch.Tensor
+    feature_std: torch.Tensor
 
     def __init__(self, input_dim: int, z_dim: int) -> None:
         super().__init__()
@@ -53,6 +74,8 @@ class WholeBodyAE(nn.Module):
             raise ValueError(f"z_dim must be positive, got {z_dim}")
         self.input_dim = input_dim
         self.z_dim = z_dim
+        self.register_buffer("feature_mean", torch.zeros(input_dim))
+        self.register_buffer("feature_std", torch.ones(input_dim))
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, 24),
             nn.ReLU(),
@@ -70,17 +93,56 @@ class WholeBodyAE(nn.Module):
             nn.Linear(12, 24),
             nn.ReLU(),
             nn.Linear(24, input_dim),
-            nn.Sigmoid(),
+        )
+
+    def set_normalisation(self, mean: torch.Tensor, std: torch.Tensor) -> None:
+        """Store the feature statistics; ``std`` must be positive and both must be finite.
+
+        Raises:
+            ValueError: If a shape is not ``(input_dim,)`` or a value is not finite, or a
+                standard deviation is not positive. The message names the first bad dimension.
+        """
+        for name, value in (("mean", mean), ("std", std)):
+            if value.shape != (self.input_dim,) or not value.is_floating_point():
+                raise ValueError(
+                    f"{name}: expected a floating-point tensor of shape ({self.input_dim},), "
+                    f"got {tuple(value.shape)} of dtype {value.dtype}"
+                )
+            bad = torch.nonzero(~torch.isfinite(value)).flatten()
+            if bad.numel():
+                raise ValueError(f"{name}: dimension {int(bad[0])} is not finite")
+        bad = torch.nonzero(~(std > 0)).flatten()
+        if bad.numel():
+            raise ValueError(
+                f"std: dimension {int(bad[0])} is {float(std[bad[0]])}; it must be positive"
+            )
+        with torch.no_grad():
+            self.feature_mean.copy_(mean)
+            self.feature_std.copy_(std)
+
+    def standardise(self, features: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
+        """Standardise raw hybrid features with the stored statistics; invalid entries become 0.
+
+        Args:
+            features: Raw features of shape ``(N, input_dim)``, floating point.
+            valid: Boolean mask of the same shape, see :func:`hybrid_valid_mask`.
+
+        Returns:
+            ``(features - feature_mean) / feature_std`` where ``valid``, 0 elsewhere.
+        """
+        return standardise_features(
+            features, valid, self.feature_mean, self.feature_std
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Reconstruct ``x``.
+        """Reconstruct the standardised features ``x``.
 
         Args:
-            x: Floating-point tensor of shape ``(..., input_dim)``.
+            x: Floating-point tensor of shape ``(..., input_dim)``, the output of
+                :meth:`standardise`.
 
         Returns:
-            Tensor of the same shape with values in ``[0, 1]``.
+            Tensor of the same shape; the values at invalid entries carry no meaning.
         """
         assert x.is_floating_point(), x.dtype
         assert x.shape[-1] == self.input_dim, (x.shape, self.input_dim)
@@ -89,8 +151,73 @@ class WholeBodyAE(nn.Module):
         return out
 
 
+def standardise_features(
+    features: torch.Tensor,
+    valid: torch.Tensor,
+    mean: torch.Tensor,
+    std: torch.Tensor,
+) -> torch.Tensor:
+    """``(features - mean) / std`` where ``valid`` and 0 elsewhere.
+
+    Args:
+        features: Floating-point tensor ``(N, D)``.
+        valid: Boolean tensor ``(N, D)``.
+        mean: Per-dimension mean, shape ``(D,)``.
+        std: Per-dimension standard deviation, shape ``(D,)``; positive.
+
+    Returns:
+        Tensor of the shape and dtype of ``features``. An invalid entry may hold any value (even
+        a non-finite one) in ``features``; it is 0 in the result.
+    """
+    assert features.is_floating_point(), features.dtype
+    assert features.ndim == 2, features.shape
+    assert valid.dtype == torch.bool and valid.shape == features.shape, (
+        valid.dtype,
+        valid.shape,
+        features.shape,
+    )
+    assert mean.shape == std.shape == features.shape[1:], (mean.shape, std.shape)
+    standardised = torch.where(
+        valid, (features - mean) / std, torch.zeros_like(features)
+    )
+    assert standardised.shape == features.shape
+    return standardised
+
+
+def masked_mse(
+    prediction: torch.Tensor, target: torch.Tensor, valid: torch.Tensor
+) -> torch.Tensor:
+    """Mean squared error over the valid entries of all rows.
+
+    Args:
+        prediction: ``(N, D)`` floating-point reconstruction.
+        target: ``(N, D)`` standardised features.
+        valid: ``(N, D)`` boolean mask; an entry that is not valid does not enter the loss and
+            passes no gradient.
+
+    Raises:
+        ValueError: If no entry is valid.
+    """
+    assert prediction.shape == target.shape == valid.shape, (
+        prediction.shape,
+        target.shape,
+        valid.shape,
+    )
+    assert valid.dtype == torch.bool, valid.dtype
+    count = int(valid.sum())
+    if count == 0:
+        raise ValueError("masked_mse: no valid entry; every entry is masked out")
+    squared = torch.where(valid, (prediction - target) ** 2, torch.zeros_like(target))
+    return squared.sum() / count
+
+
 def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
-    """Load the state dict of ``ckpt`` on the CPU, accepting tensors only."""
+    """Load the state dict of ``ckpt`` on the CPU, accepting tensors only.
+
+    Raises:
+        ValueError: If ``ckpt`` is no whole-body autoencoder state dict, or one of the 2023
+            format (without the normalisation buffers), or the buffers do not fit the encoder.
+    """
     state = torch.load(ckpt, map_location="cpu", weights_only=True)
     if (
         not isinstance(state, dict)
@@ -101,6 +228,21 @@ def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
             f"{ckpt} is not a whole-body autoencoder state dict: "
             f"no 2-D entry {_FIRST_WEIGHT_KEY!r}"
         )
+    missing = [key for key in _NORMALISATION_KEYS if key not in state]
+    if missing:
+        raise ValueError(
+            f"{ckpt} is a whole-body autoencoder of the 2023 format (no {', '.join(missing)}: "
+            "sigmoid decoder on unscaled features). This version standardises the features and "
+            "needs the retrained weights WholeBodyAE_zdim4_v1.pth, or a new training with "
+            "vatl4pose-train train=ae_posetrack21 or train=ae_jrdb"
+        )
+    input_dim = int(state[_FIRST_WEIGHT_KEY].shape[1])
+    for key in _NORMALISATION_KEYS:
+        if tuple(state[key].shape) != (input_dim,):
+            raise ValueError(
+                f"{ckpt}: {key} has shape {tuple(state[key].shape)}, expected ({input_dim},) "
+                f"like the input of {_FIRST_WEIGHT_KEY}"
+            )
     return state
 
 
@@ -108,7 +250,7 @@ def read_input_dim(ckpt: pathlib.Path) -> int:
     """Return the input dimension of a checkpoint, the width of ``encoder.0.weight``.
 
     Raises:
-        ValueError: If ``ckpt`` is not a whole-body autoencoder state dict.
+        ValueError: If ``ckpt`` is not a whole-body autoencoder state dict of the current format.
     """
     return int(_read_state(ckpt)[_FIRST_WEIGHT_KEY].shape[1])
 
@@ -126,10 +268,12 @@ def load_wholebody_ae(
         device: Device of the returned model.
 
     Returns:
-        The model in evaluation mode, with every parameter taken from the checkpoint.
+        The model in evaluation mode, with every parameter and both normalisation buffers taken
+        from the checkpoint.
 
     Raises:
-        ValueError: If the input dimension of the checkpoint differs from ``spec.ae_input_dim``.
+        ValueError: If ``ckpt`` is of the 2023 format or no autoencoder state dict, or its input
+            dimension differs from ``spec.ae_input_dim``. The message names the file.
         RuntimeError: If the checkpoint has missing, unexpected or mis-shaped entries
             (for example a different ``z_dim``).
     """
@@ -142,6 +286,56 @@ def load_wholebody_ae(
     ae = WholeBodyAE(input_dim, z_dim)
     ae.load_state_dict(state, strict=True)
     return ae.to(device).eval()
+
+
+def hybrid_valid_mask(keypoint_weights: np.ndarray, spec: KeypointSpec) -> np.ndarray:
+    """Which entries of the hybrid feature hold a measured value.
+
+    A joint is usable when its weight is positive (a visible label, a confident prediction) and
+    the spec does not list it as redundant, that is never annotated. The x and the y offset of a
+    usable joint are valid. An angle is valid when all three joints of its triplet are usable.
+
+    Args:
+        keypoint_weights: Weights of the joints, shape ``(N, spec.num_joints)``; the third column
+            of the keypoints that :func:`compute_hybrid` takes.
+        spec: Joint layout.
+
+    Returns:
+        Boolean array of shape ``(N, spec.ae_input_dim)``, in the order of the feature:
+        x offsets, y offsets, angles.
+
+    Raises:
+        ValueError: If ``keypoint_weights`` has the wrong shape.
+    """
+    weight = np.asarray(keypoint_weights)
+    if weight.ndim != 2 or weight.shape[1] != spec.num_joints:
+        raise ValueError(
+            f"keypoint_weights: expected shape (N, {spec.num_joints}) for spec "
+            f"{spec.name!r}, got {weight.shape}"
+        )
+    usable = weight > 0
+    if spec.redundant_joints:
+        usable[:, list(spec.redundant_joints)] = False
+    triplets = np.asarray(spec.angle_triplets, dtype=np.int64).reshape(-1, 3)
+    angle_ok = usable[:, triplets].all(axis=2)
+    valid = np.concatenate([usable, usable, angle_ok], axis=1)
+    assert valid.shape == (weight.shape[0], spec.ae_input_dim), valid.shape
+    assert valid.dtype == np.bool_
+    return valid
+
+
+def feature_dim_name(dim: int, spec: KeypointSpec) -> str:
+    """Name a dimension of the hybrid feature for a message, for example ``x offset of nose``."""
+    k = spec.num_joints
+    if not 0 <= dim < spec.ae_input_dim:
+        raise ValueError(f"dimension {dim} is outside [0, {spec.ae_input_dim})")
+    if dim < k:
+        return f"x offset of {spec.joint_names[dim]}"
+    if dim < 2 * k:
+        return f"y offset of {spec.joint_names[dim - k]}"
+    a, b, c = spec.angle_triplets[dim - 2 * k]
+    names = (spec.joint_names[a], spec.joint_names[b], spec.joint_names[c])
+    return f"angle {dim - 2 * k} at {names[1]} ({names[0]}, {names[1]}, {names[2]})"
 
 
 def compute_hybrid(
@@ -213,27 +407,40 @@ def compute_hybrid(
 
 
 def wpu_scores(
-    ae: WholeBodyAE, hybrid: np.ndarray, keep_index: np.ndarray | None
+    ae: WholeBodyAE,
+    hybrid: np.ndarray,
+    valid: np.ndarray,
+    keep_index: np.ndarray | None,
 ) -> np.ndarray:
-    """Whole-body pose uncertainty: reconstruction error of each hybrid feature.
+    """Whole-body pose uncertainty: masked reconstruction error of each hybrid feature.
+
+    The features are standardised with the statistics of the autoencoder (invalid entries become
+    0). The score of a row is the mean squared difference between the standardised input and the
+    reconstruction over the kept columns that are valid in that row.
 
     Args:
         ae: Autoencoder that reconstructs the feature vectors.
-        hybrid: Features of shape ``(N, ae.input_dim)`` from :func:`compute_hybrid`; they are
+        hybrid: Raw features of shape ``(N, ae.input_dim)`` from :func:`compute_hybrid`; they are
             converted to ``float32`` for the network.
+        valid: Boolean mask of the same shape from :func:`hybrid_valid_mask`.
         keep_index: Columns that enter the error, for example ``spec.wpu_keep_index()``, which
             leaves out the offsets of the redundant joints. ``None`` keeps every column.
 
     Returns:
-        ``float64`` array of shape ``(N,)``, the mean squared difference between the input and the
-        reconstruction over the kept columns of each row. The autoencoder is not modified.
+        ``float64`` array of shape ``(N,)``. The autoencoder is not modified.
 
     Raises:
-        ValueError: If ``hybrid`` or ``keep_index`` has an unexpected shape, dtype or value.
+        ValueError: If ``hybrid``, ``valid`` or ``keep_index`` has an unexpected shape, dtype or
+            value, or a row has no valid kept column (the message names the row).
     """
     if hybrid.ndim != 2 or hybrid.shape[1] != ae.input_dim:
         raise ValueError(
             f"hybrid: expected shape (N, {ae.input_dim}), got {hybrid.shape}"
+        )
+    if valid.shape != hybrid.shape or valid.dtype != np.bool_:
+        raise ValueError(
+            f"valid: expected a bool array of shape {hybrid.shape}, got {valid.dtype} "
+            f"of shape {valid.shape}"
         )
     if keep_index is None:
         keep = np.arange(ae.input_dim, dtype=np.int64)
@@ -251,13 +458,24 @@ def wpu_scores(
             )
         if np.unique(keep).size != keep.size:
             raise ValueError("keep_index: entries must be unique")
+    counted = valid[:, keep]
+    empty = np.flatnonzero(counted.sum(axis=1) == 0)
+    if empty.size:
+        raise ValueError(
+            f"row {int(empty[0])}: no valid entry among the kept columns, so the "
+            "reconstruction error is undefined"
+        )
 
     device = next(ae.parameters()).device
-    x = torch.tensor(np.asarray(hybrid, dtype=np.float32), device=device)
+    x = ae.standardise(
+        torch.tensor(np.asarray(hybrid, dtype=np.float32), device=device),
+        torch.tensor(valid, device=device),
+    )
     columns = torch.as_tensor(keep, dtype=torch.long, device=device)
+    weight = torch.as_tensor(counted, dtype=torch.float32, device=device)
     with torch.no_grad():
-        squared_error = (ae(x) - x)[:, columns] ** 2
-        scores = squared_error.mean(dim=1)
+        squared_error = ((ae(x) - x)[:, columns]) ** 2
+        scores = (squared_error * weight).sum(dim=1) / weight.sum(dim=1)
     out = scores.cpu().numpy().astype(np.float64)
     assert out.shape == (hybrid.shape[0],), out.shape
     return out

@@ -5,7 +5,12 @@ from __future__ import annotations
 import numpy as np
 
 from ...eval import xyxy_to_xywh
-from ...models.wholebody_ae import WholeBodyAE, compute_hybrid, wpu_scores
+from ...models.wholebody_ae import (
+    WholeBodyAE,
+    compute_hybrid,
+    hybrid_valid_mask,
+    wpu_scores,
+)
 from ..base import RoundContext
 from ..registry import register_scorer
 
@@ -28,8 +33,10 @@ class WPUScorer:
     """Reconstruction error of the hybrid feature of the predicted pose.
 
     The feature is built from the crop box ``ctx.bbox_crop`` and the decoded joints
-    ``ctx.coords`` weighted by their peak values ``ctx.maxvals``. The autoencoder is
-    ``ctx.extras["ae"]``. The score is the mean squared reconstruction error over the columns that
+    ``ctx.coords`` weighted by their peak values ``ctx.maxvals``. A joint with a peak value of 0 or
+    below is invalid (:func:`~vatl4pose.models.wholebody_ae.hybrid_valid_mask`) and does not enter
+    the score. The autoencoder is ``ctx.extras["ae"]``. The score is the mean squared
+    reconstruction error in standardised feature space over the valid columns that
     ``ctx.spec.wpu_keep_index()`` keeps, which leaves out the offsets of the redundant joints of the
     dataset. The scorer takes no arguments: another set of columns is another specification,
     for example ``dataclasses.replace(spec, redundant_joints=())`` for all of them.
@@ -46,4 +53,5 @@ class WPUScorer:
             [ctx.coords, ctx.maxvals[..., None]], axis=-1, dtype=np.float64
         )
         hybrid = compute_hybrid(crop_boxes_xywh(ctx.bbox_crop), keypoints, ctx.spec)
-        return wpu_scores(ae, hybrid, ctx.spec.wpu_keep_index())
+        valid = hybrid_valid_mask(ctx.maxvals, ctx.spec)
+        return wpu_scores(ae, hybrid, valid, ctx.spec.wpu_keep_index())
