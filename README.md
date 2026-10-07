@@ -113,7 +113,7 @@ data/mine/annotations/clip1.json
 
 The reader orders the frames by the sorted `file_name`, so number the frames with zero padding (`000001.jpg`, not `1.jpg`). The boxes and the track ids come from your own detector and tracker, and an annotation with an empty box is skipped.
 
-For a 360-degree video, whose right edge continues at its left edge, set `dataset.panorama=true`: the reader then moves the joints of a person on the seam next to the box of the person, and the crops continue across the seam.
+For a 360-degree video, whose right edge continues at its left edge, set `dataset.panorama=true`: the reader then moves the joints of a person on the seam next to the box of the person, and the crops continue across the seam. Write the `bbox` of a person on the seam so that it extends past the edge (`x + w > W`, or `x < 0`) and is not cut at the edge; the reader keeps such a box as it is and clips it only at the top and the bottom.
 
 With `oracle=coco_file` the keypoints of this file are not labels. The loop reads them only to report AP and OSPA. If any person has no visible joint, `result.json` holds `null` for these metrics and `vatl4pose-summarize` lists the video as "no ground truth". Selection, annotation rounds and retraining run as usual, while `oracle=simulated`, `vatl4pose-tune`, `vatl4pose-eval` and `vatl4pose-train` need the keypoints and stop with an error for such a video.
 
