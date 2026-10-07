@@ -99,6 +99,12 @@ class DatasetSection:
             of the paper datasets, for example in an A/B run. The annotation files must have the
             joint count of the spec, and a cache is bound to the spec (build it again with the new
             spec, in another ``paths.output_root``).
+        panorama: Whether the frames are 360-degree panoramas whose right edge continues at the
+            left edge. The JRDB-Pose frames are, so ``jrdb_pose.yaml`` sets it to ``true``; set it
+            for ``coco_custom`` to treat your own 360-degree video the same way (the readers place
+            the joints of a person on the seam next to the box and the crops wrap at the seam, see
+            :mod:`vatl4pose.data.annotations`). ``posetrack21`` has no panorama. A cache is bound
+            to the value (build it again in another ``paths.output_root`` after a change).
     """
 
     name: str = MISSING
@@ -107,6 +113,7 @@ class DatasetSection:
     ids_file: Optional[str] = None
     ids: Optional[list[str]] = None
     keypoints: Any = None
+    panorama: bool = False
 
 
 @dataclass

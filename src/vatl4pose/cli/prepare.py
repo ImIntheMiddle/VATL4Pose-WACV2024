@@ -62,7 +62,7 @@ def prepare_video(
             return "built", path
         spec, digest = keypoint_spec(dataset), annotation_sha256(video)
         try:
-            cache = VideoCache(path, spec, digest)
+            cache = VideoCache(path, spec, digest, dataset.panorama)
             if len(cache) != len(video.people):
                 raise ValueError(
                     f"{path} holds {len(cache)} people, but the annotation file now gives "

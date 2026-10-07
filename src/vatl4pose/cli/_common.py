@@ -231,19 +231,25 @@ def read_video(
                 f"dataset {dataset.name!r} needs a split (the directory below activelearning), "
                 "got none"
             )
-        reader = (
-            read_posetrack21_video
-            if dataset.name == "posetrack21"
-            else read_jrdb_pose_video
+        if dataset.name == "posetrack21":
+            if dataset.panorama:
+                raise ValueError(
+                    "dataset.panorama=true, but PoseTrack21 has no 360-degree frames; "
+                    "panorama is an option of jrdb_pose and coco_custom"
+                )
+            return read_posetrack21_video(root, video_id, split, keypoint_spec(dataset))
+        return read_jrdb_pose_video(
+            root, video_id, split, keypoint_spec(dataset), dataset.panorama
         )
-        return reader(root, video_id, split, keypoint_spec(dataset))
     if dataset.name == "coco_custom":
         if split:
             raise ValueError(
                 f"coco_custom has no splits, but the split {split!r} is set; "
                 "use an id list for the videos you want"
             )
-        return read_coco_custom_video(root, video_id, keypoint_spec(dataset))
+        return read_coco_custom_video(
+            root, video_id, keypoint_spec(dataset), dataset.panorama
+        )
     raise ValueError(f"unknown dataset {dataset.name!r}")
 
 
@@ -440,7 +446,7 @@ def run_video(
                 f"the cache {path} does not exist; build it with vatl4pose-prepare using the "
                 "same dataset, split and paths.output_root"
             )
-        cache = VideoCache(path, spec, annotation_sha256(video))
+        cache = VideoCache(path, spec, annotation_sha256(video), job.dataset.panorama)
         if not known:
             write_settings(run_dir, settings)
         name = wandb_run_name(
