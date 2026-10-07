@@ -91,7 +91,7 @@ The table gives the paper values of the ALC of AP@0.6 in percent, the mean over 
 | `thc_wpu_duw` | THC+WPU_Coresetfilter | THC+WPU+DUW | 98.21 | 96.52 |
 | all | all | AP@0.6 before any annotation (round 0), 2023 runs, scale 0 to 1 | - | 0.561 |
 
-The last row is the mean over the 15 JRDB-Pose test videos of FastPose with the released weights. The value of one video is `performances[0]["AP .6"]` in its `result.json`. The 2023 code evaluated JRDB-Pose with the OKS sigmas of COCO, and this version uses the OKS sigmas of JRDB-Pose. The JRDB-Pose sigmas raise the round-0 AP@0.6 of video 00 from 0.592 to 0.602.
+The last row is the mean over the 15 JRDB-Pose test videos of FastPose with the released weights. The value of one video is `performances[0]["AP .6"]` in its `result.json`. The 2023 code evaluated JRDB-Pose with the OKS sigmas of COCO, and this version uses the OKS sigmas of JRDB-Pose. The JRDB-Pose sigmas raise the round-0 AP@0.6 of video 00 from 0.592 to 0.602 with `dataset.panorama=false`; the default `dataset.panorama=true` of JRDB-Pose gives 0.610 for this video (next paragraph).
 
 The frames of JRDB-Pose are 360-degree panoramas, and this version places the joints that the file records on the other side of the seam next to their person and crops across the seam, which the 2023 code did not do. `dataset=jrdb_pose` sets `dataset.panorama=true`, and `dataset.panorama=false` reads the dataset as the 2023 code did.
 
