@@ -1,6 +1,9 @@
 # @package _global_
 # Pretraining of the whole-body autoencoder on JRDB-Pose: the recipe of ae_posetrack21 on the
-# 10 training and 2 validation videos (paper: 10 and 2 videos).
+# 10 training and 2 validation videos (paper: 10 and 2 videos), with a smaller batch. The 12088
+# training people make 2 updates per epoch at the batch size 10000 of ae_posetrack21. After 300
+# epochs the validation loss was 0.432 and still falling, above the 0.286 of the best constant
+# output. The batch sizes 1000 and 256 gave 0.293 and 0.275.
 defaults:
   - override /dataset: jrdb_pose
 
@@ -20,5 +23,5 @@ train:
       - {epoch: 12, lr: 2.0e-4}
       - {epoch: 40, lr: 5.0e-5}
     epochs: 300
-    batch_size: 10000
+    batch_size: 256
     patience: 30
