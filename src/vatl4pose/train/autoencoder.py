@@ -1,24 +1,32 @@
 """Pretraining of the whole-body autoencoder behind the WPU uncertainty.
 
-The autoencoder reconstructs the hybrid feature of a person (:func:`compute_hybrid`). It trains
-on the ground-truth poses of the training split, and the active-learning loop later tunes it on the
-labeled people of one video. The recipe is that of the 2023 script:
+The autoencoder reconstructs the standardised hybrid feature of a person (:func:`compute_hybrid`).
+It trains on the ground-truth poses of the training split, and the active-learning loop later tunes
+it on the labeled people of one video. The optimiser is that of the 2023 script:
 
 * AdamW (PyTorch defaults, so a weight decay of 0.01) at ``lr``, lowered to the rates of
   ``lr_steps`` at their epochs (counted from 0); batches of ``batch_size`` rows in a new random
-  order every epoch; loss ``MSE(reconstruction, feature)``.
-* After every epoch the loss on the validation features is computed, in batches of 8000 rows. Both
-  losses of the log are the mean of the batch means, as in the 2023 script.
+  order every epoch.
+* The loss is the mean squared error over the *valid* entries of the batch
+  (:func:`~vatl4pose.models.wholebody_ae.masked_mse`). An entry is invalid when its joint is not
+  visible, or when it is an angle with an invisible joint (:func:`hybrid_valid_mask`).
+* The features are standardised. The mean and the standard deviation of every dimension come from
+  the valid entries of the training features (:func:`feature_statistics`) and are stored in the
+  model. A dimension with no valid entry, or with a standard deviation of 0, makes the training
+  raise. The only exception are the dimensions that the spec never makes valid (the offsets of its
+  redundant joints and the angles that use them), which keep the mean 0 and the standard deviation 1.
+* After every epoch the loss on the validation features is computed, in batches of 8000 rows, as the
+  mean over all valid validation entries, so it does not depend on the batch size. The training loss
+  of the log is the mean of the batch means.
 * ``best.pth`` is the state dict of the epoch with the lowest validation loss. The run stops when
   the validation loss has not improved for ``patience`` epochs.
-* The features are used as they are, with no scaling. The decoder ends in a sigmoid, so a feature
-  below 0 or above 1 is reconstructed with an error that no training removes.
 
 The features are the hybrid features of the ground truth, one row per person: the raw ``bbox``
 of the annotation (height only), the keypoints with the visibility as the weight of every joint.
-The fine-tuning in the loop builds its features the same way, from the labels of the oracle.
-The 2023 script built them with one dictionary that it reused for every person, so all rows of its
-training set were copies of the last person (an aliasing bug). Here every row is its own person.
+The fine-tuning in the loop builds its features and masks the same way, from the labels of the
+oracle. The 2023 script built the features with one dictionary that it reused for every person, so
+all rows of its training set were copies of the last person (an aliasing bug). Here every row is
+its own person.
 
 Reproducibility: the order of the rows in an epoch comes from
 :func:`~vatl4pose.train._common.shuffle_order`, and the initial weights are drawn with a generator
@@ -36,12 +44,17 @@ from typing import Any
 
 import numpy as np
 import torch
-from torch.nn import functional as F
 
 from vatl4pose.data.annotations import VideoAnnotation
 from vatl4pose.data.datasets import collect_people
 from vatl4pose.keypoints import KeypointSpec
-from vatl4pose.models.wholebody_ae import WholeBodyAE, compute_hybrid
+from vatl4pose.models.wholebody_ae import (
+    WholeBodyAE,
+    compute_hybrid,
+    feature_dim_name,
+    hybrid_valid_mask,
+    masked_mse,
+)
 from vatl4pose.train._common import derived_seed, shuffle_order, write_atomic
 from vatl4pose.train._files import prepare_output_dir
 
@@ -100,17 +113,19 @@ class AETrainConfig:
 
 def hybrid_features(
     videos: Sequence[VideoAnnotation], spec: KeypointSpec
-) -> np.ndarray:
-    """Hybrid features of the ground truth of all people of ``videos``, one row per person.
+) -> tuple[np.ndarray, np.ndarray]:
+    """Hybrid features of the ground truth of all people of ``videos``, with their validity masks.
 
     Args:
         videos: Videos of the keypoint spec ``spec`` with at least one person in total.
         spec: Keypoint spec that defines the angles of the feature.
 
     Returns:
-        ``(N, spec.ae_input_dim)`` float64 array, the people video after video. A person without a
-        visible joint (a ``coco_custom`` box without keypoints) has no feature:
-        :func:`~vatl4pose.data.datasets.collect_people` raises for it.
+        ``(features, valid)``: the ``(N, spec.ae_input_dim)`` float64 raw features, the people
+        video after video, and the ``(N, spec.ae_input_dim)`` bool mask of the entries that hold a
+        measured value (:func:`~vatl4pose.models.wholebody_ae.hybrid_valid_mask` of the label
+        visibilities). A person without a visible joint (a ``coco_custom`` box without keypoints)
+        has no feature: :func:`~vatl4pose.data.datasets.collect_people` raises for it.
 
     Raises:
         ValueError: If the videos hold no person, or their keypoint spec differs from ``spec``,
@@ -122,25 +137,89 @@ def hybrid_features(
             "videos and spec must have the same keypoint spec, got "
             f"{video_spec.name!r} and {spec.name!r}"
         )
+    keypoints = np.stack([person.keypoints for person in people])
     features = compute_hybrid(
-        np.stack([person.bbox_json_xywh for person in people]),
-        np.stack([person.keypoints for person in people]),
-        spec,
+        np.stack([person.bbox_json_xywh for person in people]), keypoints, spec
     )
-    assert features.shape == (len(people), spec.ae_input_dim)
+    valid = hybrid_valid_mask(keypoints[..., 2], spec)
+    assert features.shape == valid.shape == (len(people), spec.ae_input_dim)
     assert features.dtype == np.float64
-    return features
+    return features, valid
+
+
+def feature_statistics(
+    features: torch.Tensor, valid: torch.Tensor, spec: KeypointSpec
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Mean and standard deviation of every feature dimension over its valid entries.
+
+    The standard deviation is the population one (divisor: the number of valid entries). A
+    dimension that ``spec`` never makes valid (:func:`hybrid_valid_mask` of all-visible joints
+    leaves it invalid) has no entries to measure and gets the mean 0 and the standard deviation 1.
+
+    Args:
+        features: ``(N, spec.ae_input_dim)`` raw features.
+        valid: Boolean mask of the same shape.
+        spec: Keypoint spec of the features.
+
+    Returns:
+        ``(mean, std)``, each ``float32`` of shape ``(spec.ae_input_dim,)``.
+
+    Raises:
+        ValueError: If another dimension has no valid entry or a standard deviation that is not
+            positive and finite. The message names the dimension.
+    """
+    dim = spec.ae_input_dim
+    assert features.is_floating_point() and features.shape == valid.shape, (
+        features.shape,
+        valid.shape,
+    )
+    assert valid.dtype == torch.bool and features.shape[1] == dim, (
+        valid.dtype,
+        features.shape,
+    )
+    never_valid = torch.from_numpy(
+        ~hybrid_valid_mask(np.ones((1, spec.num_joints)), spec)[0]
+    )
+    x = features.double()
+    weight = valid.double()
+    count = weight.sum(dim=0)
+    empty = torch.nonzero((count == 0) & ~never_valid).flatten()
+    if empty.numel():
+        d = int(empty[0])
+        raise ValueError(
+            f"dimension {d} ({feature_dim_name(d, spec)}) has no valid entry in the training "
+            "features, so its mean and standard deviation are undefined"
+        )
+    safe_count = torch.where(count > 0, count, torch.ones_like(count))
+    mean = (x * weight).sum(dim=0) / safe_count
+    variance = (weight * (x - mean) ** 2).sum(dim=0) / safe_count
+    std = variance.sqrt()
+    mean = torch.where(never_valid, torch.zeros_like(mean), mean)
+    std = torch.where(never_valid, torch.ones_like(std), std)
+    bad = torch.nonzero(
+        ~((std > 0) & torch.isfinite(std) & torch.isfinite(mean))
+    ).flatten()
+    if bad.numel():
+        d = int(bad[0])
+        raise ValueError(
+            f"dimension {d} ({feature_dim_name(d, spec)}): the standard deviation over its "
+            f"{int(count[d])} valid training entries is {float(std[d])} and the mean "
+            f"{float(mean[d])}; standardising would divide by it"
+        )
+    return mean.float(), std.float()
 
 
 def _split_features(
     name: str, videos: Sequence[VideoAnnotation], spec: KeypointSpec
-) -> torch.Tensor:
-    """Features of one split as ``(N, input_dim)`` float32; errors name the split."""
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Features of one split as ``(N, input_dim)`` float32 and bool; errors name the split."""
     try:
-        features = hybrid_features(videos, spec)
+        features, valid = hybrid_features(videos, spec)
     except ValueError as exc:
         raise ValueError(f"{name} videos: {exc}") from exc
-    return torch.from_numpy(features.astype(np.float32))
+    if not valid.any():
+        raise ValueError(f"{name} videos: no valid feature entry; no joint is visible")
+    return torch.from_numpy(features.astype(np.float32)), torch.from_numpy(valid)
 
 
 def train_wholebody_ae(
@@ -159,7 +238,8 @@ def train_wholebody_ae(
 
     * ``log.jsonl``: one line per epoch, with ``epoch`` (the number of finished epochs, from 1),
       ``lr`` (the learning rate of that epoch), ``train_loss`` and ``valid_loss``.
-    * ``best.pth``: the state dict of the epoch with the lowest ``valid_loss``. It loads with
+    * ``best.pth``: the state dict of the epoch with the lowest ``valid_loss``, with the feature
+      statistics of the training split in its buffers. It loads with
       :func:`~vatl4pose.models.wholebody_ae.load_wholebody_ae`.
 
     Args:
@@ -180,22 +260,30 @@ def train_wholebody_ae(
         ``n_valid`` (numbers of people), and the paths ``best`` and ``log``.
 
     Raises:
-        ValueError: If ``seed`` is negative, a split has no person or another keypoint spec, or a
-            feature cannot be computed.
+        ValueError: If ``seed`` is negative, a split has no person or another keypoint spec, a
+            feature cannot be computed, or a dimension of the training features has no valid entry
+            or a standard deviation of 0 (see :func:`feature_statistics`).
         FileExistsError: If ``out_dir`` already holds one of the output files.
         FloatingPointError: If a loss is not finite.
     """
     if seed < 0:
         raise ValueError(f"seed must be non-negative, got {seed}")
-    x_train = _split_features("train", train_videos, spec).to(device)
-    x_valid = _split_features("val", val_videos, spec).to(device)
+    x_train, valid_train = _split_features("train", train_videos, spec)
+    x_valid, valid_valid = _split_features("val", val_videos, spec)
+    mean, std = feature_statistics(x_train, valid_train, spec)
     best_path, log_path = prepare_output_dir(out_dir, _OUTPUT_FILES)
     n_train, n_valid = x_train.shape[0], x_valid.shape[0]
 
     # the global CPU state is restored afterwards, and the CUDA state is not touched
     with torch.random.fork_rng(devices=[]):
         torch.default_generator.manual_seed(derived_seed("ae", "model", seed))
-        model = WholeBodyAE(spec.ae_input_dim, cfg.z_dim).to(device)
+        model = WholeBodyAE(spec.ae_input_dim, cfg.z_dim)
+    model.set_normalisation(mean, std)
+    model = model.to(device)
+    # standardised once; the statistics are buffers, so training does not change them
+    z_train = model.standardise(x_train.to(device), valid_train.to(device))
+    z_valid = model.standardise(x_valid.to(device), valid_valid.to(device))
+    valid_train, valid_valid = valid_train.to(device), valid_valid.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     rate_at = dict(cfg.lr_steps)
 
@@ -211,8 +299,9 @@ def train_wholebody_ae(
         order = shuffle_order(n_train, seed, 0, epoch).to(device)
         batch_losses = []
         for start in range(0, n_train, cfg.batch_size):
-            batch = x_train[order[start : start + cfg.batch_size]]
-            loss = F.mse_loss(model(batch), batch)
+            rows = order[start : start + cfg.batch_size]
+            batch = z_train[rows]
+            loss = masked_mse(model(batch), batch, valid_train[rows])
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -221,11 +310,13 @@ def train_wholebody_ae(
 
         model.eval()
         with torch.no_grad():
-            valid_losses = [
-                float(F.mse_loss(model(batch), batch))
-                for batch in x_valid.split(VALID_BATCH_SIZE)
-            ]
-        valid_loss = sum(valid_losses) / len(valid_losses)
+            error_sum, error_count = 0.0, 0
+            for start in range(0, n_valid, VALID_BATCH_SIZE):
+                batch = z_valid[start : start + VALID_BATCH_SIZE]
+                mask = valid_valid[start : start + VALID_BATCH_SIZE]
+                error_sum += float(((model(batch) - batch) ** 2)[mask].double().sum())
+                error_count += int(mask.sum())
+        valid_loss = error_sum / error_count
         if not (math.isfinite(train_loss) and math.isfinite(valid_loss)):
             raise FloatingPointError(
                 f"the loss is {train_loss} (train) and {valid_loss} (valid) in epoch {epoch}; "

@@ -2,6 +2,12 @@
 # Pretraining of the whole-body autoencoder on PoseTrack21. Paper: Adam, lr 1e-3, 300 epochs.
 # Legacy scripts/wholebodyAE_train.py: AdamW lr 0.001 (line 118), lr 0.0002 at epoch 12 and 0.00005 at
 # epoch 40 (137-140), batch 10000 (125), early stopping patience 30 on the validation loss (120).
+# The features are standardised and the loss is a masked MSE (invisible joints are left out).
+# Batch size: chosen by the validation loss (masked MSE in standardised space, seed 166, CPU) among
+# 256, 1000 and 10000, which gave 0.2494, 0.2977 and 0.4400 at the best epochs 300, 297 and 300.
+# All three runs had their best epoch at 297 to 300, so none had converged after 300 epochs. The shipped
+# run (256, 4 CPU threads instead of the 2 of the comparison) reached 0.2579. A run is reproducible byte
+# for byte with the same number of CPU threads and differs a little with another.
 defaults:
   - override /dataset: posetrack21
 
@@ -21,5 +27,5 @@ train:
       - {epoch: 12, lr: 2.0e-4}
       - {epoch: 40, lr: 5.0e-5}
     epochs: 300
-    batch_size: 10000
+    batch_size: 256
     patience: 30
