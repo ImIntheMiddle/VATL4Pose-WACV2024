@@ -60,7 +60,7 @@ vatl4pose-download-weights --weights-root pretrained_models
 vatl4pose-doctor paths.weights_root=pretrained_models paths.data_root=data
 ```
 
-The first command downloads the weights of the release, checks each file by SHA256 and installs six files below `pretrained_models/`. The files are the estimators SimpleBaseline, FastPose and HRNet-W32 for PoseTrack21, FastPose for JRDB-Pose, and the whole-body autoencoder (Hybrid, zdim 4) of each dataset. `--from-file PATH` installs from a zip that you downloaded yourself. The second command checks the whole setup and exits with status 1 if a check fails.
+The first command downloads the weights of the release, checks each file by SHA256 and installs six files below `pretrained_models/`. The files are the estimators SimpleBaseline, FastPose and HRNet-W32 for PoseTrack21, FastPose for JRDB-Pose, and the whole-body autoencoder (Hybrid, zdim 4) of each dataset. The autoencoders are the `WholeBodyAE_zdim4_v1.pth` files, retrained for this version because the autoencoders of the paper were pretrained on a single repeated pose. `--from-file PATH` installs from a zip that you downloaded yourself. The second command checks the whole setup and exits with status 1 if a check fails.
 
 The paper evaluates SimpleBaseline on PoseTrack21 (Table 2) and FastPose on JRDB-Pose (Table 4). `strategy=thc_wpu_duw` is the proposed method and the default.
 
@@ -157,7 +157,7 @@ vatl4pose-prepare dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1,clip
 
 vatl4pose-atl dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1,clip2]' dataset.keypoints=posetrack21 \
   estimator=simplebaseline estimator.weights=posetrack21/simplebaseline_256x192.pth \
-  ae.checkpoint=wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth \
+  ae.checkpoint=wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4_v1.pth \
   oracle=coco_file run.name=mine run.device=cuda 'loop.query_ratio=[0.05,0.1,0.2]' loop.save_final_model=true
 ```
 
@@ -168,7 +168,7 @@ vatl4pose-prepare dataset=coco_custom dataset.root=mine 'dataset.ids=[val1,val2]
 
 vatl4pose-tune dataset=coco_custom dataset.root=mine dataset.keypoints=posetrack21 \
   estimator=simplebaseline estimator.weights=posetrack21/simplebaseline_256x192.pth \
-  ae.checkpoint=wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4.pth \
+  ae.checkpoint=wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4_v1.pth \
   tune.ids_file=val_ids.txt 'tune.lams=[0.01,1,100]' run.name=mine_tune run.device=cuda
 ```
 

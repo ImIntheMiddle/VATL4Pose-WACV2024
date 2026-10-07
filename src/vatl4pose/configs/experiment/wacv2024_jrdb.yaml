@@ -16,7 +16,7 @@ estimator:
   weights: jrdb/fastpose_256x192.pth
 
 ae:
-  checkpoint: wholebodyAE/JRDB2022/Hybrid/WholeBodyAE_zdim4.pth
+  checkpoint: wholebodyAE/JRDB2022/Hybrid/WholeBodyAE_zdim4_v1.pth
 
 # weight of the uncertainty term of the DUW selector (strategy.params.lam of the DUW strategies)
 lam: 1000.0
