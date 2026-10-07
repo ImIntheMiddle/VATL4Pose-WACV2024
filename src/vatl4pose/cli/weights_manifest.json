@@ -3,6 +3,6 @@
   "posetrack21/fastpose_256x192.pth": "03c727be9aed8fdefcab0d668370f0cc724d7b2ece246ec87cc50c8fa5140a67",
   "posetrack21/hrnet_256x192.pth": "faffc60d3a7c5cc512a31d0814a90a78c98b63cc1dda753e2f4b6ecdd105bd01",
   "posetrack21/simplebaseline_256x192.pth": "7329616ee09bc90cf744bce99b9fb030a2f199f52d2b8baca09df807d73b49b4",
-  "wholebodyAE/JRDB2022/Hybrid/WholeBodyAE_zdim4_v1.pth": "6bec4678f882c6babbb0620b3ff69741f6ae73a0fb286bb7bad68c7cd49eb272",
-  "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4_v1.pth": "09e88efb21e05e4761cccd797b78abffd2c41c140e59059e436435e7d55690dc"
+  "wholebodyAE/JRDB2022/Hybrid/WholeBodyAE_zdim4_v1.pth": "2908ac973be6e197ebf24a6c5a93879b96c514f7be3f4be72b241db0fc0a0bc5",
+  "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4_v1.pth": "944234c5e0d5f9ba4a44b83ce542153fa0775f5ea789743c8267589b398d90f2"
 }
