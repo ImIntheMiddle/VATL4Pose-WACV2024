@@ -10,7 +10,8 @@ produced a state, oracle files, a result or a done marker; a start that failed b
 settings replaced by the next start.
 
 The fingerprint holds the package version, the dataset, split and video id, the keypoint spec (name and
-SHA-256 of all its fields), whether the frames are panoramas (``dataset.panorama``), the seed, the estimator architecture, its weights file (path and SHA-256),
+SHA-256 of all its fields), whether the frames are panoramas (``dataset.panorama``), the seed, the
+estimator architecture, its weights file (path and SHA-256),
 the autoencoder checkpoint (path and SHA-256), the oracle, the strategy (name, parts and parameters,
 ``lam`` included), the loop settings and the retraining settings. Settings that do not change what a
 round computes are left out, the same ones the loop leaves out when it resumes: the inference batch

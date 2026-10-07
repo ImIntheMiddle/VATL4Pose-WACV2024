@@ -17,7 +17,8 @@ and this package keeps that rule so that its numbers stay comparable with the pa
 that no label matches and whose area lies outside the area range is then ignored instead of
 counted as a false positive. On the 2023 predictions of JRDB-Pose video 00 in round 0, the AP@0.6
 is 0.592 with this rule and 0.458 with the standard area ``w * h``. The file names the protocol in
-``ap_protocol``, and ``vatl4pose.eval.coco_ap`` explains it. The ten values are computed in this
+``ap_protocol``, and ``vatl4pose.eval.coco_ap`` explains it. The file also records ``panorama``, the
+setting of ``dataset.panorama`` that the labels and the crops of the evaluation followed. The ten values are computed in this
 package from the precision and recall arrays of ``pycocotools``. Issue #40 came from the summary
 of the stock ``pycocotools``, which lists AP75 at the position of the key ``AP .6``.
 """
@@ -126,6 +127,7 @@ def run(cfg: DictConfig) -> None:
         "estimator": estimator.arch,
         "weights": None if est_cfg.weights is None else str(est_cfg.weights),
         "ap_protocol": AP_PROTOCOL,
+        "panorama": dataset.panorama,
         "metrics": {
             **{k: float(metrics.ap[k]) for k in METRIC_KEYS},
             "OSPA": float(metrics.ospa),
