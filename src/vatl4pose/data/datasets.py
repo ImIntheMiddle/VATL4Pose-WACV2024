@@ -45,16 +45,23 @@ def collect_people(
 
     The training and the evaluation of an estimator read the keypoints of every person as labels,
     so a person without a visible keypoint (a ``coco_custom`` box without keypoints) is refused.
+    The videos must agree on ``panorama``: the datasets below crop every person the same way.
 
     Raises:
-        ValueError: If the videos do not share one keypoint spec, hold no person, or hold a person
-            without a visible keypoint.
+        ValueError: If the videos do not share one keypoint spec or one ``panorama`` setting, hold
+            no person, or hold a person without a visible keypoint.
     """
     specs = {video.spec for video in videos}
     if len(specs) > 1:
         raise ValueError(
             "all videos must have the same keypoint spec, got "
             f"{sorted(spec.name for spec in specs)}"
+        )
+    panoramas = {video.panorama for video in videos}
+    if len(panoramas) > 1:
+        raise ValueError(
+            "all videos must have the same panorama setting, got "
+            f"{[(video.video_id, video.panorama) for video in videos]}"
         )
     people = tuple(person for video in videos for person in video.people)
     if not people:
@@ -109,7 +116,8 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
 
     Args:
         cache: The cache of the video; the original frames and the ground-truth boxes come from
-            it. The cached crops are not used.
+            it. The cached crops are not used. The crops follow the ``panorama`` setting of the
+            cache (the frames wrap at the seam, the boxes and labels are in unwrapped coordinates).
         indices: ``(M,)`` int64 sample indices of the training set.
         labels: ``(M, K, 3)`` float array of x, y (image pixels) and visibility (0 or 1), one row
             per entry of ``indices``; the answers of the oracle.
@@ -228,6 +236,7 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
             self._spec,
             self._augment,
             rng,
+            panorama=self._cache.panorama,
         )
         target, weight = make_targets(joints, self._spec.num_joints)
         x = to_input_tensor(torch.from_numpy(crop).unsqueeze(0))[0]
@@ -244,8 +253,9 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """Augmented training items of all people of several videos, read from the original frames.
 
     Item ``i`` belongs to the ``i``-th person of ``videos`` (video after video). It is cropped from
-    the ground-truth box of the person, which the readers clipped to the frame, with a random
-    scale, rotation and flip, and its heatmap target is built from the ground-truth joints. The
+    the ground-truth box of the person, which the readers clipped to the frame (not at the left and
+    right edge of a panorama), with a random scale, rotation and flip, and its heatmap target is
+    built from the ground-truth joints. The crops follow the ``panorama`` setting of the videos. The
     augmentation of an item is drawn from ``np.random.default_rng((seed, epoch, i))``, so an item
     is the same whenever it is read in the same epoch, whatever the order of reads, the batch size
     or the number of loader workers.
@@ -257,13 +267,14 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     the previous epoch. This is the mechanism of :class:`FinetuneDataset`.
 
     Args:
-        videos: Videos with the same keypoint spec and at least one person in total.
+        videos: Videos with the same keypoint spec and ``panorama`` setting and at least one
+            person in total.
         augment: Augmentation strengths and probabilities.
         seed: Seed of the run; non-negative.
 
     Raises:
-        ValueError: If ``seed`` is negative, the videos differ in their keypoint spec, or they
-            hold no person.
+        ValueError: If ``seed`` is negative, the videos differ in their keypoint spec or their
+            ``panorama`` setting, or they hold no person.
     """
 
     def __init__(
@@ -272,6 +283,7 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         if seed < 0:
             raise ValueError(f"seed must be non-negative, got {seed}")
         self._spec, self._people = collect_people(videos)
+        self._panorama = videos[0].panorama
         self._augment = augment
         self._seed = seed
         # shared memory: the worker processes of a loader read the epoch that the main process sets
@@ -315,6 +327,7 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
             self._spec,
             self._augment,
             rng,
+            panorama=self._panorama,
         )
         target, weight = make_targets(joints, self._spec.num_joints)
         x = to_input_tensor(torch.from_numpy(crop).unsqueeze(0))[0]
@@ -334,14 +347,17 @@ class PersonCropDataset(Dataset[tuple[int, torch.Tensor, torch.Tensor]]):
     one of :func:`~vatl4pose.data.geometry.crop_person`, the one the active-learning loop caches.
 
     Args:
-        videos: Videos with the same keypoint spec and at least one person in total.
+        videos: Videos with the same keypoint spec and ``panorama`` setting and at least one
+            person in total.
 
     Raises:
-        ValueError: If the videos differ in their keypoint spec or hold no person.
+        ValueError: If the videos differ in their keypoint spec or their ``panorama`` setting, or
+            hold no person.
     """
 
     def __init__(self, videos: Sequence[VideoAnnotation]) -> None:
         _, self._people = collect_people(videos)
+        self._panorama = videos[0].panorama
 
     def __len__(self) -> int:
         return len(self._people)
@@ -354,7 +370,7 @@ class PersonCropDataset(Dataset[tuple[int, torch.Tensor, torch.Tensor]]):
             raise IndexError(f"index {i} out of range [0, {len(self)})")
         person = self._people[i]
         crop, bbox_crop = crop_person(
-            read_image_rgb(person.image_path), person.bbox_xyxy
+            read_image_rgb(person.image_path), person.bbox_xyxy, self._panorama
         )
         x = to_input_tensor(torch.from_numpy(crop).unsqueeze(0))[0]
         assert x.dtype == torch.float32 and tuple(x.shape) == (3, *INPUT_SIZE)

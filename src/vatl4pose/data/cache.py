@@ -10,17 +10,25 @@ File layout (``N`` samples, ``K`` joints of the keypoint spec)::
 
     crops           uint8   (N, 256, 192, 3)  RGB, one chunk per sample, lzf compression
     bbox_crop       float64 (N, 4)            xyxy box of the cropped region (float32 values)
-    bbox_gt         float64 (N, 4)            xyxy ground-truth box (clipped, as the reader gives it)
+    bbox_gt         float64 (N, 4)            xyxy ground-truth box (clipped, as the reader gives it;
+                                              not clipped at the left and right edge in a panorama)
     bbox_json_xywh  float64 (N, 4)            raw xywh box of the annotation file
-    keypoints_gt    float64 (N, K, 3)         x, y, visibility
+    keypoints_gt    float64 (N, K, 3)         x, y, visibility (x in the unwrapped coordinates of
+                                              the box in a panorama)
     ann_id, image_id, frame_index, prev_index, next_index    int64 (N,)
     track_id, image_path                      variable-length strings (N,); paths are absolute
     has_gt          bool    (N,)              True where the person has a visible ground-truth joint
 
 Attributes: ``cache_version``, ``dataset``, ``video_id``, ``spec_name``, ``spec_sha256`` (of all
 fields of the keypoint spec, see :func:`spec_sha256`), ``annotation_sha256`` (of the annotation
-file, see :func:`annotation_sha256`), ``created_utc`` and ``vatl4pose_version``. ``VideoCache``
-compares the spec digest, so a cache is refused for a spec that differs in any field.
+file, see :func:`annotation_sha256`), ``panorama``, ``created_utc`` and ``vatl4pose_version``.
+``VideoCache`` compares the spec digest, so a cache is refused for a spec that differs in any field.
+
+``panorama`` tells that the frames are 360-degree panoramas: the crops read the frame as a periodic
+strip (:func:`~vatl4pose.data.geometry.warp_crop`) and the boxes and joints are in the unwrapped
+coordinates of the strip (see :mod:`vatl4pose.data.annotations`). The readers of the cache (the
+fine-tune dataset in particular) crop the original frames the same way when the cache says so, and
+``VideoCache`` refuses a cache whose ``panorama`` differs from the one the caller works with.
 
 The cache holds no feature of the autoencoder. The loop computes the hybrid feature
 (:func:`~vatl4pose.models.wholebody_ae.compute_hybrid`) from ``bbox_json_xywh`` and the labels that
@@ -42,6 +50,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import itertools
 import json
 import os
 import pathlib
@@ -60,9 +69,10 @@ from vatl4pose.keypoints import KeypointSpec
 from .annotations import PersonRecord, VideoAnnotation
 from .geometry import INPUT_SIZE, crop_person
 
-CACHE_VERSION: int = 3
+CACHE_VERSION: int = 4
 """Version of the file layout; a cache of another version is refused. Version 2 added ``has_gt``,
-version 3 dropped ``hybrid_gt``, which no code read."""
+version 3 dropped ``hybrid_gt``, which no code read, version 4 added the attribute ``panorama``
+(a cache of an older version holds crops and joints that were made without the seam)."""
 
 # Frames handled per round of parallel work, per worker. The crops of a round wait in memory
 # (147 kB each) until the main thread has written them.
@@ -106,11 +116,14 @@ def annotation_sha256(video: VideoAnnotation) -> str:
     return hashlib.sha256(video.annotation_path.read_bytes()).hexdigest()
 
 
-def _crop_frame(frame: list[PersonRecord]) -> list[tuple[np.ndarray, np.ndarray]]:
+def _crop_frame(
+    frame: list[PersonRecord], panorama: bool
+) -> list[tuple[np.ndarray, np.ndarray]]:
     """Decode one frame and crop every person of ``frame`` from it (runs in a worker thread).
 
     Args:
         frame: Samples that all show the same image file; at least one.
+        panorama: Whether the frame is a 360-degree panorama (the crops wrap at the seam).
 
     Returns:
         ``(crop, bbox_crop)`` of every sample, in the order of ``frame``.
@@ -123,7 +136,7 @@ def _crop_frame(frame: list[PersonRecord]) -> list[tuple[np.ndarray, np.ndarray]
                 f"image {person.image_path} has size (width, height) = {(width, height)}, "
                 f"but the annotation of sample {person.sample_index} says {person.image_size}"
             )
-    return [crop_person(image, person.bbox_xyxy) for person in frame]
+    return [crop_person(image, person.bbox_xyxy, panorama) for person in frame]
 
 
 def _create_strings(handle: h5py.File, name: str, values: list[str]) -> None:
@@ -149,6 +162,7 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
         handle.attrs["spec_name"] = spec.name
         handle.attrs["spec_sha256"] = spec_sha256(spec)
         handle.attrs["annotation_sha256"] = annotation_sha256(video)
+        handle.attrs["panorama"] = video.panorama
         handle.attrs["created_utc"] = datetime.now(timezone.utc).isoformat(
             timespec="seconds"
         )
@@ -178,7 +192,9 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
                 # ``map`` yields the results in the order of its input, whatever the order in
                 # which the workers finish.
                 results = pool.map(
-                    _crop_frame, ([people[i] for i in frame] for frame in batch)
+                    _crop_frame,
+                    ([people[i] for i in frame] for frame in batch),
+                    itertools.repeat(video.panorama),
                 )
                 for frame, frame_results in zip(batch, results, strict=True):
                     for position, (crop, box) in zip(frame, frame_results, strict=True):
@@ -295,13 +311,16 @@ class VideoCache:
         expected_spec: Keypoint spec the caller works with; the cache must have been built for it.
         expected_annotation_sha256: SHA-256 of the annotation file the caller works with. If given,
             the cache must have been built from a file with this digest.
+        expected_panorama: The ``panorama`` setting the caller works with. If given, the cache must
+            have been built with the same value (its crops and joints depend on it).
 
     Raises:
         FileNotFoundError: If ``path`` does not exist.
         ValueError: If the file is not a cache, has another cache version, was built for another
             spec (another name, joint count or any other spec field, see :func:`spec_sha256`), or
-            (when ``expected_annotation_sha256`` is given) from another annotation file, or if a
-            dataset of the file has an unexpected shape or dtype.
+            (when ``expected_annotation_sha256`` is given) from another annotation file, or (when
+            ``expected_panorama`` is given) with another ``panorama`` setting, or if a dataset of
+            the file has an unexpected shape or dtype.
     """
 
     def __init__(
@@ -309,11 +328,15 @@ class VideoCache:
         path: pathlib.Path,
         expected_spec: KeypointSpec,
         expected_annotation_sha256: str | None = None,
+        expected_panorama: bool | None = None,
     ) -> None:
         self._path = pathlib.Path(path)
         self._spec = expected_spec
         with h5py.File(self._path, "r") as handle:
-            self._check_attributes(handle, expected_spec, expected_annotation_sha256)
+            self._check_attributes(
+                handle, expected_spec, expected_annotation_sha256, expected_panorama
+            )
+            self._panorama = bool(handle.attrs["panorama"])
             self._dataset = self._text_attribute(handle, "dataset")
             self._video_id = self._text_attribute(handle, "video_id")
             self._arrays = self._load_arrays(handle, expected_spec)
@@ -338,6 +361,11 @@ class VideoCache:
     def video_id(self) -> str:
         """Identifier of the video the cache was built from."""
         return self._video_id
+
+    @property
+    def panorama(self) -> bool:
+        """Whether the cache was built for 360-degree frames (crops and joints across the seam)."""
+        return self._panorama
 
     def __len__(self) -> int:
         return self._length
@@ -388,6 +416,7 @@ class VideoCache:
         handle: h5py.File,
         spec: KeypointSpec,
         expected_annotation_sha256: str | None,
+        expected_panorama: bool | None,
     ) -> None:
         def attribute(name: str) -> object:
             if name not in handle.attrs:
@@ -420,6 +449,12 @@ class VideoCache:
                 f"{self._path} was built for a spec {spec.name!r} with SHA-256 {built_hash}, "
                 f"but the spec given has SHA-256 {expected_hash}; a field of the spec changed "
                 "(for example the angle triplets), rebuild the cache"
+            )
+        built_panorama = bool(attribute("panorama"))
+        if expected_panorama is not None and built_panorama != expected_panorama:
+            raise ValueError(
+                f"{self._path} was built with panorama={built_panorama}, but panorama="
+                f"{expected_panorama} is set; the crops and the joints differ, rebuild the cache"
             )
         if expected_annotation_sha256 is not None:
             digest = str(attribute("annotation_sha256"))
