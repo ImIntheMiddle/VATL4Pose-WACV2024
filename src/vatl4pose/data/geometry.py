@@ -5,7 +5,7 @@ predicts one ``64 x 48`` heatmap per joint. This module holds the geometry aroun
 
 * box to crop-centre and scale (:func:`box_to_center_scale`, :func:`center_scale_to_box`),
 * the affine map between image and crop (:func:`get_affine_transform`),
-* cropping and normalising (:func:`crop_person`, :func:`to_input_tensor`),
+* cropping and normalising (:func:`crop_person`, :func:`warp_crop`, :func:`to_input_tensor`),
 * decoding heatmaps into image coordinates (:func:`heatmaps_to_coords`, :func:`coords_in_box`),
 * Gaussian training targets (:func:`make_targets`).
 
@@ -17,7 +17,9 @@ The numbers follow the 2023 inference code of the paper exactly, including its f
   images (JRDB-Pose frames are 3760 pixels wide) equal the legacy ones.
 * Both axes of the heatmap-to-image map use the box *width* divided by the heatmap width. A box
   with the crop aspect ratio makes this equal to height divided by heatmap height.
-* A crop is not clipped to the image: parts outside the frame are black.
+* A crop is not clipped to the image: parts outside the frame are black. With ``panorama`` the
+  left and right edges are the same seam: parts beyond them show the other end of the frame, and
+  only the parts above and below the frame are black (:func:`warp_crop`).
 
 Conventions of this module:
 
@@ -153,18 +155,88 @@ def get_affine_transform(
     return cv2.getAffineTransform(src, dst)
 
 
+def warp_crop(
+    image_rgb: np.ndarray, trans: np.ndarray, panorama: bool = False
+) -> np.ndarray:
+    """Warp the region of an RGB frame that ``trans`` maps to the ``256 x 192`` crop.
+
+    The sampling is bilinear and the outside of the frame is black. With ``panorama`` the frame
+    is read as a periodic strip: the columns left of the first column are the last columns, and
+    the columns right of the last column are the first ones, as many as the crop reaches. Above and
+    below the frame the crop stays black. A crop that stays inside the frame is the same with and
+    without ``panorama``; the frame is copied only when the crop reaches over a left or right edge.
+
+    Args:
+        image_rgb: ``(H, W, 3)`` uint8 RGB image.
+        trans: ``(2, 3)`` float64 map from image pixels to crop pixels
+            (:func:`get_affine_transform`), in the coordinates of the unwrapped strip.
+        panorama: Whether the left and right edge of the frame are one seam.
+
+    Returns:
+        The ``(256, 192, 3)`` uint8 crop.
+    """
+    out_h, out_w = INPUT_SIZE
+    if panorama:
+        image_rgb, trans = _wrap_columns(image_rgb, trans)
+    crop = cv2.warpAffine(image_rgb, trans, (out_w, out_h), flags=cv2.INTER_LINEAR)
+    assert crop.shape == (out_h, out_w, 3) and crop.dtype == np.uint8
+    return crop
+
+
+def _wrap_columns(
+    image_rgb: np.ndarray, trans: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Extend the frame left and right by wrapped columns so that the crop lies inside it.
+
+    The columns that the crop samples (with one pixel for the bilinear step and one more as a
+    margin) come from the inverse map of the crop corners. A frame that already holds them is
+    returned as it is. Otherwise the columns ``-left .. -1`` and ``W .. W + right - 1`` are taken
+    modulo ``W``, and the map moves by ``left`` columns, which is an integer shift of the source
+    coordinate.
+
+    Returns:
+        ``(image, trans)``: the padded frame and the map for it.
+    """
+    height, width = image_rgb.shape[:2]
+    out_h, out_w = INPUT_SIZE
+    inverse = cv2.invertAffineTransform(trans)
+    corners = np.array(
+        [
+            [0.0, 0.0, 1.0],
+            [out_w - 1.0, 0.0, 1.0],
+            [0.0, out_h - 1.0, 1.0],
+            [out_w - 1.0, out_h - 1.0, 1.0],
+        ]
+    )
+    source_x = corners @ inverse[0]
+    first = int(np.floor(source_x.min())) - 2
+    last = int(np.ceil(source_x.max())) + 2
+    left, right = max(0, -first), max(0, last - (width - 1))
+    if left == 0 and right == 0:
+        return image_rgb, trans
+    padded = image_rgb[:, np.arange(-left, width + right) % width]
+    assert padded.shape == (height, width + left + right, 3)
+    shifted = trans.copy()
+    shifted[:, 2] -= trans[:, 0] * left
+    return np.ascontiguousarray(padded), shifted
+
+
 def crop_person(
-    image_rgb: np.ndarray, bbox_xyxy: np.ndarray
+    image_rgb: np.ndarray, bbox_xyxy: np.ndarray, panorama: bool = False
 ) -> tuple[np.ndarray, np.ndarray]:
     """Crop one person from an RGB frame.
 
     Args:
         image_rgb: ``(H, W, 3)`` uint8 RGB image.
-        bbox_xyxy: ``(4,)`` float box of the person in image pixels.
+        bbox_xyxy: ``(4,)`` float box of the person in image pixels. With ``panorama`` its ``x``
+            may lie left of 0 or right of ``W - 1``: the person stands on the seam.
+        panorama: Whether the frame is a 360-degree panorama (see :func:`warp_crop`).
 
     Returns:
         ``(crop, bbox_crop)``: the ``(256, 192, 3)`` uint8 crop (bilinear, black outside the
-        frame) and the ``(4,)`` float32 box ``xmin, ymin, xmax, ymax`` of the cropped region.
+        frame, or the other end of the frame across the seam of a panorama) and the ``(4,)``
+        float32 box ``xmin, ymin, xmax, ymax`` of the cropped region. The box is in the coordinates
+        of the person, so it may reach beyond ``[0, W)`` in a panorama.
     """
     assert image_rgb.dtype == np.uint8, (
         f"image_rgb: expected uint8, got {image_rgb.dtype}"
@@ -175,8 +247,7 @@ def crop_person(
     center, scale = box_to_center_scale(bbox_xyxy, aspect=_CROP_ASPECT)
     out_h, out_w = INPUT_SIZE
     trans = get_affine_transform(center, scale, 0.0, (out_w, out_h))
-    crop = cv2.warpAffine(image_rgb, trans, (out_w, out_h), flags=cv2.INTER_LINEAR)
-    assert crop.shape == (out_h, out_w, 3) and crop.dtype == np.uint8
+    crop = warp_crop(image_rgb, trans, panorama)
     bbox_crop = center_scale_to_box(center, scale).astype(np.float32)
     return crop, bbox_crop
 

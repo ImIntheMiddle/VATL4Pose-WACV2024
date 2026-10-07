@@ -20,7 +20,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
 
 from vatl4pose.keypoints import KeypointSpec
@@ -29,6 +28,7 @@ from .geometry import (
     INPUT_SIZE,
     box_to_center_scale,
     get_affine_transform,
+    warp_crop,
 )
 
 
@@ -110,6 +110,7 @@ def augment_and_crop(
     spec: KeypointSpec,
     cfg: AugmentConfig,
     rng: np.random.Generator,
+    panorama: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Augment and crop one annotated person for training.
 
@@ -121,6 +122,11 @@ def augment_and_crop(
         spec: Keypoint layout; ``spec.flip_pairs`` swap under a flip.
         cfg: Augmentation strengths and probabilities.
         rng: Source of all random draws (``standard_normal()`` and ``random()``).
+        panorama: Whether the frame is a 360-degree panorama. The box and the joints are then in
+            the unwrapped coordinates of the person (they may lie left of 0 or right of ``W - 1``),
+            and the crop reads the frame as a periodic strip (:func:`~.geometry.warp_crop`). A
+            flip mirrors the whole strip, so the mirrored person lies at ``W - 1 - x`` in the
+            mirrored strip; no random number is drawn differently.
 
     Returns:
         ``(crop, joints, visibility)``: the ``(256, 192, 3)`` uint8 crop, the ``(K, 3)`` float32
@@ -157,7 +163,7 @@ def augment_and_crop(
         center[0] = width - center[0] - 1
 
     trans = get_affine_transform(center, scale, rot, (out_w, out_h))
-    crop = cv2.warpAffine(image_rgb, trans, (out_w, out_h), flags=cv2.INTER_LINEAR)
+    crop = warp_crop(image_rgb, trans, panorama)
     assert crop.shape == (out_h, out_w, 3) and crop.dtype == np.uint8
 
     visible = joints[:, 2] > 0.0
