@@ -93,6 +93,8 @@ The table gives the paper values of the ALC of AP@0.6 in percent, the mean over 
 
 The last row is the mean over the 15 JRDB-Pose test videos of FastPose with the released weights. The value of one video is `performances[0]["AP .6"]` in its `result.json`. The 2023 code evaluated JRDB-Pose with the OKS sigmas of COCO, and this version uses the OKS sigmas of JRDB-Pose. The JRDB-Pose sigmas raise the round-0 AP@0.6 of video 00 from 0.592 to 0.602.
 
+The frames of JRDB-Pose are 360-degree panoramas, and this version places the joints that the file records on the other side of the seam next to their person and crops across the seam, which the 2023 code did not do. `dataset=jrdb_pose` sets `dataset.panorama=true`, and `dataset.panorama=false` reads the dataset as the 2023 code did.
+
 The AP of this package is the AP of the paper, not the standard COCO keypoint AP. The 2023 evaluation gives a detection the area `(w - x) * (h - y)` of its box `[x, y, w, h]`, so a detection that no label matches and whose area lies outside the area range counts as ignored and not as a false positive. This version keeps that rule so that its numbers stay comparable with the paper. With the standard area `w * h`, the round-0 AP@0.6 of JRDB-Pose video 00 is 0.458 instead of 0.592 on the same predictions. Every AP of this package follows the rule, in `result.json`, in `vatl4pose-eval` and in the validation of `vatl4pose-train`, and `result.json` and the file of `vatl4pose-eval` name it in `"ap_protocol": "wacv2024-detection-area"`. An AP from another COCO keypoint evaluation is therefore not comparable. This package computes the ten values itself, because the summary of the stock `pycocotools` lists AP75 at the position of the key `AP .6`, which caused issue #40.
 
 ## Using your own data
@@ -110,6 +112,8 @@ data/mine/annotations/clip1.json
 - `annotations`: `id` (integer, unique in the file), `image_id`, `track_id` (all integers or all strings in a file), `bbox` as `[x, y, w, h]`, and optionally `keypoints` as a flat list of `x, y, visibility` for every joint. Leave the key out for a person without ground truth, because `[]` and `null` raise an error.
 
 The reader orders the frames by the sorted `file_name`, so number the frames with zero padding (`000001.jpg`, not `1.jpg`). The boxes and the track ids come from your own detector and tracker, and an annotation with an empty box is skipped.
+
+For a 360-degree video, whose right edge continues at its left edge, set `dataset.panorama=true`: the reader then moves the joints of a person on the seam next to the box of the person, and the crops continue across the seam.
 
 With `oracle=coco_file` the keypoints of this file are not labels. The loop reads them only to report AP and OSPA. If any person has no visible joint, `result.json` holds `null` for these metrics and `vatl4pose-summarize` lists the video as "no ground truth". Selection, annotation rounds and retraining run as usual, while `oracle=simulated`, `vatl4pose-tune`, `vatl4pose-eval` and `vatl4pose-train` need the keypoints and stop with an error for such a video.
 
