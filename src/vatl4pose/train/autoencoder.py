@@ -13,7 +13,7 @@ it on the labeled people of one video. The optimiser is that of the 2023 script:
 * The features are standardised. The mean and the standard deviation of every dimension come from
   the valid entries of the training features (:func:`feature_statistics`) and are stored in the
   model. A dimension with no valid entry, or with a standard deviation of 0, makes the training
-  raise. The only exception are the dimensions that the spec never makes valid (the offsets of its
+  raise. The only exceptions are the dimensions that the spec never makes valid (the offsets of its
   redundant joints and the angles that use them), which keep the mean 0 and the standard deviation 1.
 * After every epoch the loss on the validation features is computed, in batches of 8000 rows, as the
   mean over all valid validation entries, so it does not depend on the batch size. The training loss
@@ -268,9 +268,9 @@ def train_wholebody_ae(
     """
     if seed < 0:
         raise ValueError(f"seed must be non-negative, got {seed}")
-    x_train, valid_train = _split_features("train", train_videos, spec)
-    x_valid, valid_valid = _split_features("val", val_videos, spec)
-    mean, std = feature_statistics(x_train, valid_train, spec)
+    x_train, mask_train = _split_features("train", train_videos, spec)
+    x_valid, mask_val = _split_features("val", val_videos, spec)
+    mean, std = feature_statistics(x_train, mask_train, spec)
     best_path, log_path = prepare_output_dir(out_dir, _OUTPUT_FILES)
     n_train, n_valid = x_train.shape[0], x_valid.shape[0]
 
@@ -281,9 +281,9 @@ def train_wholebody_ae(
     model.set_normalisation(mean, std)
     model = model.to(device)
     # standardised once; the statistics are buffers, so training does not change them
-    z_train = model.standardise(x_train.to(device), valid_train.to(device))
-    z_valid = model.standardise(x_valid.to(device), valid_valid.to(device))
-    valid_train, valid_valid = valid_train.to(device), valid_valid.to(device)
+    z_train = model.standardise(x_train.to(device), mask_train.to(device))
+    z_valid = model.standardise(x_valid.to(device), mask_val.to(device))
+    mask_train, mask_val = mask_train.to(device), mask_val.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     rate_at = dict(cfg.lr_steps)
 
@@ -301,7 +301,7 @@ def train_wholebody_ae(
         for start in range(0, n_train, cfg.batch_size):
             rows = order[start : start + cfg.batch_size]
             batch = z_train[rows]
-            loss = masked_mse(model(batch), batch, valid_train[rows])
+            loss = masked_mse(model(batch), batch, mask_train[rows])
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -313,7 +313,7 @@ def train_wholebody_ae(
             error_sum, error_count = 0.0, 0
             for start in range(0, n_valid, VALID_BATCH_SIZE):
                 batch = z_valid[start : start + VALID_BATCH_SIZE]
-                mask = valid_valid[start : start + VALID_BATCH_SIZE]
+                mask = mask_val[start : start + VALID_BATCH_SIZE]
                 error_sum += float(((model(batch) - batch) ** 2)[mask].double().sum())
                 error_count += int(mask.sum())
         valid_loss = error_sum / error_count
