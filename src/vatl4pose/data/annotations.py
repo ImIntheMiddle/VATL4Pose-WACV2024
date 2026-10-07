@@ -33,6 +33,22 @@ Conventions
   ``ymax <= ymin``. JRDB-Pose keeps such boxes: its legacy test (``xmax < xmin``) cannot
   fire after clipping, because ``xmax >= xmin`` holds by construction. JRDB-Pose skips
   annotations without a ``bbox``.
+* Panorama. A frame of a 360-degree video is a strip whose right edge continues at its left edge
+  (a JRDB-Pose frame is 3760 pixels wide). The JRDB-Pose and ``coco_custom`` readers take
+  ``panorama``. With it on, a person is placed in the unwrapped coordinates of the strip, next to
+  the box of the person:
+
+  - The box is clipped at the top and the bottom edge only. A box with ``x < 0`` or
+    ``x + w > W`` keeps its raw coordinates, so ``xmin`` may be negative and ``xmax`` may exceed
+    ``W - 1``. ``bbox_json_xywh`` is the raw box in both modes.
+  - Every joint with a position is moved by a whole number of frame widths ``k * W`` to the copy
+    nearest to the centre of the box, ``k = round((cx - x) / W)`` with ``cx = (xmin + xmax) / 2``.
+    A joint that is not visible but has a position moves as well, and keeps its visibility 0. A
+    joint at ``(0, 0)`` is the "not annotated" marker of the files and stays at ``(0, 0)``,
+    whatever its visibility. A person in the middle of the frame is unchanged.
+  - The skip rules, the sample order and the links between frames do not depend on ``panorama``.
+
+  With ``panorama`` off the readers behave as in 2023.
 * Keypoints. ``(K, 3)`` array of x, y, visibility with visibility ``min(1, v)``. PoseTrack21 and
   JRDB-Pose skip an annotation without a visible keypoint (this covers the legacy test for an
   all-zero annotation, which has no visible keypoint either) and require the ``keypoints`` key.
@@ -87,9 +103,11 @@ class PersonRecord:
         track_id: Person identity within the video.
         image_path: Absolute path of the frame image.
         image_size: ``(width, height)`` of the image in pixels.
-        bbox_xyxy: ``(4,)`` float64 box, converted and clipped by the legacy convention.
+        bbox_xyxy: ``(4,)`` float64 box, converted and clipped by the legacy convention. In a
+            panorama it is not clipped at the left and right edge (see the module docstring).
         keypoints: ``(K, 3)`` float64 array of x, y and visibility in ``{0, 1}``. All zeros for a
-            ``coco_custom`` person without a visible keypoint (no ground truth).
+            ``coco_custom`` person without a visible keypoint (no ground truth). In a panorama the
+            x of a joint is in the unwrapped coordinates of the box of the person.
         bbox_json_xywh: ``(4,)`` float64 raw ``bbox`` of the annotation, unclipped.
     """
 
@@ -161,6 +179,9 @@ class VideoAnnotation:
         next_index: ``(N,)`` int64. Sample of the same track in the nearest later
             annotated frame, or ``-1``.
         annotation_path: Absolute path of the JSON file the samples were read from.
+        panorama: Whether the frames are 360-degree panoramas and the people are placed in the
+            unwrapped coordinates of the strip (see the module docstring). The crops of the cache
+            and of the training read the frames the same way.
     """
 
     dataset: str
@@ -170,6 +191,7 @@ class VideoAnnotation:
     prev_index: np.ndarray
     next_index: np.ndarray
     annotation_path: pathlib.Path
+    panorama: bool = False
 
     def __post_init__(self) -> None:
         if not self.annotation_path.is_absolute():
@@ -260,14 +282,50 @@ def _require(mapping: Mapping[str, Any], key: str, owner: str) -> Any:
     return mapping[key]
 
 
-def _legacy_box_xyxy(xywh: np.ndarray, width: int, height: int) -> np.ndarray:
-    """xywh to xyxy with ``max(size - 1, 0)`` extents, clipped to ``[0, size - 1]``."""
+def _legacy_box_xyxy(
+    xywh: np.ndarray, width: int, height: int, panorama: bool = False
+) -> np.ndarray:
+    """xywh to xyxy with ``max(size - 1, 0)`` extents, clipped to ``[0, size - 1]``.
+
+    With ``panorama`` only the y coordinates are clipped; x is left as the box has it.
+    """
     x, y, w, h = xywh
     xyxy = np.array(
         [x, y, x + max(w - 1.0, 0.0), y + max(h - 1.0, 0.0)], dtype=np.float64
     )
     limits = np.array([width - 1, height - 1, width - 1, height - 1], dtype=np.float64)
-    return np.minimum(limits, np.maximum(0.0, xyxy))
+    clipped = np.minimum(limits, np.maximum(0.0, xyxy))
+    if panorama:
+        clipped[[0, 2]] = xyxy[[0, 2]]
+    return clipped
+
+
+def unwrap_keypoints(
+    keypoints: np.ndarray, bbox_xyxy: np.ndarray, width: int
+) -> np.ndarray:
+    """Move every joint with a position by a whole number of frame widths next to the box.
+
+    A joint is moved by ``k * width`` with ``k = round((cx - x) / width)``, ``cx`` the centre of the
+    box, so that it lies within half a frame width of ``cx``. Joints at ``(0, 0)`` (not annotated)
+    stay. The visibility column is not touched. The readers use it on the joints of a file, and the
+    COCO-file oracle on the joints that a human drew in the frame.
+
+    Args:
+        keypoints: ``(K, 3)`` float array of x, y and visibility.
+        bbox_xyxy: ``(4,)`` float box of the person, not clipped at the left and right edge.
+        width: Width of the frame in pixels.
+
+    Returns:
+        A new ``(K, 3)`` array.
+    """
+    centre = 0.5 * (bbox_xyxy[0] + bbox_xyxy[2])
+    has_position = (keypoints[:, 0] != 0.0) | (keypoints[:, 1] != 0.0)
+    turns = np.round((centre - keypoints[:, 0]) / width)
+    moved = keypoints.copy()
+    moved[:, 0] = np.where(
+        has_position, keypoints[:, 0] + turns * width, keypoints[:, 0]
+    )
+    return moved
 
 
 def _collect(
@@ -278,12 +336,15 @@ def _collect(
     skip_empty_box: bool,
     skip_without_bbox: bool,
     require_keypoints: bool,
+    panorama: bool = False,
 ) -> list[_Raw]:
     """Read the people of one annotation file, ordered by image id and then by file order.
 
     With ``require_keypoints`` (the paper datasets) an annotation needs the ``keypoints`` key and
     is skipped without a visible keypoint. Without it (``coco_custom``) the annotation is kept and
-    gets all-zero keypoints if the key is missing or no keypoint is visible.
+    gets all-zero keypoints if the key is missing or no keypoint is visible. With ``panorama`` the
+    box is not clipped at the left and right edge and the joints move next to it (see the module
+    docstring).
     """
     with json_path.open(encoding="utf-8") as handle:
         data = json.load(handle)
@@ -336,7 +397,7 @@ def _collect(
                 raise ValueError(
                     f"{owner}: bbox must hold 4 values, got {bbox_json.shape}"
                 )
-            bbox_xyxy = _legacy_box_xyxy(bbox_json, width, height)
+            bbox_xyxy = _legacy_box_xyxy(bbox_json, width, height, panorama)
             if skip_empty_box and (
                 bbox_xyxy[2] <= bbox_xyxy[0] or bbox_xyxy[3] <= bbox_xyxy[1]
             ):
@@ -357,6 +418,8 @@ def _collect(
                 if require_keypoints:
                     continue
                 keypoints[:] = 0.0  # no ground truth: all zeros, whatever positions the file holds
+            elif panorama:
+                keypoints = unwrap_keypoints(keypoints, bbox_xyxy, width)
 
             raws.append(
                 _Raw(
@@ -381,6 +444,7 @@ def _build(
     json_path: pathlib.Path,
     raws: Sequence[_Raw],
     track_id_of: Callable[[_Raw], str],
+    panorama: bool,
 ) -> VideoAnnotation:
     people = tuple(
         PersonRecord(
@@ -406,6 +470,7 @@ def _build(
         prev_index=prev_index,
         next_index=next_index,
         annotation_path=json_path,
+        panorama=panorama,
     )
 
 
@@ -470,6 +535,7 @@ def read_posetrack21_video(
         json_path,
         raws,
         lambda raw: f"{video_id}{raw.track}",
+        panorama=False,
     )
 
 
@@ -478,8 +544,14 @@ def read_jrdb_pose_video(
     video_id: str,
     split: str = "test",
     spec: KeypointSpec | None = None,
+    panorama: bool = True,
 ) -> VideoAnnotation:
     """Read one JRDB-Pose video.
+
+    The frames of JRDB-Pose are 360-degree panoramas, so the reader treats the seam as part of
+    the image by default (``panorama``, see the module docstring). ``panorama=False`` gives the
+    boxes and joints of the 2023 reader, which clips the boxes at the left and right edge and
+    leaves the joints on the side of the frame where the file records them.
 
     Args:
         root: JRDB-Pose root; the annotation file is
@@ -489,6 +561,7 @@ def read_jrdb_pose_video(
         split: Sub-directory of ``activelearning``.
         spec: Joint layout; the ``jrdb_pose`` preset if omitted. A spec with another joint
             count than the annotation files raises.
+        panorama: Place the people in the unwrapped coordinates of the 360-degree strip.
 
     Raises:
         ValueError: If the annotation file is not unique, the JSON is malformed or its keypoints
@@ -505,15 +578,22 @@ def read_jrdb_pose_video(
         skip_empty_box=False,
         skip_without_bbox=True,
         require_keypoints=True,
+        panorama=panorama,
     )
     raws.sort(key=_legacy_sort_key(3))
     return _build(
-        "jrdb_pose", video_id, spec, json_path, raws, lambda raw: str(raw.track)
+        "jrdb_pose",
+        video_id,
+        spec,
+        json_path,
+        raws,
+        lambda raw: str(raw.track),
+        panorama=panorama,
     )
 
 
 def read_coco_custom_video(
-    root: pathlib.Path, video_id: str, spec: KeypointSpec
+    root: pathlib.Path, video_id: str, spec: KeypointSpec, panorama: bool = False
 ) -> VideoAnnotation:
     """Read one video of a ``coco_custom`` dataset (layout in the module docstring).
 
@@ -527,6 +607,8 @@ def read_coco_custom_video(
         video_id: Video identifier.
         spec: Joint layout; a ``keypoints`` list that is given needs ``3 * spec.num_joints``
             values.
+        panorama: Whether the frames are 360-degree panoramas (an own 360-degree video). The people
+            are then placed in the unwrapped coordinates of the strip (see the module docstring).
 
     Raises:
         ValueError: If the JSON is malformed or the track ids are not all ints or all strings.
@@ -541,6 +623,7 @@ def read_coco_custom_video(
         skip_empty_box=True,
         skip_without_bbox=False,
         require_keypoints=False,
+        panorama=panorama,
     )
     kinds = {type(raw.track) for raw in raws}
     if len(kinds) > 1 or not kinds <= {int, str}:
@@ -550,5 +633,11 @@ def read_coco_custom_video(
         )
     raws.sort(key=lambda raw: (raw.track, raw.frame_index))
     return _build(
-        "coco_custom", video_id, spec, json_path, raws, lambda raw: str(raw.track)
+        "coco_custom",
+        video_id,
+        spec,
+        json_path,
+        raws,
+        lambda raw: str(raw.track),
+        panorama=panorama,
     )
