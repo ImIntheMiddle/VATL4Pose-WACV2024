@@ -3,11 +3,12 @@
 # Legacy scripts/wholebodyAE_train.py: AdamW lr 0.001 (line 118), lr 0.0002 at epoch 12 and 0.00005 at
 # epoch 40 (137-140), batch 10000 (125), early stopping patience 30 on the validation loss (120).
 # The features are standardised and the loss is a masked MSE (invisible joints are left out).
-# Batch size: chosen by the validation loss (masked MSE in standardised space, seed 166, CPU) among
-# 256, 1000 and 10000, which gave 0.2494, 0.2977 and 0.4400 at the best epochs 300, 297 and 300.
-# All three runs had their best epoch at 297 to 300, so none had converged after 300 epochs. The shipped
-# run (256, 4 CPU threads instead of the 2 of the comparison) reached 0.2579. A run is reproducible byte
-# for byte with the same number of CPU threads and differs a little with another.
+# Epochs: at most 1000, stopped by patience 30. The best epoch was 295 of 300 with the paper's 300
+# epochs, so that run had not converged; with 1000 the shipped run stopped at epoch 443 (best epoch 413).
+# Batch size: chosen by the validation loss (masked MSE in standardised space, seed 166, CPU, 4 threads)
+# among 256 and 1000, which gave 0.2547 (best epoch 413 of 443) and 0.2946 (best epoch 429 of 459);
+# 256, 1000 and 10000 gave 0.2494, 0.2977 and 0.4400 at 300 epochs. A run is reproducible byte for byte
+# with the same number of CPU threads and differs a little with another.
 defaults:
   - override /dataset: posetrack21
 
@@ -26,6 +27,6 @@ train:
     lr_steps:
       - {epoch: 12, lr: 2.0e-4}
       - {epoch: 40, lr: 5.0e-5}
-    epochs: 300
+    epochs: 1000
     batch_size: 256
     patience: 30

@@ -1,14 +1,16 @@
 # @package _global_
 # Pretraining of the whole-body autoencoder on JRDB-Pose: the recipe of ae_posetrack21 on the
-# 10 training and 2 validation videos (paper: 10 and 2 videos). The features are standardised and
-# the loss is a masked MSE (invisible joints are left out).
-# Batch size: chosen by the validation loss (masked MSE in standardised space, seed 166, CPU) among
-# 256, 1000 and 10000, which gave 1.1720 (stopped at epoch 55, best epoch 25), 1.2046 (best epoch 300)
-# and 2.2694 (best epoch 300). The 12088 training people make 2 updates per epoch at 10000. The
-# validation videos have a larger spread than the training ones: the constant output 0 (the training
-# mean) scores 2.341 on them, against 1.0 on the training split. The shipped run (256, 4 CPU threads
-# instead of the 2 of the comparison) reached 1.1687 at epoch 25 and stopped at epoch 55. A run is
-# reproducible byte for byte with the same number of CPU threads and differs a little with another.
+# 10 training and 2 validation videos (paper: 10 and 2 videos). The features are standardised, the
+# loss is a masked MSE (invisible joints are left out), and the joints of a person on the seam of
+# the 360-degree frame are placed next to the person (dataset.panorama of jrdb_pose.yaml).
+# Epochs: at most 1000, stopped by patience 30. The shipped run stopped at epoch 178 (best epoch 148).
+# Batch size: chosen by the validation loss (masked MSE in standardised space, seed 166, CPU, 4 threads)
+# among 256 and 1000, which gave 1.5901 (stopped at epoch 178, best epoch 148) and 1.6347 (stopped at
+# epoch 397, best epoch 367). The panorama handling changed the standardisation (the standard deviation
+# of the x offsets of the training features fell by a factor of 10 to 25), so these losses are not
+# comparable with the ones before it. The validation videos have a larger spread than the training
+# ones: the constant output 0 (the training mean) scores 3.208 on them. A run is reproducible byte for
+# byte with the same number of CPU threads and differs a little with another.
 defaults:
   - override /dataset: jrdb_pose
 
@@ -27,6 +29,6 @@ train:
     lr_steps:
       - {epoch: 12, lr: 2.0e-4}
       - {epoch: 40, lr: 5.0e-5}
-    epochs: 300
+    epochs: 1000
     batch_size: 256
     patience: 30
