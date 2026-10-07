@@ -3,6 +3,7 @@
 from .spec import (
     COCO17_SIGMAS,
     JRDB_ORDER_SIGMAS,
+    LEGACY_COCO_ANGLE_TRIPLETS,
     LEGACY_JRDB_FLIP_SWAPS,
     KeypointSpec,
     get_spec,
@@ -12,6 +13,7 @@ from .spec import (
 __all__ = [
     "COCO17_SIGMAS",
     "JRDB_ORDER_SIGMAS",
+    "LEGACY_COCO_ANGLE_TRIPLETS",
     "LEGACY_JRDB_FLIP_SWAPS",
     "KeypointSpec",
     "get_spec",

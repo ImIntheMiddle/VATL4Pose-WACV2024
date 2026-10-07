@@ -85,10 +85,7 @@ mirror. The ``jrdb_pose`` preset uses the corrected left/right pairs instead; th
 serves the comparison against the legacy behavior (``dataclasses.replace(spec, flip_pairs=...)``).
 """
 
-# Triplets (a, b, c) of the hybrid feature: the angle at joint b between the
-# segments a-b and b-c. They index joints in COCO order and are the ones the
-# released 42-dimensional autoencoder checkpoints were trained with.
-_LEGACY_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
+LEGACY_COCO_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
     (8, 6, 12),
     (6, 8, 10),
     (5, 7, 9),
@@ -98,6 +95,30 @@ _LEGACY_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
     (12, 14, 16),
     (11, 13, 15),
 )
+"""The angle triplets ``(a, b, c)`` of the 2023 code: the angle at joint ``b`` between ``a-b`` and ``b-c``.
+
+They index joints in COCO order. The ``posetrack21`` and ``coco17`` presets use them. The 2023 code
+applied the same indices to the JRDB-Pose joint order, where they name other body parts; the
+``jrdb_pose`` preset uses triplets at the JRDB-Pose joints of the same body parts instead. This
+constant serves the comparison with the legacy behavior
+(``dataclasses.replace(get_spec("jrdb_pose"), angle_triplets=LEGACY_COCO_ANGLE_TRIPLETS)``).
+"""
+
+_JRDB_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
+    (6, 3, 10),
+    (3, 6, 9),
+    (5, 7, 12),
+    (7, 5, 11),
+    (11, 10, 13),
+    (10, 11, 14),
+    (10, 13, 15),
+    (11, 14, 16),
+)
+"""The triplets of :data:`LEGACY_COCO_ANGLE_TRIPLETS` at the JRDB-Pose joints of the same body parts.
+
+Each COCO joint maps to the JRDB-Pose joint of the same name (JRDB-Pose has feet, no ankles), and
+the triplets keep their order, so the feature has the same 42 values in the same order.
+"""
 
 
 def _as_sequence(where: str, value: Any) -> Sequence[Any]:
@@ -319,14 +340,13 @@ _POSETRACK21 = KeypointSpec(
     skeleton=tuple((a - 1, b - 1) for a, b in _POSETRACK21_JSON_SKELETON),
     oks_sigmas=COCO17_SIGMAS,
     redundant_joints=(3, 4),  # the ears are not annotated in PoseTrack21
-    angle_triplets=_LEGACY_ANGLE_TRIPLETS,
+    angle_triplets=LEGACY_COCO_ANGLE_TRIPLETS,
 )
 
 # The legacy JRDB reader listed these skeleton edges as its flip pairs, which swapped
 # unrelated joints under horizontal flip. The flip pairs below join the left and right
-# joints. The angle triplets stay the legacy COCO-index triplets so that the released
-# 42-dimensional autoencoder remains valid; they point at JRDB joints by the same
-# indices, as in the legacy implementation.
+# joints. The angle triplets name the JRDB-Pose joints of the body parts that the legacy
+# COCO-index triplets meant.
 _JRDB_POSE = KeypointSpec(
     name="jrdb_pose",
     joint_names=(
@@ -368,7 +388,7 @@ _JRDB_POSE = KeypointSpec(
     ),
     oks_sigmas=JRDB_ORDER_SIGMAS,
     redundant_joints=(),
-    angle_triplets=_LEGACY_ANGLE_TRIPLETS,
+    angle_triplets=_JRDB_ANGLE_TRIPLETS,
 )
 
 _COCO17 = KeypointSpec(
@@ -416,7 +436,7 @@ _COCO17 = KeypointSpec(
     ),
     oks_sigmas=COCO17_SIGMAS,
     redundant_joints=(),
-    angle_triplets=_LEGACY_ANGLE_TRIPLETS,
+    angle_triplets=LEGACY_COCO_ANGLE_TRIPLETS,
 )
 
 _PRESETS: dict[str, KeypointSpec] = {
