@@ -36,6 +36,14 @@ requested annotation id must appear exactly once and no other id may appear. ``k
 ``3 K`` finite numbers; the visibility of each joint is 0, 1 or 2 and is mapped to 0 (not
 labelled) or 1 (labelled; COCO's 1 "occluded" and 2 "visible" both become 1, as in the cache).
 The answer keeps the positions the annotator left, also for joints with visibility 0.
+
+Panorama
+--------
+For a cache of 360-degree frames (``cache.panorama``) the annotator works in the frame, where a
+person on the seam is split in two. The queries file therefore holds the prefilled joints at
+``x mod width``, and each answer is moved by whole frame widths next to the box of the person
+(:func:`~vatl4pose.data.annotations.unwrap_keypoints`), so that the labels are in the unwrapped
+coordinates of the box like the ground truth of the readers.
 """
 
 from __future__ import annotations
@@ -47,6 +55,7 @@ from typing import Any
 
 import numpy as np
 
+from vatl4pose.data.annotations import unwrap_keypoints
 from vatl4pose.data.cache import VideoCache, read_image_rgb
 
 from .base import OracleResult, check_request
@@ -194,6 +203,7 @@ class CocoFileOracle:
             raise ValueError(f"dataset_root: {dataset_root} is not an absolute path")
         self._arrays = cache.arrays
         self._spec = cache.spec
+        self._panorama = cache.panorama
         self._dir = pathlib.Path(run_dir) / "oracle"
         self._dataset_root = dataset_root.resolve()
 
@@ -251,6 +261,8 @@ class CocoFileOracle:
                 f"the result as {answers}; then run again.",
             )
         keypoints = self._import(answers, indices)
+        if self._panorama:
+            keypoints = self._unwrap(keypoints, indices, queries)
         return OracleResult(
             ready=True,
             keypoints=keypoints,
@@ -290,15 +302,19 @@ class CocoFileOracle:
         images = [
             self._image_entry(image_id, path) for image_id, path in frames.items()
         ]
+        width_of = {image["id"]: image["width"] for image in images}
 
         annotations: list[dict[str, Any]] = []
         for row, sample in enumerate(samples):
             confidence = prefill[row, :, 2]
             visibility = np.where(confidence > 0, 2, 0).tolist()
+            x_drawn = prefill[row, :, 0]
+            if self._panorama:
+                x_drawn = np.mod(x_drawn, width_of[int(a.image_id[sample])])
             flat = [
                 value
                 for x, y, v in zip(
-                    prefill[row, :, 0].tolist(),
+                    x_drawn.tolist(),
                     prefill[row, :, 1].tolist(),
                     visibility,
                     strict=True,
@@ -354,6 +370,29 @@ class CocoFileOracle:
         }
 
     # ------------------------------------------------------------------ import
+
+    def _unwrap(
+        self, keypoints: np.ndarray, indices: np.ndarray, queries: pathlib.Path
+    ) -> np.ndarray:
+        """Move the answers of a panorama next to the box of each person (see the module docstring).
+
+        The width of each frame is read from the ``images`` of the queries file that this oracle
+        wrote.
+        """
+        width_of = {
+            image["id"]: image["width"] for image in _read_queries(queries)["images"]
+        }
+        a = self._arrays
+        return np.stack(
+            [
+                unwrap_keypoints(
+                    keypoints[row],
+                    a.bbox_gt[sample],
+                    width_of[int(a.image_id[sample])],
+                )
+                for row, sample in enumerate(indices)
+            ]
+        )
 
     def _import(self, path: pathlib.Path, indices: np.ndarray) -> np.ndarray:
         """Read and check the answers file; return ``(k, K, 3)`` rows in the order of ``indices``."""
