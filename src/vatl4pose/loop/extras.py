@@ -1,8 +1,8 @@
 """The inputs that some query strategies need besides the heatmaps, and how the loop builds them.
 
 * The WPU scorer reads a whole-body autoencoder. Every round the loop starts from the pretrained
-  checkpoint and tunes it on the hybrid features of the labels of the labeled people
-  (:func:`load_pretrained_ae`, :func:`finetune_wholebody_ae`).
+  checkpoint and tunes it on the hybrid features of the labels of the labeled people, with the
+  invisible joints masked out (:func:`load_pretrained_ae`, :func:`finetune_wholebody_ae`).
 * The VL4Pose scorer reads the Gaussian over every link length that an auxiliary network predicts
   for every person. Every round the loop trains a new network on the labeled people and predicts
   all people (:func:`fit_link_gaussians`).
@@ -17,12 +17,11 @@ import pathlib
 
 import numpy as np
 import torch
-from torch.nn import functional as F
 
 from ..data.geometry import HEATMAP_SIZE, box_to_center_scale, get_affine_transform
 from ..keypoints import KeypointSpec
 from ..models.auxnet import AuxNet, predict_link_gaussians, train_auxnet
-from ..models.wholebody_ae import WholeBodyAE, load_wholebody_ae
+from ..models.wholebody_ae import WholeBodyAE, load_wholebody_ae, masked_mse
 from ..strategies.baselines.vl4pose import LinkGaussians, vl4pose_links
 
 
@@ -37,32 +36,40 @@ def load_pretrained_ae(
 def finetune_wholebody_ae(
     ae: WholeBodyAE,
     features: np.ndarray,
+    valid: np.ndarray,
     *,
     epochs: int,
     lr: float,
     batch_size: int,
     seed: int,
 ) -> list[float]:
-    """Tune ``ae`` in place on hybrid features: Adam, mean squared reconstruction error.
+    """Tune ``ae`` in place on hybrid features: Adam, masked mean squared reconstruction error.
 
-    Every epoch visits all rows once in a random order that depends on ``seed`` only (the last
-    batch may be smaller). The autoencoder is left in evaluation mode.
+    The features are standardised with the statistics stored in ``ae``, which stay as they are
+    (the pretrained normalisation is fixed; the buffers are not parameters). An entry that is not
+    valid is 0 in the input and does not enter the loss. Every epoch visits all rows once in a
+    random order that depends on ``seed`` only (the last batch may be smaller). The autoencoder is
+    left in evaluation mode.
 
     Args:
         ae: The autoencoder, usually just loaded from its pretrained checkpoint.
-        features: ``(n, ae.input_dim)`` hybrid features, one row per labeled person, of the labels
-            that the oracle gave.
+        features: ``(n, ae.input_dim)`` raw hybrid features, one row per labeled person, of the
+            labels that the oracle gave.
+        valid: ``(n, ae.input_dim)`` bool mask of the entries of ``features`` that hold a measured
+            value, :func:`~vatl4pose.models.wholebody_ae.hybrid_valid_mask` of the label
+            visibilities.
         epochs: Number of passes; 0 changes nothing.
         lr: Learning rate of Adam.
         batch_size: Rows per step.
         seed: Seed of the order of the rows.
 
     Returns:
-        The mean loss of every epoch (``epochs`` floats).
+        The mean loss of every epoch (``epochs`` floats), each weighted by the number of valid
+        entries of its batches.
 
     Raises:
-        ValueError: If ``features`` has no row or the wrong width, or ``epochs`` is negative or
-            ``batch_size`` is below 1.
+        ValueError: If ``features`` has no row or the wrong width, ``valid`` does not fit
+            ``features``, or ``epochs`` is negative or ``batch_size`` is below 1.
     """
     if epochs < 0 or batch_size < 1:
         raise ValueError(
@@ -76,24 +83,35 @@ def finetune_wholebody_ae(
         raise ValueError(
             f"features: expected shape (n, {ae.input_dim}) with n >= 1, got {features.shape}"
         )
+    if valid.shape != features.shape or valid.dtype != np.bool_:
+        raise ValueError(
+            f"valid: expected a bool array of shape {features.shape}, got {valid.dtype} "
+            f"of shape {valid.shape}"
+        )
     device = next(ae.parameters()).device
-    x = torch.from_numpy(np.asarray(features, dtype=np.float32)).to(device)
+    mask = torch.from_numpy(valid).to(device)
+    x = ae.standardise(
+        torch.from_numpy(np.asarray(features, dtype=np.float32)).to(device), mask
+    )
     n = x.shape[0]
     generator = torch.Generator().manual_seed(seed)
     optimizer = torch.optim.Adam(ae.parameters(), lr=lr)
     ae.train()
     history: list[float] = []
     for _ in range(epochs):
-        order = torch.randperm(n, generator=generator)
-        total = 0.0
+        order = torch.randperm(n, generator=generator).to(device)
+        total, count = 0.0, 0
         for start in range(0, n, batch_size):
-            batch = x[order[start : start + batch_size].to(device)]
-            loss = F.mse_loss(ae(batch), batch)
+            rows = order[start : start + batch_size]
+            batch = x[rows]
+            loss = masked_mse(ae(batch), batch, mask[rows])
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-            total += float(loss.detach()) * batch.shape[0]
-        history.append(total / n)
+            entries = int(mask[rows].sum())
+            total += float(loss.detach()) * entries
+            count += entries
+        history.append(total / count)
     ae.eval()
     return history
 

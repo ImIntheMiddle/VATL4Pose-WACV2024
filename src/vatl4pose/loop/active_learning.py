@@ -73,7 +73,7 @@ from ..data.datasets import FinetuneDataset
 from ..data.geometry import HEATMAP_SIZE, heatmaps_to_coords, to_input_tensor
 from ..eval import evaluate_predictions, oks_per_sample, pose_score, xyxy_to_xywh
 from ..models.estimator import PoseEstimator
-from ..models.wholebody_ae import WholeBodyAE, compute_hybrid
+from ..models.wholebody_ae import WholeBodyAE, compute_hybrid, hybrid_valid_mask
 from ..oracle import Oracle
 from ..strategies import RoundContext, Strategy, local_peak_mean
 from ..strategies.baselines.vl4pose import EXTRAS_KEY as VL4POSE_KEY
@@ -940,19 +940,22 @@ class ActiveLearningLoop:
         """The pretrained autoencoder, tuned on the hybrid features of the labels of the labeled people.
 
         The features are those of the answers of the oracle, with the label visibility as weights
-        (with the simulated oracle the answers are the ground truth). The result depends on the
-        checkpoint, the labels and the seed only, so a resume gets the autoencoder the
+        (with the simulated oracle the answers are the ground truth); a joint with no visibility
+        is masked out of the loss. The pretrained feature statistics stay fixed. The result depends
+        on the checkpoint, the labels and the seed only, so a resume gets the autoencoder the
         uninterrupted run had.
         """
         ae = self._pretrained_ae()
         labeled = np.flatnonzero(self._labeled)
         if labeled.size:
+            labels = self._labels[labeled]
             features = compute_hybrid(
-                self._arrays.bbox_json_xywh[labeled], self._labels[labeled], self.spec
+                self._arrays.bbox_json_xywh[labeled], labels, self.spec
             )
             extras.finetune_wholebody_ae(
                 ae,
                 features,
+                hybrid_valid_mask(labels[..., 2], self.spec),
                 epochs=self.cfg.ae_finetune_epochs,
                 lr=self.cfg.ae_finetune_lr,
                 batch_size=self.cfg.ae_finetune_batch,
