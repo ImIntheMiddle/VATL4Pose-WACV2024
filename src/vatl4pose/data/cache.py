@@ -67,7 +67,7 @@ import vatl4pose
 from vatl4pose.keypoints import KeypointSpec
 
 from .annotations import PersonRecord, VideoAnnotation
-from .geometry import INPUT_SIZE, crop_person
+from .geometry import INPUT_SIZE, crop_person, single_threaded_opencv
 
 CACHE_VERSION: int = 4
 """Version of the file layout; a cache of another version is refused. Version 2 added ``has_gt``,
@@ -186,7 +186,8 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
         waiting: dict[int, np.ndarray] = {}
         written = 0
         step = _FRAMES_PER_WORKER * num_workers
-        with ThreadPoolExecutor(max_workers=num_workers) as pool:
+        # the pool threads crop on their own; OpenCV's own threads would only compete with them
+        with single_threaded_opencv(), ThreadPoolExecutor(max_workers=num_workers) as pool:
             for start in range(0, len(frames), step):
                 batch = frames[start : start + step]
                 # ``map`` yields the results in the order of its input, whatever the order in

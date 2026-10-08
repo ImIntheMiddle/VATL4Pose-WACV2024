@@ -37,6 +37,7 @@ from torch.utils.data import DataLoader
 
 from vatl4pose.data.augment import AugmentConfig
 from vatl4pose.data.datasets import FinetuneDataset
+from vatl4pose.data.geometry import init_loader_worker
 from vatl4pose.models.estimator import PoseEstimator
 from vatl4pose.train._common import FixedOrderSampler, derived_seed, shuffle_order
 
@@ -338,6 +339,7 @@ class Finetuner:
             num_workers=workers,
             persistent_workers=workers > 0,
             pin_memory=self.device.type == "cuda",
+            worker_init_fn=init_loader_worker,
             # the loader draws its worker seeds from this generator, not from the global one
             generator=torch.Generator().manual_seed(
                 derived_seed("loader", self.seed, round_index)

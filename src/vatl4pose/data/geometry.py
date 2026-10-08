@@ -31,6 +31,9 @@ Conventions of this module:
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Iterator
+
 import cv2
 import numpy as np
 import torch
@@ -45,6 +48,28 @@ PIXEL_MEAN_RGB: tuple[float, float, float] = (0.406, 0.457, 0.480)
 """Per-channel mean (RGB, scale 0 to 1) subtracted from a crop; there is no division by a std."""
 
 _CROP_ASPECT: float = INPUT_SIZE[1] / INPUT_SIZE[0]
+
+
+def init_loader_worker(worker_id: int) -> None:
+    """``worker_init_fn`` of every data loader: run OpenCV on one thread in the worker.
+
+    OpenCV spreads each ``cv2.warpAffine`` over all cores of the host. A crop has only
+    ``INPUT_SIZE`` pixels, so that gains nothing, and the workers of one loader (and the runs of
+    several users on a shared host) then compete for the same cores. One thread per worker is the
+    fastest setting and changes no output.
+    """
+    cv2.setNumThreads(1)
+
+
+@contextlib.contextmanager
+def single_threaded_opencv() -> Iterator[None]:
+    """Run OpenCV on one thread inside the block, for code that crops from its own thread pool."""
+    before = cv2.getNumThreads()
+    cv2.setNumThreads(1)
+    try:
+        yield
+    finally:
+        cv2.setNumThreads(before)
 
 
 def box_to_center_scale(

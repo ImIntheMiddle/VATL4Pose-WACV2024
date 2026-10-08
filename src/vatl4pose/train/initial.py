@@ -56,7 +56,7 @@ from vatl4pose.data.datasets import (
     PersonTrainDataset,
     collect_people,
 )
-from vatl4pose.data.geometry import heatmaps_to_coords
+from vatl4pose.data.geometry import heatmaps_to_coords, init_loader_worker
 from vatl4pose.eval import (
     METRIC_KEYS,
     RoundMetrics,
@@ -228,6 +228,7 @@ def evaluate_estimator(
         shuffle=False,
         num_workers=num_workers,
         pin_memory=device.type == "cuda",
+        worker_init_fn=init_loader_worker,
         # the loader draws its worker seeds from this generator, not from the global one
         generator=torch.Generator().manual_seed(0),
     )
@@ -394,6 +395,7 @@ def train_estimator(
         num_workers=workers,
         persistent_workers=workers > 0,
         pin_memory=device.type == "cuda",
+        worker_init_fn=init_loader_worker,
         # the loader draws its worker seeds from this generator, not from the global one
         generator=torch.Generator().manual_seed(
             derived_seed("initial", "loader", seed)
