@@ -124,6 +124,8 @@ def center_scale_to_box(center: np.ndarray, scale: np.ndarray) -> np.ndarray:
     return np.array([xmin, ymin, xmin + s[0], ymin + s[1]], dtype=np.float64)
 
 
+# The affine reference-point construction follows Microsoft's HRNet transforms.py.
+# Its MIT notice is included in third_party/hrnet/LICENSE.
 def _third_point(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Point ``b`` plus the vector ``a - b`` turned by 90 degrees (float32 arithmetic)."""
     direct = a - b

@@ -152,6 +152,8 @@ vatl4pose-train dataset=coco_custom dataset.root=mine dataset.keypoints=coco17 \
   run.name=mine_ae run.device=cuda
 ```
 
+With `estimator=hrnet_w32 estimator.weights=null`, the network uses PyTorch's default layer initialisation. The upstream HRNet normal(0.001) initialisation is not applied. Use the released HRNet checkpoint for the pretrained reference network.
+
 Pass the trained files to `vatl4pose-atl` as absolute paths, for example `estimator.weights=/home/me/VATL4Pose-WACV2024/outputs/train/mine_estimator/best.pth` and `ae.checkpoint=/home/me/VATL4Pose-WACV2024/outputs/train/mine_ae/best.pth`. The options `estimator.weights` and `ae.checkpoint` resolve relative to `paths.weights_root`, so a path that starts with `outputs/` raises a `FileNotFoundError`.
 
 The example below uses the `posetrack21` layout and the weights from `vatl4pose-download-weights` on two videos, `clip1` and `clip2`, and ends at 20 % labeled people. `loop.query_ratio` lists the share of labeled people after each round, and the default `[0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0]` ends with all people. `loop.save_final_model=true` makes the run write `final_estimator.pth` into the run directory of each video, next to `result.json`. The file holds the weights of the estimator adapted to that video.
@@ -185,7 +187,7 @@ With `oracle=coco_file` a person annotates the queries of every round.
 3. Save the export as `round_XX_answers.json` in the same `oracle/` folder.
 4. Run the same command again. The run reads the answers, retrains the estimator and writes the queries of the next round. After the last round it writes `result.json`.
 
-The loop reads each answer by the annotation `id` of the queries file, and `id` and `keypoints` are the only fields it uses. The answers have to contain every queried `id` once and no other `id`, and `keypoints` holds `x, y, visibility` for every joint with a visibility of 0, 1 or 2. The annotation tool has to keep the `id` values in its export. CVAT and Label Studio have not been checked for this. A rerun with other settings than the first run stops with an error that names the changed keys. Give new settings a new `run.name`.
+The loop reads each answer by the annotation `id` of the queries file, and `id` and `keypoints` are the only fields it uses. The answers have to contain every queried `id` once and no other `id`, and `keypoints` holds `x, y, visibility` for every joint with a visibility of 0, 1 or 2. The annotation tool has to keep the `id` values in its export, or an adapter must restore them. Label Studio's COCO export renumbers the annotation ids: keep the query id in each task's data, export JSON and convert the answers using that query id. CVAT's id preservation has not been checked. A rerun with other settings than the first run stops with an error that names the changed keys. Give new settings a new `run.name`.
 
 ## Citation
 
@@ -211,6 +213,6 @@ The earlier paper on the uncertainty criteria is MVA 2023 ([IEEE Xplore](https:/
 
 ## License
 
-This repository is released under the MIT License (`LICENSE`). `third_party/hrnet/` holds the HRNet-W32 network definition of [deep-high-resolution-net.pytorch](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch) under its MIT license (`third_party/hrnet/LICENSE`), and `third_party/hrnet/UPSTREAM.md` lists the source commit and every local change. VL4Pose and AlphaPose are reimplemented here and their code is not included.
+The v1 source tree is released under the MIT License (`LICENSE`). `third_party/hrnet/` holds the HRNet-W32 network definition of [deep-high-resolution-net.pytorch](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch) under its MIT license (`third_party/hrnet/LICENSE`), and `third_party/hrnet/UPSTREAM.md` lists the source commit and every local change. VL4Pose and AlphaPose are reimplemented in v1 and their code is not included in the v1 source tree. The paper version at `wacv2024` and the repository history contain legacy third-party code; the v1 MIT License does not grant rights to that code.
 
 This work builds on [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose), [ALiPy](https://github.com/NUAA-AL/ALiPy), [DeepAL+](https://github.com/SineZHAN/deepALplus) and [VL4Pose](https://github.com/meghshukla/ActiveLearningForHumanPose), whose authors we thank.
