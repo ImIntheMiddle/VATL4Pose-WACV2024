@@ -21,6 +21,8 @@ is 0.592 with this rule and 0.458 with the standard area ``w * h``. The file nam
 setting of ``dataset.panorama`` that the labels and the crops of the evaluation followed. The ten values are computed in this
 package from the precision and recall arrays of ``pycocotools``. Issue #40 came from the summary
 of the stock ``pycocotools``, which lists AP75 at the position of the key ``AP .6``.
+The JSON also records the video ids, device, seed, weight digest and keypoint-spec digest to
+identify the inputs of an evaluation.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ from vatl4pose.config import (
     resolve_path,
     section,
 )
+from vatl4pose.data.cache import spec_sha256
 from vatl4pose.eval import AP_PROTOCOL, METRIC_KEYS
 from vatl4pose.models.estimator import build_estimator
 from vatl4pose.train import evaluate_estimator
@@ -58,6 +61,7 @@ from ._common import (
     require_unsharded,
     torch_device,
 )
+from ._settings import file_sha256
 
 
 def output_path(
@@ -107,7 +111,8 @@ def run(cfg: DictConfig) -> None:
             "give another eval.output"
         )
     videos = [read_video(paths, dataset, i, dataset.split) for i in ids]
-    est_cfg = estimator_config(estimator, keypoint_spec(dataset), paths.weights_root)
+    spec = keypoint_spec(dataset)
+    est_cfg = estimator_config(estimator, spec, paths.weights_root)
     # the initial weights of a network without a checkpoint follow run.seed
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(run_.seed)
@@ -123,9 +128,16 @@ def run(cfg: DictConfig) -> None:
         "dataset": dataset.name,
         "split": dataset.split,
         "n_videos": len(videos),
+        "video_ids": sorted(ids),
+        "device": str(device),
+        "seed": run_.seed,
+        "keypoints_sha256": spec_sha256(spec),
         "n_people": sum(len(v.people) for v in videos),
         "estimator": estimator.arch,
         "weights": None if est_cfg.weights is None else str(est_cfg.weights),
+        "weights_sha256": None if est_cfg.weights is None else file_sha256(
+            est_cfg.weights, "estimator.weights"
+        ),
         "ap_protocol": AP_PROTOCOL,
         "panorama": dataset.panorama,
         "metrics": {
