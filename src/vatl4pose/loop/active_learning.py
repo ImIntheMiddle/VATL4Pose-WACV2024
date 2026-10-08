@@ -413,7 +413,8 @@ class ActiveLearningLoop:
             if ae_ckpt is None:
                 raise ValueError(
                     f"strategy {strategy.config.name!r} uses the 'wpu' scorer, which needs the "
-                    "whole-body autoencoder; pass its checkpoint as ae_ckpt"
+                    "whole-body autoencoder; set ae.checkpoint to its checkpoint path "
+                    "(ae_ckpt in the Python API)"
                 )
             self._pretrained_ae()  # fails now, not in round 0, if the checkpoint does not fit
 

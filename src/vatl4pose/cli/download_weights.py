@@ -19,6 +19,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 import zlib
@@ -284,6 +285,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 installed = install_from_zip(download, args.weights_root)
             finally:
                 download.unlink()
+    except urllib.error.URLError as exc:
+        print(f"vatl4pose-download-weights: error: {RELEASE_URL}: {exc}", file=sys.stderr)
+        return 1
     except ValueError as exc:
         print(f"vatl4pose-download-weights: error: {exc}", file=sys.stderr)
         return 1
