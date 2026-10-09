@@ -63,6 +63,8 @@ from vatl4pose.data import (
     read_posetrack21_video,
 )
 from vatl4pose.data.cache import VideoCache, annotation_sha256
+from vatl4pose.execution.status import Status
+from vatl4pose.execution.workflow import publish_outcome
 from vatl4pose.eval import compute_alc
 from vatl4pose.loop import (
     ActiveLearningLoop,
@@ -437,51 +439,62 @@ def run_video(
         settings = fingerprint(job, video_id, split)
         known = check_settings(run_dir, settings)
         if is_done(run_dir):
+            publish_outcome(video_id, "skipped", run_dir)
             return VideoOutcome("skipped", f"{video_id}: already done ({run_dir})")
-        video = read_video(job.paths, job.dataset, video_id, split)
-        spec = keypoint_spec(job.dataset)
-        path = cache_file(job.paths, job.dataset, split, video_id)
-        if not path.is_file():
-            raise FileNotFoundError(
-                f"the cache {path} does not exist; build it with vatl4pose-prepare using the "
-                "same dataset, split and paths.output_root"
+        with Status(run_dir, "atl", video_id=video_id) as execution:
+            video = read_video(job.paths, job.dataset, video_id, split)
+            spec = keypoint_spec(job.dataset)
+            path = cache_file(job.paths, job.dataset, split, video_id)
+            if not path.is_file():
+                raise FileNotFoundError(
+                    f"the cache {path} does not exist; build it with vatl4pose-prepare using the "
+                    "same dataset, split and paths.output_root"
+                )
+            cache = VideoCache(
+                path, spec, annotation_sha256(video), job.dataset.panorama
             )
-        cache = VideoCache(path, spec, annotation_sha256(video), job.dataset.panorama)
-        if not known:
-            write_settings(run_dir, settings)
-        name = wandb_run_name(
-            datetime.date.today(), job.dataset.name, job.strategy.name, video_id, tag
-        )
-        with open_round_log(
-            job.logger,
-            job.wandb,
-            run_dir,
-            name,
-            job.run.name or "",
-            _wandb_config(job, video_id, split) if job.logger == "wandb" else {},
-            output_root(job.paths),
-            video_id,
-        ) as on_round:
-            loop = _build_loop(job, video, cache, run_dir, on_round)
-            outcome = loop.run()
-        if isinstance(outcome, Pending):
-            return VideoOutcome(
-                "pending",
-                f"Pending: {video_id} round {outcome.round_index}: {outcome.message}",
+            if not known:
+                write_settings(run_dir, settings)
+            name = wandb_run_name(
+                datetime.date.today(),
+                job.dataset.name,
+                job.strategy.name,
+                video_id,
+                tag,
             )
-        mark_done(
-            run_dir,
-            {
-                "dataset": job.dataset.name,
-                "video_id": video_id,
-                "strategy": job.strategy.name,
-                "n_samples": len(cache),
-                "finished_utc": datetime.datetime.now(
-                    datetime.timezone.utc
-                ).isoformat(),
-            },
-        )
-        return VideoOutcome("done", f"{video_id}: done ({run_dir / RESULT_NAME})")
+            with open_round_log(
+                job.logger,
+                job.wandb,
+                run_dir,
+                name,
+                job.run.name or "",
+                _wandb_config(job, video_id, split) if job.logger == "wandb" else {},
+                output_root(job.paths),
+                video_id,
+            ) as on_round:
+                loop = _build_loop(job, video, cache, run_dir, on_round)
+                outcome = loop.run()
+            if isinstance(outcome, Pending):
+                execution.update("waiting_annotation", round=outcome.round_index)
+                publish_outcome(video_id, "pending", run_dir)
+                return VideoOutcome(
+                    "pending",
+                    f"Pending: {video_id} round {outcome.round_index}: {outcome.message}",
+                )
+            mark_done(
+                run_dir,
+                {
+                    "dataset": job.dataset.name,
+                    "video_id": video_id,
+                    "strategy": job.strategy.name,
+                    "n_samples": len(cache),
+                    "finished_utc": datetime.datetime.now(
+                        datetime.timezone.utc
+                    ).isoformat(),
+                },
+            )
+            publish_outcome(video_id, "done", run_dir)
+            return VideoOutcome("done", f"{video_id}: done ({run_dir / RESULT_NAME})")
 
 
 # ------------------------------------------------------------------ results
