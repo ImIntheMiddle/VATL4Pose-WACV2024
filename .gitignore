@@ -11,3 +11,6 @@ __pycache__/
 *.h5
 *.pth
 *.zip
+
+# isolated development workspaces
+.worktrees/
