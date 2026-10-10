@@ -213,6 +213,8 @@ The earlier paper on the uncertainty criteria is MVA 2023 ([IEEE Xplore](https:/
 
 ## License
 
+See [DISTRIBUTION.md](DISTRIBUTION.md) for the checked distribution scope. The source MIT license does not grant rights to checkpoints, datasets or legacy repository history. Checkpoint redistribution and the optional SAMIDARE dependency's permission remain unconfirmed. The planned v1 weights download is not yet a published, verified route.
+
 The v1 source tree is released under the MIT License (`LICENSE`). `third_party/hrnet/` holds the HRNet-W32 network definition of [deep-high-resolution-net.pytorch](https://github.com/leoxiaobin/deep-high-resolution-net.pytorch) under its MIT license (`third_party/hrnet/LICENSE`), and `third_party/hrnet/UPSTREAM.md` lists the source commit and every local change. VL4Pose and AlphaPose are reimplemented in v1 and their code is not included in the v1 source tree. The paper version at `wacv2024` and the repository history contain legacy third-party code; the v1 MIT License does not grant rights to that code.
 
 This work builds on [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose), [ALiPy](https://github.com/NUAA-AL/ALiPy), [DeepAL+](https://github.com/SineZHAN/deepALplus) and [VL4Pose](https://github.com/meghshukla/ActiveLearningForHumanPose), whose authors we thank.
