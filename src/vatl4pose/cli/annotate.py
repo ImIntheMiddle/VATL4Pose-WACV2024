@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("Provide one video path or --sample")
     candidates = [
         Path.cwd() / "tracking",
-        Path(__file__).resolve().parents[3].parent / "VATL4Pose-dev/tracking",
+        Path(__file__).resolve().parents[3] / "tracking",
     ]
     if args.tools is not None:
         root = args.tools
