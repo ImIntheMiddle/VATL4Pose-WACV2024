@@ -11,8 +11,14 @@ from vatl4pose.execution.status import Status, atomic_json, read_json, status_re
 
 
 def main(argv: list[str] | None = None) -> None:
+    arguments = sys.argv[1:] if argv is None else argv
+    if arguments[:1] == ["annotate"]:
+        from vatl4pose.cli.annotate import main as annotate
+        annotate(arguments[1:])
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("annotate", help="Annotate a video in one local browser session")
     status = commands.add_parser(
         "status", help="Read execution states without changing a run"
     )

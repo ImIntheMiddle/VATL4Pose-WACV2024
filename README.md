@@ -221,6 +221,8 @@ This work builds on [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose), [ALiPy]
 
 ## Managing command execution
 
+With the optional tracking tools installed beside this repository, `vatl4pose annotate /path/to/video.mp4` launches one local annotation session. It tracks people, selects pose annotations, opens a browser editor without a separate login, and imports saved answers when you press the continue button. The same command resumes the session. `--tools /path/to/tracking` locates an independently installed tools archive. The tools' README documents the prepared local sample and remote port forwarding; sample videos are not bundled with the public package.
+
 The existing `vatl4pose-*` commands remain available. The `vatl4pose` entry point adds a sequential workflow runner and read-only status inspection:
 
 ```bash
