@@ -82,7 +82,8 @@ class RoundRecord:
         answers: Labels of the oracle for ``queried``, row for row, as ``(k, K, 3)`` nested lists
             of x, y and visibility; ``None`` where ``queried`` is ``None`` or empty.
         moks_queried: Mean OKS of the predictions for the queried people against their labels, from
-            the model before it learned from them; ``None`` without a query.
+            the model before it learned from them, over the people with a visible joint; ``None``
+            without a query or when no queried person has a visible joint.
         timings: Seconds of each step (``infer``, ``eval``, ``select``, ``oracle``, ``retrain``,
             ``ae``) and ``total``, the work of the whole round without the write of the state.
     """

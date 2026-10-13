@@ -25,7 +25,8 @@ model) and has ``null`` where the round computed nothing:
     for the uncertainty term); ``null`` when nobody is unlabeled.
 ``moks_queried``
     The mean OKS of the people queried in the round, measured on the model before it learned
-    from them; ``null`` without a query or for an empty one.
+    from them, over the people whose label has a visible joint; ``null`` without a query, for
+    an empty one, and when no queried person has a visible joint.
 ``timings``
     Seconds per step: ``infer``, ``eval``, ``select`` (the extras and the strategy), ``oracle``,
     ``retrain``, ``ae`` (the fine-tuning of the autoencoder) and ``total`` (the round without the

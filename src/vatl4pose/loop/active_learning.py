@@ -762,6 +762,15 @@ class ActiveLearningLoop:
 
     # ------------------------------------------------------------------ step 2: evaluation
 
+    def _labeled_with_joints(self) -> np.ndarray:
+        """Sample indices of the labeled people whose label has a visible joint.
+
+        An annotator answers a person who shows no joint (hidden, or a wrong box) with no visible
+        joint. Such a person counts as labeled, so it is not asked again, but it gives no training
+        target, no autoencoder or auxiliary network input and no OKS.
+        """
+        return np.flatnonzero(self._labeled & (self._labels[:, :, 2] > 0).any(axis=1))
+
     def _oks(
         self, coords: np.ndarray, index: np.ndarray, labels: np.ndarray
     ) -> np.ndarray:
@@ -794,7 +803,8 @@ class ActiveLearningLoop:
         if self._has_ground_truth:
             performance, ospa = measure(pool.coords)
             replaced = pool.coords.astype(np.float64)
-            replaced[labeled] = self._labels[labeled, :, :2]
+            with_joints = self._labeled_with_joints()
+            replaced[with_joints] = self._labels[with_joints, :, :2]
             performance_ann, ospa_ann = measure(replaced)
 
         unlabeled = np.flatnonzero(~self._labeled)
@@ -824,7 +834,7 @@ class ActiveLearningLoop:
             inputs[AE_KEY] = self._ae
         if self._uses_vl4pose:
             assert pool.embeddings is not None
-            labeled = np.flatnonzero(self._labeled)
+            labeled = self._labeled_with_joints()
             inputs[VL4POSE_KEY] = extras.fit_link_gaussians(
                 pool.embeddings,
                 labeled,
@@ -888,33 +898,44 @@ class ActiveLearningLoop:
                 f"the oracle answered with shape {answers.shape} for a request of "
                 f"{len(query.queried)} people; expected {expected}"
             )
-        if self._uses_ae:
-            blind = query.queried[~(answers[:, :, 2] > 0).any(axis=1)]
-            if blind.size:
-                raise ValueError(
-                    f"the oracle marked no joint visible for the samples {blind.tolist()}; the "
-                    "autoencoder of the WPU score is tuned on the hybrid feature of the labels, "
-                    "which needs one visible joint per person"
-                )
+        blind = query.queried[~(answers[:, :, 2] > 0).any(axis=1)]
+        if blind.size:
+            logger.info(
+                "round %d: the oracle marked no joint visible for the samples %s; they count "
+                "as labeled but give no training target, autoencoder feature or OKS",
+                round_index,
+                blind.tolist(),
+            )
         return answers
 
     # ------------------------------------------------------------------ step 6: retraining
 
-    def _retrain(self, round_index: int, query: _Query, answers: np.ndarray) -> float:
+    def _retrain(
+        self, round_index: int, query: _Query, answers: np.ndarray
+    ) -> float | None:
         """Label the people, train the estimator on them, return their mean query OKS.
 
         The training set is the queried people plus the labeled people whose OKS (under the model
         before this training) is at most ``finish_acc + 0.05``; the number of epochs follows from
-        the mean OKS of the queried people.
+        the mean OKS of the queried people. People without a visible joint in their label are
+        labeled but left out of both (see :meth:`_labeled_with_joints`). If no queried person has
+        a visible joint, the estimator is not trained and the result is ``None``.
         """
         picked, coords = query.queried, query.coords
-        before = np.flatnonzero(self._labeled)
+        before = self._labeled_with_joints()
         oks_before = self._oks(coords, before, self._labels[before])
-        moks = float(self._oks(coords, picked, answers).mean())
+        seen = (answers[:, :, 2] > 0).any(axis=1)
         self._labeled[picked] = True
         self._labels[picked] = answers
+        if not seen.any():
+            logger.warning(
+                "round %d: no queried person has a visible joint, so the estimator is not trained",
+                round_index,
+            )
+            return None
+        moks = float(self._oks(coords, picked[seen], answers[seen]).mean())
         training = Finetuner.retrain_indices(
-            before, oks_before, picked, self.finetuner.cfg.finish_acc
+            before, oks_before, picked[seen], self.finetuner.cfg.finish_acc
         )
         epochs = self.finetuner.epochs_for_round(int(self._labeled.sum()), self.n, moks)
         dataset = FinetuneDataset(
@@ -938,7 +959,7 @@ class ActiveLearningLoop:
         )
 
     def _build_ae(self) -> WholeBodyAE:
-        """The pretrained autoencoder, tuned on the hybrid features of the labels of the labeled people.
+        """The pretrained autoencoder, tuned on the hybrid features of the labels with a visible joint.
 
         The features are those of the answers of the oracle, with the label visibility as weights
         (with the simulated oracle the answers are the ground truth); a joint with no visibility
@@ -947,7 +968,7 @@ class ActiveLearningLoop:
         uninterrupted run had.
         """
         ae = self._pretrained_ae()
-        labeled = np.flatnonzero(self._labeled)
+        labeled = self._labeled_with_joints()
         if labeled.size:
             labels = self._labels[labeled]
             features = compute_hybrid(
