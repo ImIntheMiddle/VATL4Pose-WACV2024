@@ -56,7 +56,11 @@ from vatl4pose.data.datasets import (
     PersonTrainDataset,
     collect_people,
 )
-from vatl4pose.data.geometry import heatmaps_to_coords, init_loader_worker
+from vatl4pose.data.geometry import (
+    heatmaps_to_coords,
+    init_loader_worker,
+    single_threaded_opencv,
+)
 from vatl4pose.eval import (
     METRIC_KEYS,
     RoundMetrics,
@@ -235,14 +239,16 @@ def evaluate_estimator(
     was_training = model.training
     model.eval()
     try:
-        for index, x, bbox_crop in loader:
-            output = model(x.to(device, non_blocking=True))
-            assert output.dtype == torch.float32, (
-                f"the model returned {output.dtype} heatmaps"
-            )
-            decoded, scores = heatmaps_to_coords(output.cpu(), bbox_crop)
-            coords[index.numpy()] = decoded.numpy()
-            maxvals[index.numpy()] = scores.numpy()
+        # a fork while OpenCV runs its thread pool deadlocks the worker in init_loader_worker
+        with single_threaded_opencv():
+            for index, x, bbox_crop in loader:
+                output = model(x.to(device, non_blocking=True))
+                assert output.dtype == torch.float32, (
+                    f"the model returned {output.dtype} heatmaps"
+                )
+                decoded, scores = heatmaps_to_coords(output.cpu(), bbox_crop)
+                coords[index.numpy()] = decoded.numpy()
+                maxvals[index.numpy()] = scores.numpy()
     finally:
         model.train(was_training)
     return evaluate_predictions(
@@ -407,7 +413,10 @@ def train_estimator(
         lr = optimizer.param_groups[0]["lr"]
         dataset.set_epoch(epoch)
         sampler.order = shuffle_order(n_train, seed, 0, epoch).tolist()
-        loss = _train_epoch(model, loader, optimizer, device, n_train, epoch)
+        # the workers fork in the first epoch; a fork while OpenCV runs its thread pool
+        # deadlocks the worker in init_loader_worker
+        with single_threaded_opencv():
+            loss = _train_epoch(model, loader, optimizer, device, n_train, epoch)
         scheduler.step()
         finished = epoch + 1
         if finished % cfg.val_every == 0 or finished == cfg.epochs:

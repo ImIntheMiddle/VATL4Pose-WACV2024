@@ -38,7 +38,7 @@ from torch.utils.data import DataLoader
 
 from vatl4pose.data.augment import AugmentConfig
 from vatl4pose.data.datasets import FinetuneDataset
-from vatl4pose.data.geometry import init_loader_worker
+from vatl4pose.data.geometry import init_loader_worker, single_threaded_opencv
 from vatl4pose.models.estimator import PoseEstimator
 from vatl4pose.train._common import FixedOrderSampler, derived_seed, shuffle_order
 
@@ -356,14 +356,17 @@ class Finetuner:
         was_training = self.model.training
         self.model.train()
         try:
-            for epoch in range(epochs):
-                dataset.set_epoch(epoch)
-                sampler.order = shuffle_order(n, self.seed, round_index, epoch).tolist()
-                history.append(self._train_epoch(loader, n, round_index, epoch))
-                self.scheduler.step()
-                self.epochs_trained += 1
-                if on_epoch is not None:
-                    on_epoch(epoch + 1, epochs)
+            # the workers fork in the first epoch; a fork while OpenCV runs its thread pool
+            # deadlocks the worker in init_loader_worker
+            with single_threaded_opencv():
+                for epoch in range(epochs):
+                    dataset.set_epoch(epoch)
+                    sampler.order = shuffle_order(n, self.seed, round_index, epoch).tolist()
+                    history.append(self._train_epoch(loader, n, round_index, epoch))
+                    self.scheduler.step()
+                    self.epochs_trained += 1
+                    if on_epoch is not None:
+                        on_epoch(epoch + 1, epochs)
         finally:
             self.model.train(was_training)
         return history
