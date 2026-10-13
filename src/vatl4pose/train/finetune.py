@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import copy
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -291,7 +292,12 @@ class Finetuner:
         self.model.load_state_dict(self._initial_state, strict=True)
         self.optimizer, self.scheduler = self._build_optimizer()
 
-    def run(self, dataset: FinetuneDataset, epochs: int) -> list[float]:
+    def run(
+        self,
+        dataset: FinetuneDataset,
+        epochs: int,
+        on_epoch: Callable[[int, int], None] | None = None,
+    ) -> list[float]:
         """Train ``epochs`` epochs on ``dataset``.
 
         The round is the ``round_index`` of the dataset, so that the augmentation of the items
@@ -305,6 +311,7 @@ class Finetuner:
             dataset: Training items of the round; its ``seed`` must equal the seed of this
                 finetuner.
             epochs: Number of epochs, 0 or more.
+            on_epoch: Called after every epoch with the number of epochs done and ``epochs``.
 
         Returns:
             The mean loss of every epoch, weighted by batch size; empty for 0 epochs.
@@ -355,6 +362,8 @@ class Finetuner:
                 history.append(self._train_epoch(loader, n, round_index, epoch))
                 self.scheduler.step()
                 self.epochs_trained += 1
+                if on_epoch is not None:
+                    on_epoch(epoch + 1, epochs)
         finally:
             self.model.train(was_training)
         return history

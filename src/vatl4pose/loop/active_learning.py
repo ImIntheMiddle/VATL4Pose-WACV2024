@@ -44,6 +44,13 @@ Decisions of this implementation:
 * The retraining set, the mean query OKS, the OKS of the labeled people, the autoencoder tuning
   (the hybrid features of the labels) and the training of the auxiliary network use the labels the
   oracle gave. With the simulated oracle they are the ground truth.
+* An answer that marks no joint of a person visible (a hidden person, or a wrong box) labels the
+  person, so it is not asked again, but the person is left out of the steps that read labels:
+  the retraining set, the mean query OKS, the autoencoder and the auxiliary network. A round in
+  which no queried person shows a joint does not retrain, and its mean query OKS is ``None``.
+* ``run_dir/progress.json`` names the step the loop works on (the steps of the ``timings`` of a
+  round) and, while the estimator trains, the epoch; an interface reads it to show progress. A
+  stopped run leaves its last step in the file.
 * A ``run`` that finds the stored query of its round (the oracle had no answers yet, or the run
   was killed after the request) asks the oracle for the same people with the same predictions,
   without inference or selection, whatever the model is then. The round then ends as if it had run
@@ -98,6 +105,8 @@ AE_KEY = "ae"
 """Key of ``RoundContext.extras`` that holds the whole-body autoencoder."""
 
 STEPS = ("infer", "eval", "select", "oracle", "retrain", "ae")
+PROGRESS_SCHEMA = "vatl4pose.progress/1"
+_REPORT_INTERVAL = 0.5  # seconds between two epoch updates of progress.json
 """The timed steps of a round; ``total`` is added to them in the record."""
 
 _PEAK_CHUNK = 256
@@ -282,8 +291,9 @@ class _Query:
 class _Clock:
     """Wall-clock seconds per step of one round; waits for the GPU so that a step owns its work."""
 
-    def __init__(self, device: torch.device) -> None:
+    def __init__(self, device: torch.device, on_step: Callable[[str], None]) -> None:
         self._device = device
+        self._on_step = on_step
         self.times = dict.fromkeys(STEPS, 0.0)
         self._start = time.perf_counter()
         self._carried = 0.0
@@ -301,6 +311,7 @@ class _Clock:
     @contextmanager
     def measure(self, step: str) -> Iterator[None]:
         self._synchronize()
+        self._on_step(step)
         began = time.perf_counter()
         try:
             yield
@@ -377,6 +388,7 @@ class ActiveLearningLoop:
         self.state_dir = self.run_dir / "state"
         self.device = device
         self._on_round = on_round
+        self._reported: tuple[int, str, float] = (-1, "", 0.0)
         self.spec = cache.spec
         self.seed = video_seed(cfg.seed, cache.video_id)
         if finetuner.model is not estimator:
@@ -486,7 +498,7 @@ class ActiveLearningLoop:
         return self._finish()
 
     def _run_round(self, round_index: int) -> Pending | None:
-        clock = _Clock(self.device)
+        clock = _Clock(self.device, lambda step: self._report(round_index, step))
         stored = load_pending(self.state_dir, round_index)
         if stored is None:
             evaluation, query = self._prepare(round_index, clock)
@@ -762,6 +774,36 @@ class ActiveLearningLoop:
 
     # ------------------------------------------------------------------ step 2: evaluation
 
+    def _report(
+        self, round_index: int, step: str, done: int | None = None, total: int | None = None
+    ) -> None:
+        """Write the step of the loop, and the epoch while it trains, to ``progress.json``.
+
+        A new step is always written; the epochs of a step at most every half second and at the
+        last epoch, so that a short epoch does not wait for the file system.
+        """
+        now = time.monotonic()
+        if (
+            done is not None
+            and done != total
+            and (round_index, step) == self._reported[:2]
+            and now - self._reported[2] < _REPORT_INTERVAL
+        ):
+            return
+        self._reported = (round_index, step, now)
+        document = {
+            "schema": PROGRESS_SCHEMA,
+            "round": round_index,
+            "step": step,
+            "done": done,
+            "total": total,
+            "time": time.time(),
+        }
+        write_atomic(
+            self.run_dir / "progress.json",
+            lambda f: f.write(json.dumps(document).encode()),
+        )
+
     def _labeled_with_joints(self) -> np.ndarray:
         """Sample indices of the labeled people whose label has a visible joint.
 
@@ -947,7 +989,11 @@ class ActiveLearningLoop:
             self.seed,
             round_index,
         )
-        self.finetuner.run(dataset, epochs)
+        self.finetuner.run(
+            dataset,
+            epochs,
+            on_epoch=lambda done, total: self._report(round_index, "retrain", done, total),
+        )
         return moks
 
     # ------------------------------------------------------------------ step 7: autoencoder
