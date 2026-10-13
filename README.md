@@ -68,7 +68,7 @@ vatl4pose-atl dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1]' datase
 
 Each round writes `oracle/round_XX_queries.json` with the people to annotate and stops. Correct their keypoints in CVAT or Label Studio, keep the annotation ids, save the result as `round_XX_answers.json` in the same folder and run the command again. `final_estimator.pth` holds the adapted estimator after the last round.
 
-[docs/own_data.md](docs/own_data.md) covers the annotation format, other joint layouts, training and tuning. [docs/details.md](docs/details.md) covers the outputs, the evaluation and the weights, and [docs/execution.md](docs/execution.md) the workflow runner.
+[docs/guide.md](docs/guide.md) lists the commands and settings and covers the annotation format, other joint layouts, training and tuning.
 
 ## Citation
 
@@ -88,6 +88,6 @@ Each round writes `oracle/round_XX_queries.json` with the people to annotate and
 
 ## License
 
-The source is under the MIT License. The weights are for noncommercial research only. See [DISTRIBUTION.md](DISTRIBUTION.md).
+The source is under the MIT License, and `third_party/hrnet/` keeps its own MIT license. The weights are trained on PoseTrack21 and JRDB-Pose and are for noncommercial research only, under the terms of these datasets. The repository history and the tag `wacv2024` contain third-party code under its own licenses.
 
 This work builds on [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose), [ALiPy](https://github.com/NUAA-AL/ALiPy), [DeepAL+](https://github.com/SineZHAN/deepALplus) and [VL4Pose](https://github.com/meghshukla/ActiveLearningForHumanPose).
