@@ -83,6 +83,7 @@ from ..data.cache import VideoCache
 from ..data.datasets import FinetuneDataset
 from ..data.geometry import HEATMAP_SIZE, heatmaps_to_coords, to_input_tensor
 from ..eval import evaluate_predictions, oks_per_sample, pose_score, xyxy_to_xywh
+from ..explain import record as round_details
 from ..models.estimator import PoseEstimator
 from ..models.wholebody_ae import WholeBodyAE, compute_hybrid, hybrid_valid_mask
 from ..oracle import Oracle
@@ -115,7 +116,7 @@ _REPORT_INTERVAL = 0.5  # seconds between two epoch updates of progress.json
 
 _PEAK_CHUNK = 256
 # Settings that do not change what a round computes; a resume may differ in them.
-_RESUME_FREE = ("infer_batch_size", "save_final_model", "save_estimator", "stopping")
+_RESUME_FREE = ("infer_batch_size", "save_final_model", "save_estimator", "stopping", "save_round_details")
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,8 @@ class LoopConfig:
             learns from the round (``>=``, as the 2023 code). The round records the judgment
             (:attr:`RoundRecord.stopping`); the loop does not stop by itself, so that the
             annotator decides.
+        save_round_details: Write ``details/round_XX.npz`` in every round
+            (:mod:`vatl4pose.explain.record`); the selection and the results do not change.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.
         ae_finetune_epochs: Epochs of the autoencoder tuning after every retraining.
         ae_finetune_lr: Learning rate (Adam) of that tuning.
@@ -153,6 +156,7 @@ class LoopConfig:
     save_final_model: bool = False
     save_estimator: bool = False
     stopping: bool = False
+    save_round_details: bool = False
     seed: int = 166
     ae_finetune_epochs: int = 20
     ae_finetune_lr: float = 8e-5
@@ -602,6 +606,8 @@ class ActiveLearningLoop:
         if self._has_query(round_index):
             size = self._query_sizes[round_index] - int(self._labeled.sum())
         if size == 0:
+            if self.cfg.save_round_details:
+                self._write_details(round_index, pool, {})
             return evaluation, None
         with clock.measure("select"):
             # a query that takes every unlabeled person is forced: the strategy scores nothing
@@ -961,9 +967,29 @@ class ActiveLearningLoop:
             extras=extra_inputs,
         )
         selected, raw = self.strategy.query(ctx, size)
+        if self.cfg.save_round_details:
+            forced = size >= self.n - int(self._labeled.sum())
+            self._write_details(
+                round_index,
+                pool,
+                round_details.selection_details(
+                    self.strategy, ctx, raw, selected, forced
+                ),
+            )
         unlabeled = ctx.unlabeled_index
         means = {name: float(score[unlabeled].mean()) for name, score in raw.items()}
         return np.sort(selected), means
+
+    def _write_details(
+        self, round_index: int, pool: _Pool, selection: dict[str, np.ndarray]
+    ) -> None:
+        """Write the details of the round; ``selection`` is empty for a round without a query."""
+        details = round_details.prediction_details(
+            round_index, self._arrays, pool.coords, pool.maxvals, self._labeled
+        )
+        round_details.write_round_details(
+            self.run_dir, round_index, {**details, **selection}
+        )
 
     # ------------------------------------------------------------------ step 5: oracle
 
