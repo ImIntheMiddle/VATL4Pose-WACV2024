@@ -18,6 +18,7 @@ instead:
 from __future__ import annotations
 
 import pathlib
+from collections import OrderedDict
 from collections.abc import Sequence
 
 import numpy as np
@@ -36,6 +37,9 @@ from .geometry import (
     make_targets,
     to_input_tensor,
 )
+
+FRAME_CACHE_BYTES = 256 << 20
+"""Bytes of decoded frames that one :class:`FinetuneDataset` keeps per process."""
 
 
 def collect_people(
@@ -107,6 +111,11 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
     ``np.random.default_rng((seed, round_index, epoch, i))``, so an item is the same whenever it
     is read in the same epoch, whatever the order of reads, the batch size or the number of
     loader workers.
+
+    Every epoch of a round reads the same frames, so a dataset keeps the frames it decoded, read
+    only, up to ``FRAME_CACHE_BYTES`` per process (each loader worker holds its own), and drops
+    the least recently used frame beyond that. A kept frame equals a decoded one, so the items
+    do not change.
 
     The epoch is set with :meth:`set_epoch`. It is held in a shared-memory tensor, so the worker
     processes of a :class:`~torch.utils.data.DataLoader` see it, also when the loader keeps its
@@ -189,6 +198,8 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         self._round_index = round_index
         # shared memory: the worker processes of a loader read the epoch that the main process sets
         self._epoch = torch.zeros((), dtype=torch.int64).share_memory_()
+        self._frames: OrderedDict[str, np.ndarray] = OrderedDict()
+        self._frame_bytes = 0
 
     @property
     def seed(self) -> int:
@@ -228,7 +239,7 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         arrays = self._cache.arrays
         epoch = int(self._epoch)
         rng = np.random.default_rng((self._seed, self._round_index, epoch, i))
-        image = read_image_rgb(pathlib.Path(arrays.image_path[sample]))
+        image = self._frame(str(arrays.image_path[sample]))
         crop, joints, _ = augment_and_crop(
             image,
             arrays.bbox_gt[sample],
@@ -247,6 +258,21 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         assert tuple(target_t.shape) == (num_joints, *HEATMAP_SIZE)
         assert tuple(weight_t.shape) == (num_joints, 1, 1)
         return x, target_t, weight_t
+
+    def _frame(self, path: str) -> np.ndarray:
+        """The decoded frame at ``path``, kept for later reads within ``FRAME_CACHE_BYTES``."""
+        frame = self._frames.get(path)
+        if frame is not None:
+            self._frames.move_to_end(path)
+            return frame
+        frame = read_image_rgb(pathlib.Path(path))
+        frame.setflags(write=False)
+        self._frames[path] = frame
+        self._frame_bytes += frame.nbytes
+        while self._frame_bytes > FRAME_CACHE_BYTES and len(self._frames) > 1:
+            _, dropped = self._frames.popitem(last=False)
+            self._frame_bytes -= dropped.nbytes
+        return frame
 
 
 class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
