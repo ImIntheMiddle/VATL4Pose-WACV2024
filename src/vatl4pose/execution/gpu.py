@@ -82,15 +82,19 @@ def _ancestor(pid: int) -> bool:
 class GpuLease:
     """Hold an exclusive UUID lock until all owned child work has exited.
 
-    New owners check for compute processes twice, 180 seconds apart. The environment
+    New owners check for compute processes twice, 180 seconds apart; with
+    ``recheck=False`` they check once and do not wait. The environment
     permits only descendants of a live owner to borrow the same lease. Unrelated
     launchers can still race; this is not a cluster scheduler.
     """
 
-    def __init__(self, index: int, root: Path | None = None) -> None:
+    def __init__(
+        self, index: int, root: Path | None = None, *, recheck: bool = True
+    ) -> None:
         if type(index) is not int or index < 0:
             raise ValueError("GPU index must be a nonnegative integer")
         self.index = index
+        self.recheck = recheck
         self.root = (
             Path(root)
             if root is not None
@@ -147,12 +151,15 @@ class GpuLease:
         self.lock.__enter__()
         try:
             check_free(uid)
-            print(
-                f"GPU {self.index} ({uid}) is free; checking again in 180 seconds",
-                flush=True,
-            )
-            wait_recheck()
-            check_free(uid)
+            if self.recheck:
+                print(
+                    f"GPU {self.index} ({uid}) is free; checking again in 180 seconds",
+                    flush=True,
+                )
+                wait_recheck()
+                check_free(uid)
+            else:
+                print(f"GPU {self.index} ({uid}) is free", flush=True)
             self.env = self._environment(self.lock.data["token"])
             return self
         except BaseException as error:
