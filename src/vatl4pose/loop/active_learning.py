@@ -130,9 +130,10 @@ class LoopConfig:
             round, so that a run stopped early leaves the model of its last finished round.
         stopping: Judge the stopping criterion of the paper (SC_All) in every round with a query:
             whether the OKS of every labeled person with a visible joint, the people queried in
-            the round included, exceeds ``retrain.finish_acc`` under the model before it learns
-            from the round. The round records the judgment (:attr:`RoundRecord.stopping`); the
-            loop does not stop by itself, so that the annotator decides.
+            the round included, is at least ``retrain.finish_acc`` under the model before it
+            learns from the round (``>=``, as the 2023 code). The round records the judgment
+            (:attr:`RoundRecord.stopping`); the loop does not stop by itself, so that the
+            annotator decides.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.
         ae_finetune_epochs: Epochs of the autoencoder tuning after every retraining.
         ae_finetune_lr: Learning rate (Adam) of that tuning.
@@ -1017,7 +1018,7 @@ class ActiveLearningLoop:
         if oks.size == 0:
             return None
         theta = self.finetuner.cfg.finish_acc
-        above = int((oks > theta).sum())
+        above = int((oks >= theta).sum())
         return {
             "theta": theta,
             "people": int(oks.size),

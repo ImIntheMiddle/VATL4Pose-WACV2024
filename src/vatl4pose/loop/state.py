@@ -87,9 +87,9 @@ class RoundRecord:
         stopping: The stopping criterion of the paper (SC_All) judged in the round, with
             ``loop.stopping``: ``theta`` (``retrain.finish_acc``), ``people`` (the labeled people
             with a visible joint, the queried ones included), ``above`` (those whose OKS under
-            the model before the round's training exceeds ``theta``), ``lowest`` (their lowest
-            OKS) and ``met`` (``above == people``). ``None`` without ``loop.stopping``, without a
-            query and when nobody labeled has a visible joint.
+            the model before the round's training is at least ``theta``), ``lowest`` (their
+            lowest OKS) and ``met`` (``above == people``). ``None`` without ``loop.stopping``,
+            without a query and when nobody labeled has a visible joint.
         timings: Seconds of each step (``infer``, ``eval``, ``select``, ``oracle``, ``retrain``,
             ``ae``) and ``total``, the work of the whole round without the write of the state.
     """
