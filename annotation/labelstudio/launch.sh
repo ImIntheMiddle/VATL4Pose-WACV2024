@@ -23,7 +23,8 @@ QUERIES="$ORACLE_DIR/round_${ROUND}_queries.json"
 if [[ ! -x "$LS_VENV/bin/label-studio" ]]; then
   echo "installing Label Studio into $LS_VENV (once, a few minutes)"
   uv venv --python 3.12 "$LS_VENV"
-  uv pip install --python "$LS_VENV/bin/python" label-studio
+  # the version that the session installs into the same environment (annotation_backend.py)
+  uv pip install --python "$LS_VENV/bin/python" label-studio==1.23.2
 fi
 mkdir -p "$LS_DATA_DIR"
 
