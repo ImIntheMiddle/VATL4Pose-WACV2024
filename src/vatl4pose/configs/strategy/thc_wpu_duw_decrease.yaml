@@ -1,0 +1,7 @@
+# THC+WPU+DUW with the weight of THC falling with the labeled share (ablation, paper Table 3).
+name: THC+WPU_Coresetfilter_decrease
+scorers: [thc, wpu]
+combiner: thc_wpu_decrease
+selector: coreset_duw
+params:
+  lam: ${lam}

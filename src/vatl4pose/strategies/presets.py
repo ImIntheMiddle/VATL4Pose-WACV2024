@@ -11,9 +11,11 @@ The presets with a ``coreset_duw`` or ``coreset_duw_fixed`` selector carry the d
 ``dataclasses.replace(PRESETS[name], params={"lam": ...})`` (PoseTrack21 0.01, JRDB-Pose 1000). The
 ``VL4Pose`` preset names the scorer ``vl4pose`` of the VL4Pose baseline.
 
-The preset ``THC+WPU_Coresetfilter_fixed`` is the row "fixed" of the ablation in paper Table 3
-(PoseTrack21). It differs from the proposed method ``THC+WPU_Coresetfilter`` (the row "const") in
-the selector: ``coreset_duw_fixed`` weighs the uncertainty by ``lam`` alone.
+The three presets ``THC+WPU_Coresetfilter_fixed``, ``..._increase`` and ``..._decrease`` are the
+rows "fixed", "increase" and "decrease" of the ablation in paper Table 3 (PoseTrack21). Each differs
+from the proposed method ``THC+WPU_Coresetfilter`` (the row "const") in one component: the selector
+``coreset_duw_fixed`` weighs the uncertainty by ``lam`` alone, and the combiners ``thc_wpu_increase``
+and ``thc_wpu_decrease`` weigh THC and WPU by the share of labeled samples.
 """
 
 from __future__ import annotations
@@ -61,6 +63,20 @@ PRESETS: dict[str, StrategyConfig] = {
             ("thc", "wpu"),
             "minmax_sum",
             "coreset_duw_fixed",
+            {"lam": DEFAULT_LAM},
+        ),
+        StrategyConfig(
+            "THC+WPU_Coresetfilter_increase",
+            ("thc", "wpu"),
+            "thc_wpu_increase",
+            "coreset_duw",
+            {"lam": DEFAULT_LAM},
+        ),
+        StrategyConfig(
+            "THC+WPU_Coresetfilter_decrease",
+            ("thc", "wpu"),
+            "thc_wpu_decrease",
+            "coreset_duw",
             {"lam": DEFAULT_LAM},
         ),
         StrategyConfig("VL4Pose", ("vl4pose",), "single", "topk", {}),
