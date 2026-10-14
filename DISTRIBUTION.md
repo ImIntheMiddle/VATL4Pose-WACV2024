@@ -1,6 +1,6 @@
 # Distribution scope
 
-Checked on 2026-10-10. Source licensing, checkpoint permissions and dataset agreements are separate. Matching SHA256 and successful installation do not establish redistribution permission.
+Checked on 2026-10-10; the SAMIDARE entry on 2026-10-14. Source licensing, checkpoint permissions and dataset agreements are separate. Matching SHA256 and successful installation do not establish redistribution permission.
 
 ## Source
 
@@ -29,7 +29,7 @@ The separate adapters fetch dependencies; they do not bundle external source, ch
 
 | Dependency | Checked scope |
 | --- | --- |
-| [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE), `d46d4b82ca3ce0ab82f205908182bd4b6e373654` | No license file or grant found for the SAMIDARE script. Obtain permission or a published license before claiming redistribution or unrestricted use. External fetching does not resolve this. |
+| [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE), `4e663fa384dcbfd0868f39db0d78933dfe1170c1` | Upstream licenses the repository under the MIT License (`LICENSE.txt`, added on 2026-10-13). Preserve its notice if redistributing. The adapter fetches from upstream. |
 | [SAM2](https://github.com/facebookresearch/sam2/blob/2b90b9f5ceec907a1c18123530e92e794ad901a4/README.md#license), `2b90b9f5ceec907a1c18123530e92e794ad901a4` | Upstream explicitly licenses model checkpoints and training/demo code under Apache 2.0. Preserve applicable licenses/notices if redistributing. The adapter downloads from upstream. |
 | [torchvision pretrained models](https://docs.pytorch.org/vision/stable/models.html#general-information-on-pre-trained-weights) | Upstream states that model terms can depend on training datasets. The COCO Faster R-CNN checkpoint is downloaded from upstream and is not bundled. |
 
