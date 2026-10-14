@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why these people were selected</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2330; --muted: #5d6677; --line: #d8dce4;
+    --accent: #b86e00; --chip: #eceff4; --chip-on: #ffb000; --chip-on-ink: #1d2330;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --panel: #1d222b; --ink: #e8ebf1; --muted: #98a1b3; --line: #343b49;
+      --accent: #ffb000; --chip: #2a303c; --chip-on: #ffb000; --chip-on-ink: #14171d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header, nav, main { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
+  header { padding-top: 20px; }
+  h1 { margin: 0; font-size: 22px; }
+  h2 { margin: 0 0 6px; font-size: 16px; }
+  h3 { margin: 18px 0 6px; font-size: 15px; }
+  .muted { color: var(--muted); }
+  #subtitle { margin: 4px 0 12px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 12px; }
+  button { font: inherit; color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); font-weight: 600; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 640px); gap: 16px; padding-bottom: 32px; align-items: start; }
+  main.wide { grid-template-columns: minmax(0, 1fr); }
+  section, aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  #controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  #controls input[type=range] { flex: 1; }
+  #stage { overflow-x: auto; }
+  #stage canvas { display: block; width: 100%; height: auto; cursor: pointer; }
+  main.wide #stage canvas { width: auto; max-width: none; }
+  #picklist { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+  #picklist button { min-width: 34px; padding: 2px 6px; }
+  #links { margin-top: 10px; }
+  #links a { margin-right: 14px; color: var(--accent); }
+  .legend span { display: inline-block; margin-right: 14px; }
+  .swatch { display: inline-block; width: 11px; height: 11px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
+  table { border-collapse: collapse; margin: 4px 0; }
+  td, th { text-align: left; padding: 2px 14px 2px 0; font-weight: normal; }
+  th { color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; }
+  canvas.figure { max-width: 100%; height: auto; background: #222; border-radius: 4px; }
+  .bars { margin: 6px 0; }
+  .bar { display: grid; grid-template-columns: 120px 1fr 56px; align-items: center; gap: 8px; font-size: 13px; }
+  .bar i { display: block; height: 8px; border-radius: 2px; background: var(--line); }
+  .bar b { font-weight: normal; font-variant-numeric: tabular-nums; text-align: right; }
+  #message { color: #c0392b; padding: 16px; }
+</style>
+<script>
+  // collects the errors of the page, so that a test (or the reader) can see whether it ran cleanly
+  window.__errors = [];
+  window.addEventListener("error", function (e) { window.__errors.push(String(e.message)); });
+</script>
+</head>
+<body>
+<header>
+  <h1 id="title">Why these people were selected</h1>
+  <p id="subtitle" class="muted"></p>
+</header>
+<nav id="rounds" aria-label="Rounds"></nav>
+<main id="main">
+  <section id="viewer">
+    <div id="controls">
+      <button id="prev" title="previous frame">&#9664;</button>
+      <button id="play" title="play the frames" aria-pressed="false">Play</button>
+      <button id="next" title="next frame">&#9654;</button>
+      <input id="frame" type="range" min="0" max="0" value="0" aria-label="Frame">
+      <span id="frameLabel" class="muted"></span>
+    </div>
+    <div id="stage"><canvas id="canvas"></canvas></div>
+    <p id="legend" class="legend muted"></p>
+    <div id="picklist"></div>
+    <div id="links"></div>
+  </section>
+  <aside id="detail"></aside>
+</main>
+<script src="data.js"></script>
+<script>
+(function () {
+  "use strict";
+  var D = window.VATL_EXPLAIN;
+  if (!D) {
+    document.body.insertAdjacentHTML("beforeend", '<p id="message">data.js did not load, so there is nothing to show.</p>');
+    return;
+  }
+  var P = D.palette;
+  var K = D.skeleton.names.length;
+  var state = { round: 0, frame: 0, person: -1, timer: null };
+  var images = {};
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (key) {
+      if (key === "text") node.textContent = attrs[key];
+      else node.setAttribute(key, attrs[key]);
+    });
+    (children || []).forEach(function (child) { node.appendChild(child); });
+    return node;
+  }
+  function $(id) { return document.getElementById(id); }
+  function num(v) { return v === null || v === undefined ? "n/a" : String(Number(Number(v).toPrecision(3))); }
+  function jointName(j) { return D.skeleton.names[j].replace(/_/g, " "); }
+  function pct(v) { return v.toFixed(1) + " %"; }
+  function round() { return D.rounds[state.round]; }
+
+  function image(file, done) {
+    var img = images[file];
+    if (!img) {
+      img = new Image();
+      img.onload = function () { img.ready = true; (img.waiting || []).forEach(function (f) { f(); }); img.waiting = []; };
+      img.onerror = function () { window.__errors.push("cannot load " + file); };
+      img.src = file;
+      images[file] = img;
+    }
+    if (img.ready) return img;
+    (img.waiting = img.waiting || []).push(done);
+    return null;
+  }
+
+  // ---------------------------------------------------------------- drawing helpers
+  function sideColour(side) { return P.side[side]; }
+
+  function drawSkeleton(ctx, xy, scale, colour, width, wrapW) {
+    // xy: flat [x0, y0, x1, y1, ...]; wrapW: width of a panorama (limbs across its seam are skipped)
+    var hidden = {};
+    D.skeleton.hidden.forEach(function (j) { hidden[j] = true; });
+    var t = width || Math.max(2, 2.2 * scale);
+    ctx.lineCap = "round";
+    D.skeleton.limbs.forEach(function (l) {
+      var x1 = xy[2 * l[0]], y1 = xy[2 * l[0] + 1], x2 = xy[2 * l[1]], y2 = xy[2 * l[1] + 1];
+      if (wrapW && Math.abs(x1 - x2) > wrapW / 2) return;
+      ctx.strokeStyle = colour || sideColour(l[2]);
+      ctx.lineWidth = t;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    });
+    if (colour) return;
+    for (var j = 0; j < K; j++) {
+      if (hidden[j]) continue;
+      ctx.fillStyle = "#141414";
+      ctx.beginPath(); ctx.arc(xy[2 * j], xy[2 * j + 1], t + 1, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(xy[2 * j], xy[2 * j + 1], Math.max(1, t - 1), 0, 2 * Math.PI); ctx.fill();
+    }
+  }
+
+  function wrapped(coords, W) {
+    var out = new Array(coords.length);
+    for (var i = 0; i < coords.length; i += 2) {
+      out[i] = ((coords[i] % W) + W) % W;
+      out[i + 1] = coords[i + 1];
+    }
+    return out;
+  }
+
+  function rankOf(person) { var r = round().rank[person]; return r || 0; }
+
+  // ---------------------------------------------------------------- the frame view
+  function drawFrame() {
+    var fr = D.frames[state.frame];
+    var canvas = $("canvas");
+    if (canvas.width !== fr.width || canvas.height !== fr.height) { canvas.width = fr.width; canvas.height = fr.height; }
+    var ctx = canvas.getContext("2d");
+    var img = image(fr.file, drawFrame);
+    if (!img) return;
+    ctx.drawImage(img, 0, 0);
+    canvas.setAttribute("data-frame", fr.file);  // the file that the canvas shows now
+    var scale = fr.height / 480;
+    var R = round();
+    var W = D.video.panorama ? fr.width : 0;
+    fr.people.forEach(function (p) {
+      var xy = R.coords[p];
+      drawSkeleton(ctx, W ? wrapped(xy, W) : xy, scale, null, 0, W);
+    });
+    fr.people.forEach(function (p) {
+      var b = D.people.box[p], rank = rankOf(p), picked = rank > 0, labeled = R.labeled[p] === 1;
+      if (!picked && !labeled) return;
+      var w = b[2] - b[0], h = b[3] - b[1];
+      var xs = W ? [((b[0] % W) + W) % W] : [b[0]];
+      if (W && xs[0] + w > W) xs.push(xs[0] - W);
+      xs.forEach(function (x) {
+        ctx.lineWidth = (p === state.person ? 4 : picked ? 2.5 : 1.5) * Math.max(1, scale);
+        ctx.strokeStyle = picked ? P.pick : P.labeled;
+        ctx.setLineDash(picked ? [] : [6 * scale, 4 * scale]);
+        ctx.strokeRect(x, b[1], w, h);
+        ctx.setLineDash([]);
+        if (picked) {
+          var fs = Math.round(24 * Math.max(1, scale)), top = Math.max(0, b[1] - fs - 6);
+          ctx.font = "bold " + fs + "px sans-serif";
+          var label = String(rank), tw = ctx.measureText(label).width + 10;
+          ctx.fillStyle = P.pick;
+          ctx.fillRect(x, top, tw, fs + 6);
+          ctx.fillStyle = "#111";
+          ctx.textBaseline = "alphabetic";
+          ctx.fillText(label, x + 5, top + fs);
+        }
+      });
+    });
+    $("frame").value = state.frame;
+    $("frameLabel").textContent = "frame " + (state.frame + 1) + " of " + D.frames.length;
+  }
+
+  function hit(event) {
+    var canvas = $("canvas"), rect = canvas.getBoundingClientRect();
+    var x = (event.clientX - rect.left) * canvas.width / rect.width;
+    var y = (event.clientY - rect.top) * canvas.height / rect.height;
+    var fr = D.frames[state.frame], W = D.video.panorama ? fr.width : 0, best = -1, area = Infinity;
+    fr.people.forEach(function (p) {
+      var b = D.people.box[p], w = b[2] - b[0], h = b[3] - b[1];
+      var x0 = W ? ((b[0] % W) + W) % W : b[0];
+      var inside = (x >= x0 && x <= x0 + w) || (W && x >= x0 - W && x <= x0 - W + w);
+      if (inside && y >= b[1] && y <= b[3] && w * h < area) { best = p; area = w * h; }
+    });
+    return best;
+  }
+
+  // ---------------------------------------------------------------- detail panel
+  function section(title) {
+    var s = el("div", {});
+    s.appendChild(el("h3", { text: title }));
+    $("detail").appendChild(s);
+    return s;
+  }
+
+  function loadCrop(file, then) {
+    var img = image(file, function () { then(images[file]); });
+    if (img) then(img);
+  }
+
+  function heatLayer(b64, colour) {
+    var raw = atob(b64), c = document.createElement("canvas");
+    c.width = 48; c.height = 64;
+    var cx = c.getContext("2d"), data = cx.createImageData(48, 64), rgb = colour.match(/\d+/g).map(Number);
+    for (var i = 0; i < 48 * 64; i++) {
+      var level = raw.charCodeAt(i) / 255;
+      data.data[4 * i] = rgb[0]; data.data[4 * i + 1] = rgb[1]; data.data[4 * i + 2] = rgb[2];
+      data.data[4 * i + 3] = Math.round(Math.pow(level, 0.7) * 0.85 * 255);
+    }
+    cx.putImageData(data, 0, 0);
+    return c;
+  }
+
+  function thcSection(pick) {
+    var thc = pick.thc, s = section("THC: how the heatmaps change over three frames");
+    s.appendChild(el("p", { class: "muted", text: "THC scores a person high when the heatmaps of its joints differ from those of the same track in the previous and next frame. The three joints that differ most are drawn in colour." }));
+    var canvas = el("canvas", { class: "figure", width: 3 * 192 + 2 * 8, height: 256 });
+    s.appendChild(canvas);
+    var ctx = canvas.getContext("2d");
+    var titles = ["previous frame", "this frame", "next frame"];
+    thc.crops.forEach(function (file, c) {
+      var x = c * 200;
+      ctx.fillStyle = "#333"; ctx.fillRect(x, 0, 192, 256);
+      if (!file) {
+        ctx.fillStyle = "#aaa"; ctx.font = "14px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText("no frame", x + 96, 128); ctx.textAlign = "left";
+        return;
+      }
+      loadCrop(file, function (img) {
+        ctx.drawImage(img, x, 0);
+        ctx.imageSmoothingEnabled = true;
+        thc.heat[c].forEach(function (b64, t) { ctx.drawImage(heatLayer(b64, P.thc[t]), x, 0, 192, 256); });
+        ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(x, 0, 192, 20);
+        ctx.fillStyle = "#fff"; ctx.font = "13px sans-serif"; ctx.fillText(titles[c], x + 6, 14);
+      });
+    });
+    var order = thc.values.map(function (v, j) { return [v, j]; }).sort(function (a, b) { return b[0] - a[0]; });
+    var top = {}; thc.joints.forEach(function (j, t) { top[j] = t; });
+    var max = order[0][0] || 1, bars = el("div", { class: "bars" });
+    order.slice(0, 8).forEach(function (o) {
+      var t = top[o[1]];
+      var bar = el("i", { style: "width:" + Math.max(2, 100 * o[0] / max) + "%;" + (t !== undefined ? "background:" + P.thc[t] : "") });
+      bars.appendChild(el("div", { class: "bar" }, [el("span", { text: jointName(o[1]) }), el("div", {}, [bar]), el("b", { text: num(o[0]) })]));
+    });
+    s.appendChild(bars);
+  }
+
+  function wpuSection(pick) {
+    var wpu = pick.wpu, s = section("WPU: how far the pose is from a plausible pose");
+    s.appendChild(el("p", { class: "muted", text: "An autoencoder trained on whole-body poses reconstructs the predicted pose. WPU scores a person high when the reconstruction differs from the prediction. Joints with the largest differences are circled in red." }));
+    var canvas = el("canvas", { class: "figure", width: 192, height: 256 });
+    s.appendChild(canvas);
+    var ctx = canvas.getContext("2d");
+    loadCrop(wpu.crop, function (img) {
+      ctx.drawImage(img, 0, 0);
+      ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.fillRect(0, 0, 192, 256);
+      drawSkeleton(ctx, wpu.reconstructed, 1, P.recon, 3.5, 0);
+      drawSkeleton(ctx, wpu.predicted, 1, null, 1.8, 0);
+      wpu.worst.forEach(function (j) {
+        ctx.strokeStyle = P.gap; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(wpu.predicted[2 * j], wpu.predicted[2 * j + 1], 14, 0, 2 * Math.PI); ctx.stroke();
+      });
+    });
+    var legend = el("p", { class: "legend" });
+    legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + P.recon }), document.createTextNode("autoencoder")]));
+    legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:#888" }), document.createTextNode("estimator")]));
+    legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + P.gap }), document.createTextNode("largest gaps: " + wpu.worst.map(jointName).join(", "))]));
+    s.appendChild(legend);
+  }
+
+  function mapCanvas(R, pick) {
+    var w = 460, h = 340, pad = 18, canvas = el("canvas", { class: "figure", width: w, height: h });
+    canvas.style.background = "var(--panel)";
+    canvas.style.border = "1px solid var(--line)";
+    var ctx = canvas.getContext("2d");
+    function pos(p) { return [pad + R.map[p][0] * (w - 2 * pad), pad + R.map[p][1] * (h - 2 * pad)]; }
+    var picked = {};
+    R.order.forEach(function (p) { picked[p] = true; });
+    function dot(p, r, fill) { var q = pos(p); ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(q[0], q[1], r, 0, 2 * Math.PI); ctx.fill(); }
+    R.map.forEach(function (_, p) { if (!picked[p] && R.labeled[p] === 0) dot(p, 2.5, "#b9bec9"); });
+    R.map.forEach(function (_, p) { if (R.labeled[p] === 1) dot(p, 3, "#4a4f5c"); });
+    R.order.forEach(function (p) { dot(p, 5, P.pick); });
+    ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#111";
+    R.picks.forEach(function (k) { var q = pos(k.person); ctx.fillText(String(k.rank), q[0], q[1] + 0.5); });
+    var q = pos(pick.person);
+    ctx.fillStyle = P.pick; ctx.strokeStyle = "#111"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(q[0], q[1], 11, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.font = "bold 13px sans-serif"; ctx.fillStyle = "#111"; ctx.fillText(String(pick.rank), q[0], q[1] + 0.5);
+    return canvas;
+  }
+
+  function duwSection(pick) {
+    var R = round(), s = section("DUW: far from what is annotated, and uncertain");
+    s.appendChild(el("p", { class: "muted", text: "DUW takes the person whose embedding is far from the annotated and the already selected people, and who is uncertain under THC and WPU. The map is a t-SNE projection, so distances on it are only a rough guide; the numbers below are those of the original space." }));
+    s.appendChild(mapCanvas(R, pick));
+    var legend = el("p", { class: "legend" });
+    [["#b9bec9", "not annotated"], ["#4a4f5c", "annotated"], [P.pick, "selected (numbers: order)"]].forEach(function (e) {
+      legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + e[0] }), document.createTextNode(e[1])]));
+    });
+    s.appendChild(legend);
+    var d = pick.duw, rows = [
+      ["distance to the nearest annotated or earlier pick", d.distance === null ? "n/a (nobody annotated or selected yet)" : num(d.distance)],
+      ["uncertainty (THC and WPU)", num(d.uncertainty)],
+      ["m (mean OKS of the last round)", num(R.duw.m)],
+      ["lam", num(R.duw.lam)],
+      ["value = (1 - m) * distance + lam * m * uncertainty", d.value === null ? "n/a" : num(d.value)]
+    ];
+    var table = el("table");
+    rows.forEach(function (r) { table.appendChild(el("tr", {}, [el("th", { text: r[0] }), el("td", { class: "num", text: r[1] })])); });
+    s.appendChild(table);
+  }
+
+  function scoresSection(pick) {
+    var names = Object.keys(pick.scores);
+    if (!names.length) return;
+    var s = section("Scores");
+    var table = el("table");
+    names.forEach(function (n) {
+      var v = pick.scores[n];
+      table.appendChild(el("tr", {}, [el("th", { text: n === "total" ? "total (what the selection ranks by)" : n }), el("td", { class: "num", text: num(v[0]) }), el("td", { class: "muted", text: "higher than " + v[1].toFixed(1) + " % of the candidates" })]));
+    });
+    s.appendChild(table);
+  }
+
+  function renderDetail() {
+    var box = $("detail"), R = round();
+    box.textContent = "";
+    var p = state.person;
+    if (p < 0) { box.appendChild(el("p", { class: "muted", text: "Click a person in the frame, or a number below it." })); return; }
+    var rank = rankOf(p), fr = D.frames[D.people.frame[p]];
+    var head = el("h2", { text: rank ? "Pick " + rank + " of " + R.order.length : "Person " + p });
+    box.appendChild(head);
+    box.appendChild(el("p", { class: "muted", text: "round " + R.round + " (" + pct(R.percentage) + " labeled) · frame " + (D.people.frame[p] + 1) + " · track " + D.people.track[p] }));
+    if (!rank) {
+      box.appendChild(el("p", { text: R.labeled[p] === 1 ? "This person was annotated before the round." : "The round did not select this person." }));
+      return;
+    }
+    var pick = R.picks.filter(function (k) { return k.rank === rank; })[0];
+    if (!pick) {
+      box.appendChild(el("p", { text: "The figures of this pick are not part of the page (it holds the first " + D.maxPicks + " picks of a round; see --max-picks)." }));
+      return;
+    }
+    if (!R.criteria.length) {
+      box.appendChild(el("p", { text: D.video.scorers.length
+        ? "This round selected everybody who was left, so nothing was scored. The number is the order in which they were taken."
+        : "This strategy uses no criterion. The number is the order in which it selected the people." }));
+    }
+    scoresSection(pick);
+    if (pick.thc) thcSection(pick);
+    if (pick.wpu) wpuSection(pick);
+    if (pick.duw && R.map) duwSection(pick);
+  }
+
+  // ---------------------------------------------------------------- controls
+  function reveal(p) {
+    // a panorama is wider than the page: scroll the frame to the person
+    if (!D.video.panorama || p < 0) return;
+    var canvas = $("canvas"), stage = $("stage"), W = D.frames[state.frame].width, b = D.people.box[p];
+    var k = canvas.getBoundingClientRect().width / canvas.width;
+    var centre = (((b[0] % W) + W) % W + (b[2] - b[0]) / 2) * k;
+    stage.scrollLeft = centre - stage.clientWidth / 2;
+  }
+
+  function select(person) {
+    state.person = person;
+    if (person >= 0) state.frame = D.people.frame[person];
+    drawFrame();
+    reveal(person);
+    renderDetail();
+    renderPicks();
+  }
+
+  function renderPicks() {
+    var list = $("picklist"), R = round();
+    list.textContent = "";
+    if (!R.order.length) {
+      list.appendChild(el("span", { class: "muted", text: "This round selects nobody; it only shows the predictions." }));
+      return;
+    }
+    R.order.forEach(function (p, i) {
+      var b = el("button", { text: String(i + 1), title: "pick " + (i + 1), "aria-pressed": String(p === state.person) });
+      b.addEventListener("click", function () { select(p); });
+      list.appendChild(b);
+    });
+  }
+
+  function renderLinks() {
+    var box = $("links"), r = round().round;
+    box.textContent = "";
+    var v = D.videos.round[String(r)], c = D.videos.compare[String(r)];
+    if (v) box.appendChild(el("a", { href: v, text: "Video of round " + r }));
+    if (c) box.appendChild(el("a", { href: c, text: "Round 0 and round " + r + " side by side" }));
+  }
+
+  function renderLegend() {
+    var box = $("legend");
+    box.textContent = "";
+    [[P.pick, "selected, numbered in the order of the selection"], ["#00a99d", "annotated before the round (dashed)"]].forEach(function (e) {
+      box.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + e[0] }), document.createTextNode(e[1])]));
+    });
+    box.appendChild(el("span", { text: "Skeletons: the predictions of the model of this round." }));
+  }
+
+  function setRound(index) {
+    state.round = index;
+    Array.prototype.forEach.call($("rounds").children, function (b, i) { b.setAttribute("aria-pressed", String(i === index)); });
+    var R = round();
+    if (state.person >= 0 && R.rank[state.person] === 0 && R.order.length) state.person = R.order[0];
+    renderLinks();
+    renderPicks();
+    drawFrame();
+    reveal(state.person);
+    renderDetail();
+  }
+
+  function init() {
+    var v = D.video;
+    document.title = v.id + " · why these people were selected";
+    $("title").textContent = "Why these people were selected in " + v.id;
+    $("subtitle").textContent = v.strategy + " · " + v.estimator + " · " + v.dataset + " · " + v.people + " people in " + D.frames.length + " frames";
+    if (v.panorama) $("main").className = "wide";
+    D.rounds.forEach(function (R, i) {
+      var b = el("button", { text: "Round " + R.round + " · " + pct(R.percentage), "aria-pressed": "false" });
+      b.addEventListener("click", function () { setRound(i); });
+      $("rounds").appendChild(b);
+    });
+    var slider = $("frame");
+    slider.max = D.frames.length - 1;
+    slider.addEventListener("input", function () { state.frame = Number(slider.value); drawFrame(); });
+    $("prev").addEventListener("click", function () { state.frame = (state.frame + D.frames.length - 1) % D.frames.length; drawFrame(); });
+    $("next").addEventListener("click", function () { state.frame = (state.frame + 1) % D.frames.length; drawFrame(); });
+    $("play").addEventListener("click", function () {
+      var on = state.timer === null;
+      if (on) state.timer = setInterval(function () { state.frame = (state.frame + 1) % D.frames.length; drawFrame(); }, 125);
+      else { clearInterval(state.timer); state.timer = null; }
+      $("play").setAttribute("aria-pressed", String(on));
+      $("play").textContent = on ? "Pause" : "Play";
+    });
+    $("canvas").addEventListener("click", function (e) {
+      var p = hit(e);
+      state.person = p;
+      drawFrame(); renderDetail(); renderPicks();
+    });
+    renderLegend();
+    var first = 0;
+    D.rounds.forEach(function (R, i) { if (first === 0 && R.order.length) first = i; });
+    state.round = first;
+    var R0 = D.rounds[first];
+    state.person = R0.order.length ? R0.order[0] : -1;
+    if (state.person >= 0) state.frame = D.people.frame[state.person];
+    setRound(first);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

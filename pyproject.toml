@@ -16,6 +16,7 @@ dependencies = [
   "omegaconf>=2.3",
   "matplotlib>=3.9",
   "pillow>=10.0",
+  "threadpoolctl>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +24,7 @@ cpu = ["torch==2.6.0", "torchvision==0.21.0"]
 cu124 = ["torch==2.6.0", "torchvision==0.21.0"]
 cu128 = ["torch==2.7.1", "torchvision==0.22.1"]
 wandb = ["wandb>=0.18"]
+explain = ["imageio-ffmpeg>=0.5"]
 
 [project.scripts]
 vatl4pose = "vatl4pose.cli.execution:main"
@@ -35,6 +37,7 @@ vatl4pose-eval = "vatl4pose.cli.evaluate:main"
 vatl4pose-atl = "vatl4pose.cli.atl:main"
 vatl4pose-tune = "vatl4pose.cli.tune:main"
 vatl4pose-summarize = "vatl4pose.cli.summarize:main"
+vatl4pose-explain = "vatl4pose.explain.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.25"]
