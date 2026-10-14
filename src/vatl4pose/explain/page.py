@@ -150,6 +150,7 @@ def build_data(
             "id": info.video_id,
             "dataset": info.dataset,
             "strategy": info.strategy,
+            "scorers": list(info.scorers),
             "estimator": info.estimator,
             "people": n,
             "panorama": info.panorama,

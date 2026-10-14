@@ -378,7 +378,9 @@
       return;
     }
     if (!R.criteria.length) {
-      box.appendChild(el("p", { text: "This strategy uses no criterion that the page can show. The number is the order in which it selected the people." }));
+      box.appendChild(el("p", { text: D.video.scorers.length
+        ? "This round selected everybody who was left, so nothing was scored. The number is the order in which they were taken."
+        : "This strategy uses no criterion. The number is the order in which it selected the people." }));
     }
     scoresSection(pick);
     if (pick.thc) thcSection(pick);

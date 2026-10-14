@@ -216,6 +216,7 @@ def explain(
             zero = (details["coords"], float(details["percentage"]))
         else:
             zero = None
+            print("no compare videos: round 0 has no details", flush=True)
         for rd in data:
             name = f"round_{rd.index:02d}.mp4"
             text = f"round {rd.index}: {rd.percentage:.1f} % labeled"
