@@ -19,6 +19,13 @@ directory and every video of the id list (the dataset's, or ``summarize.ids_file
   and left out of every mean and curve; it still counts in ``n_videos``.
 * ``learning_curves_<metric>.png``: the mean over the videos on the 0 to 100 % label grid, one line
   per strategy.
+* ``stopping`` in ``summary.json`` and the stopping table of ``summary.md`` (Table 5 of the paper)
+  for a strategy whose videos ran with ``loop.stopping=true``: for each of the three criteria of
+  :mod:`vatl4pose.eval.stopping` (SC_Min, SC_All and the oracle stop) the mean over the videos of
+  the share of labeled people at the stop and, for SC_Min and SC_All, of the AP at OKS θ
+  (``retrain.finish_acc``) at the stop, as ``scripts/detailed_result.py`` of the 2023 code
+  computes them. A video that never meets a criterion stops at 100 % and counts in the means.
+  The oracle stop and the AP come from the ground truth, so a video without it is left out.
 
 The plots are made here, from the saved results, and nowhere else.
 """
@@ -38,7 +45,13 @@ from vatl4pose.config import (
     SummarizeSection,
     section,
 )
-from vatl4pose.eval import PERCENT_GRID, interpolate_curve
+from vatl4pose.eval import (
+    CRITERIA,
+    PERCENT_GRID,
+    ap_key,
+    interpolate_curve,
+    stop_points,
+)
 from vatl4pose.loop.results import RESULT_NAME
 from vatl4pose.train._common import write_atomic
 
@@ -67,7 +80,9 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
         ``no_ground_truth`` lists the ids of the videos whose result has no metrics; the means
         cover the other videos. ``percent_range`` is ``[low, high]``, the range of labeled people
         in percent that the results of all found videos cover (``None`` without a result).
-        ``curves`` is for the plots and is dropped from the JSON.
+        ``curves`` is for the plots and is dropped from the JSON. ``stopping`` is ``None`` unless
+        the videos with ground truth ran with ``loop.stopping``; otherwise it is the dict of
+        :func:`_stopping_summary`.
     """
     if not base.is_dir():
         raise FileNotFoundError(f"no results below {base}; run vatl4pose-atl first")
@@ -88,6 +103,9 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
             "n_missing": len(ids) - len(found),
             "no_ground_truth": no_ground_truth,
             "percent_range": _covered_range(list(found.values())),
+            "stopping": _stopping_summary(
+                [(v, r) for v, r in found.items() if v not in no_ground_truth]
+            ),
             "curves": {},
         }
         for metric in METRICS:
@@ -102,6 +120,54 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
             if usable:
                 entry["curves"][metric] = _mean_curve(usable, metric)
         summary[strategy] = entry
+    return summary
+
+
+def _stopping_summary(
+    videos: list[tuple[str, dict[str, Any]]],
+) -> Optional[dict[str, Any]]:
+    """Table 5 of the paper for the videos of one strategy, or ``None`` without judged videos.
+
+    Returns:
+        ``{"theta", "ap_key", "n", criterion: {"labeled_mean", "n_never", "ap_mean"}}`` for
+        ``oracle``, ``min_error`` and ``sc_all``. ``labeled_mean`` is the mean share of labeled
+        people at the stop in percent and ``n_never`` the number of videos that stop at 100 %.
+        ``ap_mean`` is the mean AP at OKS ``theta`` in percent at the stop (``min_error`` and
+        ``sc_all`` only), ``None`` when the result holds no AP at ``theta`` (``ap_key`` is then
+        ``None`` too).
+
+    Raises:
+        ValueError: If only some of the videos were judged, or they use different values of theta.
+    """
+    points = [(video, stop_points(result)) for video, result in videos]
+    unjudged = [video for video, point in points if point is None]
+    stops = [point for _, point in points if point is not None]
+    if not stops:
+        return None
+    if unjudged:
+        raise ValueError(
+            f"{len(unjudged)} video(s) have no stopping judgment ({', '.join(unjudged)}) and "
+            f"{len(stops)} have; run all of them with loop.stopping=true, or leave some out with "
+            "summarize.ids_file"
+        )
+    thetas = sorted({point.theta for point in stops})
+    if len(thetas) != 1:
+        raise ValueError(
+            f"the videos were judged with several values of theta: {thetas}; summarize one "
+            "value (one run.name per theta)"
+        )
+    theta = thetas[0]
+    summary: dict[str, Any] = {"theta": theta, "ap_key": ap_key(theta), "n": len(stops)}
+    for criterion in CRITERIA:
+        labeled = [point.labeled[criterion] for point in stops]
+        row: dict[str, Any] = {
+            "labeled_mean": float(np.mean(labeled)),
+            "n_never": sum(share == 100.0 for share in labeled),
+        }
+        if criterion in stops[0].ap:
+            aps = [point.ap[criterion] for point in stops]
+            row["ap_mean"] = None if None in aps else float(np.mean(aps))
+        summary[criterion] = row
     return summary
 
 
@@ -181,7 +247,55 @@ def _markdown(title: str, summary: dict[str, dict[str, Any]], n_ids: int) -> str
                 )
     if notes:
         lines += ["", *notes]
+    lines += _stopping_markdown(summary)
     return "\n".join(lines) + "\n"
+
+
+_CRITERION_LABELS = {
+    "min_error": "SC_Min (mean OKS of the queried people)",
+    "sc_all": "SC_All (every annotated person)",
+    "oracle": "actual (every person of the video)",
+}
+
+
+def _stopping_markdown(summary: dict[str, dict[str, Any]]) -> list[str]:
+    """The stopping table (Table 5 of the paper) of the strategies that have one; ``[]`` if none."""
+    judged = {s: e["stopping"] for s, e in summary.items() if e["stopping"] is not None}
+    if not judged:
+        return []
+    lines = [
+        "",
+        "## Stopping criteria",
+        "",
+        "Table 5 of the paper, with `loop.stopping=true` and θ = `retrain.finish_acc`. A criterion "
+        "stops the annotation at the share of labeled people after the first round that meets "
+        "it; a video that never meets it stops at 100 % and counts in the means. SC_Min: the "
+        "mean OKS of the people queried in the round reaches θ. SC_All: every person annotated "
+        "so far reaches θ. Actual: every person of the video reaches θ, and the rounds after it "
+        "are ignored, as the 2023 runs ended there. AP@θ is the AP at OKS θ (`performances_ann`) "
+        "in the round nearest to the stop, in percent; the means run over the videos.",
+        "",
+        "| strategy | θ | videos | criterion | AP@θ (%) | stopped (%) | stopped at 100 % |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    notes = []
+    for strategy, entry in judged.items():
+        for criterion in ("min_error", "sc_all", "oracle"):
+            row = entry[criterion]
+            ap = row.get("ap_mean")
+            lines.append(
+                f"| {strategy} | {entry['theta']:g} | {entry['n']} | "
+                f"{_CRITERION_LABELS[criterion]} | {'-' if ap is None else f'{ap:.2f}'} | "
+                f"{row['labeled_mean']:.2f} | {row['n_never']} |"
+            )
+        if entry["ap_key"] is None:
+            notes.append(
+                f"- {strategy}: the results hold no AP at OKS {entry['theta']:g} (only 0.5, 0.6, "
+                "0.7, 0.75, 0.8 and 0.95), so AP@θ is not reported"
+            )
+    if notes:
+        lines += ["", *notes]
+    return lines
 
 
 def _plot(
