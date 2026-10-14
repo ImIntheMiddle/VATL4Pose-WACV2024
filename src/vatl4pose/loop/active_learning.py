@@ -982,7 +982,7 @@ class ActiveLearningLoop:
             self._oks(coords, picked[seen], answers[seen]) if seen.any() else np.empty(0)
         )
         stopping = (
-            self._stopping(np.concatenate([oks_before, oks_queried]))
+            self._stopping(np.concatenate([oks_before, oks_queried]), coords)
             if self.cfg.stopping
             else None
         )
@@ -1013,14 +1013,39 @@ class ActiveLearningLoop:
         )
         return moks, stopping
 
-    def _stopping(self, oks: np.ndarray) -> dict[str, Any] | None:
-        """SC_All of the paper over the OKS of the annotated people; ``None`` without anybody."""
+    def _stopping(self, oks: np.ndarray, coords: np.ndarray) -> dict[str, Any] | None:
+        """SC_All of the paper over the OKS of the annotated people; ``None`` without anybody.
+
+        ``oracle`` is the same count over every person of the video (see :meth:`_oracle_stopping`).
+        """
         if oks.size == 0:
             return None
         theta = self.finetuner.cfg.finish_acc
         above = int((oks >= theta).sum())
         return {
             "theta": theta,
+            "people": int(oks.size),
+            "above": above,
+            "lowest": float(oks.min()),
+            "met": above == oks.size,
+            "oracle": self._oracle_stopping(coords, theta),
+        }
+
+    def _oracle_stopping(
+        self, coords: np.ndarray, theta: float
+    ) -> dict[str, Any] | None:
+        """The oracle stop of the paper (``actual`` in Table 5): does every person reach ``theta``?
+
+        The OKS of the predicted joints ``coords`` of all people of the video against the ground
+        truth, the people not labeled yet included. The loop never reads it; it only records it,
+        so that ``vatl4pose-summarize`` can name the round in which the video was solved. ``None``
+        unless every person has ground truth.
+        """
+        if not self._has_ground_truth:
+            return None
+        oks = self._oks(coords, np.arange(self.n), self._arrays.keypoints_gt)
+        above = int((oks >= theta).sum())
+        return {
             "people": int(oks.size),
             "above": above,
             "lowest": float(oks.min()),
