@@ -111,7 +111,7 @@ _REPORT_INTERVAL = 0.5  # seconds between two epoch updates of progress.json
 
 _PEAK_CHUNK = 256
 # Settings that do not change what a round computes; a resume may differ in them.
-_RESUME_FREE = ("infer_batch_size", "save_final_model")
+_RESUME_FREE = ("infer_batch_size", "save_final_model", "save_estimator")
 
 
 @dataclass(frozen=True)
@@ -126,6 +126,8 @@ class LoopConfig:
             all remaining people in an extra round after the last ratio.
         infer_batch_size: People per forward pass of the inference.
         save_final_model: Write the state dict of the final model to ``final_estimator.pth``.
+        save_estimator: Write the state dict of the estimator to ``estimator.pth`` after every
+            round, so that a run stopped early leaves the model of its last finished round.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.
         ae_finetune_epochs: Epochs of the autoencoder tuning after every retraining.
         ae_finetune_lr: Learning rate (Adam) of that tuning.
@@ -139,6 +141,7 @@ class LoopConfig:
     query_ratio: tuple[float, ...] = (0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0)
     infer_batch_size: int = 256
     save_final_model: bool = False
+    save_estimator: bool = False
     seed: int = 166
     ae_finetune_epochs: int = 20
     ae_finetune_lr: float = 8e-5
@@ -350,8 +353,8 @@ class ActiveLearningLoop:
             ``video_seed(cfg.seed, cache.video_id)``, so that one seed drives every part of a run.
         ae_ckpt: Pretrained whole-body autoencoder; required by strategies with the ``wpu`` scorer.
         cfg: Settings of the loop.
-        run_dir: Directory of the run; ``state/``, ``result.json`` and ``final_estimator.pth`` go
-            here. The CLI holds the per-video lock.
+        run_dir: Directory of the run; ``state/``, ``result.json``, ``final_estimator.pth`` and
+            ``estimator.pth`` go here. The CLI holds the per-video lock.
         device: Device of the inference and of the autoencoder.
         on_round: Called as ``on_round(round_index, record)`` after the state of every finished round
             is saved, for logging. It is not called for a round that stops with :class:`Pending`, and
@@ -726,12 +729,7 @@ class ActiveLearningLoop:
             self._identity, self.strategy.config.scorers, self._state.rounds
         )
         if self.cfg.save_final_model:
-            weights = {
-                k: v.detach().cpu() for k, v in self.estimator.state_dict().items()
-            }
-            write_atomic(
-                self.run_dir / "final_estimator.pth", lambda f: torch.save(weights, f)
-            )
+            self._write_estimator("final_estimator.pth")
         write_result(self.run_dir, result)
         return result
 
@@ -1046,3 +1044,10 @@ class ActiveLearningLoop:
             torch.get_rng_state(),
             self.finetuner.state_dict(),
         )
+        if self.cfg.save_estimator:
+            self._write_estimator("estimator.pth")
+
+    def _write_estimator(self, name: str) -> None:
+        """Write the state dict of the estimator to ``run_dir / name``."""
+        weights = {k: v.detach().cpu() for k, v in self.estimator.state_dict().items()}
+        write_atomic(self.run_dir / name, lambda f: torch.save(weights, f))
