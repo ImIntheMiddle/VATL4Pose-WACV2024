@@ -1,0 +1,23 @@
+# @package _global_
+# WACV 2024, PoseTrack21 (paper Table 5): the stopping criteria SC_Min and SC_All against the oracle
+# stop, THC+WPU+DUW on the 170 validation videos. The settings of Table 2 (`wacv2024_posetrack21`)
+# with the three changes of the 2023 runs (`AL_WACV_SC*`): the share of labeled people rises in
+# steps of 10 % (the 2023 saved config reads `for stopping criterion test`), `loop.stopping` records
+# the judgments of every round, and `retrain.finish_acc` is the target OKS theta (`--retrain_thresh`).
+# The paper reports theta = 0.5, 0.6, 0.7 and 0.8. The run name carries theta, so that the four runs
+# keep their results apart, and `vatl4pose-summarize` with the same `retrain.finish_acc` reads one:
+#   vatl4pose-atl experiment=wacv2024_posetrack21_table5 retrain.finish_acc=0.5 run.device=cuda
+#   vatl4pose-summarize experiment=wacv2024_posetrack21_table5 retrain.finish_acc=0.5
+defaults:
+  - wacv2024_posetrack21
+  - _self_
+
+run:
+  name: wacv2024_posetrack21_table5_theta${retrain.finish_acc}
+
+loop:
+  query_ratio: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+  stopping: true
+
+retrain:
+  finish_acc: 0.8
