@@ -34,6 +34,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--max-frames", type=int)
     parser.add_argument("--learning-device", choices=["cpu", "cuda"], default="cpu")
+    parser.add_argument(
+        "--target-oks",
+        type=float,
+        help="Accuracy θ of the stopping criterion of the paper, an OKS in (0, 1)",
+    )
     args = parser.parse_args(argv)
     if (args.video is None) == (not args.sample):
         parser.error("Provide one video path or --sample")
@@ -70,7 +75,7 @@ def main(argv: list[str] | None = None) -> None:
         "--port",
         str(args.port),
     ]
-    for name in ("output", "gpu", "max_frames", "learning_device"):
+    for name in ("output", "gpu", "max_frames", "learning_device", "target_oks"):
         value = getattr(args, name)
         if value is not None:
             command.extend(["--" + name.replace("_", "-"), str(value)])
