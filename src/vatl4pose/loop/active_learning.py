@@ -590,7 +590,9 @@ class ActiveLearningLoop:
         """Steps 1 to 4: infer, evaluate and (if the round queries somebody) select.
 
         The final round, which has no query, also writes the poses of everybody from its inference
-        (:meth:`_write_predictions`).
+        (:meth:`_write_predictions`). With ``loop.save_round_details`` every round writes its
+        details (:mod:`vatl4pose.explain.record`) here, after the selection and before a query that
+        waits for the oracle is stored.
 
         Returns:
             The evaluation and the query; the query is ``None`` in the final round and for a query
@@ -605,17 +607,21 @@ class ActiveLearningLoop:
         size = 0
         if self._has_query(round_index):
             size = self._query_sizes[round_index] - int(self._labeled.sum())
-        if size == 0:
-            if self.cfg.save_round_details:
-                self._write_details(round_index, pool, {})
-            return evaluation, None
-        with clock.measure("select"):
-            # a query that takes every unlabeled person is forced: the strategy scores nothing
-            forced = size >= self.n - int(self._labeled.sum())
-            extra_inputs = {} if forced else self._extras(round_index, pool)
-            picked, score_means = self._select(round_index, pool, size, extra_inputs)
-        self._check_scores(score_means, size)
-        return evaluation, _Query(picked, pool.predictions, score_means)
+        query = None
+        selection: dict[str, np.ndarray] = {}
+        if size > 0:
+            with clock.measure("select"):
+                # a query that takes every unlabeled person is forced: nothing is scored
+                forced = size >= self.n - int(self._labeled.sum())
+                extra_inputs = {} if forced else self._extras(round_index, pool)
+                picked, score_means, selection = self._select(
+                    round_index, pool, size, extra_inputs, forced
+                )
+            self._check_scores(score_means, size)
+            query = _Query(picked, pool.predictions, score_means)
+        if self.cfg.save_round_details:
+            self._write_details(round_index, pool, selection)
+        return evaluation, query
 
     def _check_scores(self, score_means: dict[str, float], size: int) -> None:
         """Raise unless the scores are ``{}`` (a forced query) or those of the strategy's scorers."""
@@ -945,9 +951,19 @@ class ActiveLearningLoop:
         return 0.0
 
     def _select(
-        self, round_index: int, pool: _Pool, size: int, extra_inputs: dict[str, Any]
-    ) -> tuple[np.ndarray, dict[str, float]]:
-        """Ask the strategy for ``size`` people; returns them sorted and the mean raw scores."""
+        self,
+        round_index: int,
+        pool: _Pool,
+        size: int,
+        extra_inputs: dict[str, Any],
+        forced: bool,
+    ) -> tuple[np.ndarray, dict[str, float], dict[str, np.ndarray]]:
+        """Ask the strategy for ``size`` people.
+
+        Returns:
+            The people sorted, the mean raw scores and, with ``loop.save_round_details``, the keys
+            of :func:`vatl4pose.explain.record.selection_details` (else an empty dict).
+        """
         arrays = self._arrays
         ctx = RoundContext(
             round_index=round_index,
@@ -967,18 +983,14 @@ class ActiveLearningLoop:
             extras=extra_inputs,
         )
         selected, raw = self.strategy.query(ctx, size)
-        if self.cfg.save_round_details:
-            forced = size >= self.n - int(self._labeled.sum())
-            self._write_details(
-                round_index,
-                pool,
-                round_details.selection_details(
-                    self.strategy, ctx, raw, selected, forced
-                ),
-            )
+        selection = (
+            round_details.selection_details(self.strategy, ctx, raw, selected, forced)
+            if self.cfg.save_round_details
+            else {}
+        )
         unlabeled = ctx.unlabeled_index
         means = {name: float(score[unlabeled].mean()) for name, score in raw.items()}
-        return np.sort(selected), means
+        return np.sort(selected), means, selection
 
     def _write_details(
         self, round_index: int, pool: _Pool, selection: dict[str, np.ndarray]
