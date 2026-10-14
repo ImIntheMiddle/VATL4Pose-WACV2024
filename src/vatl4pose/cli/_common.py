@@ -141,7 +141,11 @@ def run_name(run: RunSection) -> str:
 
 
 def torch_device(run: RunSection) -> torch.device:
-    """The device of ``run.device``; a CUDA device that does not exist is an error."""
+    """The device of ``run.device``; a CUDA device that does not exist is an error.
+
+    For a CUDA device, cuDNN runs deterministically with autotuning off, as in the 2023 runs of the
+    paper (``--seedfix``).
+    """
     try:
         device = torch.device(run.device)
     except RuntimeError as error:
@@ -155,6 +159,9 @@ def torch_device(run: RunSection) -> torch.device:
             f"run.device={run.device} but CUDA is not available to this process; "
             "check nvidia-smi and CUDA_VISIBLE_DEVICES, or use run.device=cpu"
         )
+    if device.type == "cuda":
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
     return device
 
 

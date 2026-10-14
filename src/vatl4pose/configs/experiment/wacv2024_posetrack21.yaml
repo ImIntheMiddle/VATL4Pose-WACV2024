@@ -21,8 +21,9 @@ ae:
 # weight of the uncertainty term of the DUW selector (strategy.params.lam of the DUW strategies)
 lam: 0.01
 
+# the saved config of every 2023 PoseTrack21 run of the paper has 24 (the tag's config file says 120)
 retrain:
-  batch_size: 120
+  batch_size: 24
 
 # `vatl4pose-tune`: the 14 validation videos of PoseTrack21 (2023: configs/posetrack21/trainval_video_list.txt)
 tune:
