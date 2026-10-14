@@ -1,0 +1,10 @@
+# environments and fetched dependencies
+.venv/
+.venv-labelstudio/
+.deps/
+# local videos, tracking outputs, sessions and Label Studio databases
+samples/
+runs/
+outputs/
+ls_data/
+__pycache__/

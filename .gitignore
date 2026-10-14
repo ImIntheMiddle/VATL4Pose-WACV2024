@@ -7,6 +7,7 @@ __pycache__/
 # data, weights, outputs (never tracked)
 /data/
 /weights/
+/pretrained_models
 /outputs/
 *.h5
 *.pth

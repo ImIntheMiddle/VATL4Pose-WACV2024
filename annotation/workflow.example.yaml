@@ -1,0 +1,13 @@
+schema: vatl4pose.workflow/1
+run_dir: runs/managed_cycle
+inputs:
+  - runs/posetrack21_tracked_v2/dataset/annotations/clip.json
+  - ../pretrained_models/posetrack21/simplebaseline_256x192.pth
+  - ../pretrained_models/wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4_v1.pth
+jobs:
+  - id: atl
+    argv:
+      - .venv/bin/python
+      - cycle.py
+      - runs/posetrack21_tracked_v2
+      - atl

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__VIDEO__ · VATL4Pose</title>
+<style>
+:root{--bg:#f5f6f8;--surface:#fff;--text:#14171c;--muted:#6a717d;--faint:#9aa1ab;--line:#e3e6ea;--accent:#2f5bd3;--accent-soft:#e8eefc;--good:#18794e;--good-soft:#e5f4ec;--bad:#b42318}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums}
+button{font:inherit;border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+button.primary{background:var(--accent);color:#fff}
+button.secondary{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+button:disabled{background:#d7dbe1;color:#fff;cursor:default}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+[hidden]{display:none!important}
+
+header{height:56px;display:flex;align-items:center;gap:24px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand span{font-size:12px;color:var(--faint);letter-spacing:.04em}
+.round{flex:1;display:flex;align-items:center;gap:12px;min-width:0;max-width:520px;margin:0 auto}
+.round .meter{flex:1}
+.meter{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.meter>div{height:100%;width:0;background:var(--accent);transition:width .4s}
+.meter.busy>div{width:30%;animation:slide 1.4s linear infinite}
+@keyframes slide{from{margin-left:-30%}to{margin-left:100%}}
+.round .count{color:var(--muted);white-space:nowrap}
+
+main{height:calc(100% - 56px)}
+#work{display:grid;grid-template-columns:minmax(0,1fr) 340px;height:100%}
+#editor{width:100%;height:100%;border:0;background:var(--surface);display:block}
+aside{border-left:1px solid var(--line);background:var(--surface);overflow-y:auto;padding:18px 18px 24px;display:flex;flex-direction:column;gap:22px}
+aside section{display:flex;flex-direction:column;gap:8px}
+aside video{width:100%;border-radius:6px;background:#0d1117;aspect-ratio:16/9;display:block}
+.person{font-size:15px;font-weight:600}
+.howto{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px;color:var(--muted)}
+.howto kbd{font:11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:2px 5px;color:var(--text)}
+.target{display:flex;justify-content:space-between;align-items:baseline}
+.target b{font-size:15px}
+table{width:100%;border-collapse:collapse}
+td,th{padding:5px 0;text-align:right;font-weight:400}
+th{font-size:11px;color:var(--faint);font-weight:600;letter-spacing:.04em}
+td:first-child,th:first-child{text-align:left}
+tr+tr td{border-top:1px solid var(--line)}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--line);margin-right:7px;vertical-align:1px}
+.dot.met{background:var(--good)}
+.dot.no{background:#f0b429}
+
+.center{height:100%;overflow-y:auto;display:flex;justify-content:center;align-items:flex-start;padding:56px 20px}
+.panel{width:100%;max-width:560px;display:flex;flex-direction:column;gap:22px}
+.panel h2,.result h2{font-size:20px;font-weight:600;margin:0}
+#steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+#steps li{display:flex;align-items:center;gap:10px;padding:6px 0;color:var(--faint)}
+#steps li::before{content:"";width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--line);flex:none}
+#steps li.done{color:var(--text)}
+#steps li.done::before{background:var(--good) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.2l2.3 2.3 4.7-4.9' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/16px no-repeat;box-shadow:none}
+#steps li.now{color:var(--text);font-weight:600}
+#steps li.now::before{box-shadow:inset 0 0 0 4.5px var(--accent)}
+#detail{color:var(--muted);margin:8px 0 0}
+.error{color:var(--bad);white-space:pre-wrap;margin:0}.error:empty{display:none}
+
+.result{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 380px}
+.result .stage{padding:24px;display:flex;flex-direction:column;gap:10px;min-width:0;overflow-y:auto}
+.result .stage video{width:100%;max-height:calc(100vh - 160px);object-fit:contain;background:#0d1117;border-radius:8px}
+.result aside{gap:20px}
+.verdict{background:var(--good-soft);color:var(--good);border-radius:8px;padding:12px 14px;font-weight:500}
+.verdict.pending{background:#fdf3e1;color:#8a5300}
+.actions{display:flex;gap:10px}
+.path{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);word-break:break-all}
+@media(max-width:900px){#work,.result{grid-template-columns:1fr;height:auto}#editor{height:80vh}aside{border-left:0;border-top:1px solid var(--line)}.round{display:none}}
+</style>
+
+<header>
+  <div class="brand"><b>__VIDEO__</b><span>VATL4Pose</span></div>
+  <div class="round" id="round" hidden><span id="round-name"></span><div class="meter"><div id="round-bar"></div></div><span class="count" id="round-count"></span></div>
+  <button class="primary" id="advance" hidden disabled>Train</button>
+</header>
+
+<main>
+  <div id="work" hidden>
+    <iframe id="editor" title="Joint annotation"></iframe>
+    <aside>
+      <section>
+        <div class="label">Annotating</div>
+        <div class="person" id="person">Open a person in the editor</div>
+        <video id="tracklet" muted loop autoplay playsinline></video>
+        <div class="muted" id="track-note">The track of this person by SAMIDARE; the thick box marks the frame to annotate. <a href="/__vatl__/video" target="_blank">All tracks ↗</a></div>
+      </section>
+      <section>
+        <div class="label">How to</div>
+        <ul class="howto">
+          <li>Drag each point onto its joint.</li>
+          <li>Missing joint: pick its name below the image, then click.</li>
+          <li>Hidden joint: select it, press <kbd>Backspace</kbd>.</li>
+          <li><b>Submit</b> saves the person; <b>Train</b> above runs once all are saved.</li>
+        </ul>
+      </section>
+      <section id="criterion" hidden>
+        <div class="target"><span class="label">Stopping criterion</span><span class="muted">OKS &gt; <b id="theta"></b></span></div>
+        <div class="muted" id="criterion-note"></div>
+        <table id="history"></table>
+      </section>
+    </aside>
+  </div>
+
+  <div class="center" id="wait" hidden>
+    <div class="panel">
+      <div><div class="label" id="wait-label">Preparing</div><h2 id="wait-title"></h2></div>
+      <ol id="steps"></ol>
+      <div><div class="meter" id="bar"><div></div></div><p id="detail"></p></div>
+      <p class="error" id="wait-error"></p>
+      <p class="muted">Keep this page open. The input video is not modified, and the same command resumes the session if you stop.</p>
+    </div>
+  </div>
+
+  <div class="result" id="result" hidden>
+    <div class="stage">
+      <video id="estimate" muted loop autoplay playsinline controls></video>
+      <div class="muted">The keypoints of every person, estimated by the current estimator.</div>
+    </div>
+    <aside>
+      <section>
+        <div class="label" id="result-label"></div>
+        <h2 id="result-title"></h2>
+      </section>
+      <div class="verdict" id="verdict"></div>
+      <section id="result-history">
+        <div class="target"><span class="label">Rounds</span><span class="muted">OKS &gt; <b id="result-theta"></b></span></div>
+        <table id="result-table"></table>
+      </section>
+      <section>
+        <div class="label">Estimator</div>
+        <div class="path" id="estimator"></div>
+      </section>
+      <div class="actions" id="choice" hidden><button class="primary" id="first"></button><button class="secondary" id="second"></button></div>
+      <p class="error" id="result-error"></p>
+    </aside>
+  </div>
+</main>
+
+<script>
+const TOKEN = __TOKEN__;
+const $ = id => document.getElementById(id);
+const editor = $('editor'), tracklet = $('tracklet'), advance = $('advance');
+const views = {work: $('work'), wait: $('wait'), result: $('result')};
+let project = null, shown = null, estimateLoaded = null;
+
+function show(name) { for (const [k, v] of Object.entries(views)) v.hidden = k !== name; }
+function clock(t) { t = Math.max(0, Math.round(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
+function pct(x) { return (Math.round(x * 10) / 10) + '%'; }
+
+editor.addEventListener('load', () => {
+  // Show only the labeling area of the editor. The page shows the person and the instructions,
+  // so the editor's menu bar, side panels, task header and box label leave it.
+  const doc = editor.contentDocument, style = doc.createElement('style');
+  style.textContent = '.lsf-menu-header,.lsf-sidepanels__wrapper,.lsf-main-view__annotation h3,.lsf-object+.lsf-labels{display:none!important}'
+    + '.lsf-content-wrapper__body{height:100%!important}.lsf-sidepanels{padding:0!important}';
+  doc.head.appendChild(style);
+});
+
+function follow() {
+  if (views.work.hidden) return;
+  let task = null;
+  try { task = editor.contentWindow.Htx.task; } catch (e) { return; }
+  const data = task && task.dataObj;
+  if (!data || data.ann_id == null || data.ann_id === shown) return;
+  shown = data.ann_id;
+  tracklet.src = '/__vatl__/tracklet?ann=' + data.ann_id;
+  $('person').textContent = 'Person ' + data.ann_id + ' · frame ' + data.image_id;
+}
+setInterval(follow, 500);
+
+function historyRows(rounds) {
+  return '<tr><th>Round</th><th>Labeled</th><th>Above</th><th>Lowest</th></tr>' + rounds.map(r =>
+    '<tr><td><span class="dot ' + (r.met ? 'met' : 'no') + '"></span>' + (r.round + 1) + '</td><td>' + pct(r.labeled) +
+    '</td><td>' + r.above + ' / ' + r.people + '</td><td>' + r.lowest.toFixed(2) + '</td></tr>').join('');
+}
+
+function renderWork(s) {
+  show('work');
+  if (project !== s.project) { project = s.project; shown = null; editor.src = '/projects/' + project + '/data?labeling=1'; }
+  $('round').hidden = false;
+  advance.hidden = false;
+  $('round-name').textContent = 'Round ' + (s.round + 1);
+  const t = s.tasks;
+  $('round-bar').style.width = t && t.total ? (100 * t.saved / t.total) + '%' : '0';
+  $('round-count').textContent = t ? t.saved + ' / ' + t.total + ' saved' : '';
+  advance.disabled = s.queued || !t || t.saved < t.total;
+  advance.textContent = s.queued ? 'Starting…' : 'Train';
+  const c = s.stopping;
+  $('criterion').hidden = !c;
+  if (c) {
+    $('theta').textContent = c.theta.toFixed(2);
+    $('criterion-note').textContent = c.rounds.length
+      ? 'Judged after each round, on everyone annotated so far.'
+      : 'Judged after this round, on everyone annotated so far.';
+    $('history').innerHTML = c.rounds.length ? historyRows(c.rounds) : '';
+  }
+}
+
+const STEP = {waiting_gpu: 'GPU check', checking_gpu: 'GPU check', tracking: 'Tracking with SAMIDARE', opening_annotation: 'Opening the editor'};
+function renderWait(s) {
+  show('wait');
+  $('round').hidden = true;
+  advance.hidden = true;
+  const p = s.progress || {}, loop = p.loop, elapsed = p.since ? p.now - p.since : 0;
+  const names = ['GPU check'].concat(s.round === null ? ['Tracking with SAMIDARE'] : []).concat(['Preparing', 'Training', 'Selecting the next people', 'Opening the editor']);
+  let now = STEP[s.phase] || null, frac = null, detail = 'Elapsed ' + clock(elapsed);
+  if (s.phase === 'waiting_gpu') detail = 'Waiting for a free GPU · ' + clock(elapsed);
+  else if (s.phase === 'checking_gpu') detail = 'Checking that no other user runs on the GPU · ' + clock(elapsed);
+  else if (s.phase === 'tracking' && p.frames) { frac = p.frames[0] / p.frames[1]; detail = 'Frame ' + p.frames[0] + ' of ' + p.frames[1] + ' · ' + clock(elapsed); }
+  else if (s.phase === 'learning') {
+    if (!loop) { now = 'Preparing'; detail = 'Checking the cache and loading the models · ' + clock(elapsed); }
+    else if (loop.step === 'oracle' || loop.step === 'retrain') { now = 'Training'; if (loop.total) { frac = loop.done / loop.total; detail = 'Epoch ' + loop.done + ' of ' + loop.total; } }
+    else { now = 'Selecting the next people'; detail = {ae: 'Tuning the autoencoder that scores pose naturalness', infer: 'Estimating the joints of everyone', eval: 'Collecting the estimates', select: 'Selecting the people to annotate'}[loop.step] || loop.step; }
+  }
+  if (s.phase === 'starting') { now = null; detail = 'Starting the session'; }
+  $('wait-label').textContent = s.round === null ? 'New session' : 'Round ' + (s.round + 1);
+  $('wait-title').textContent = s.phase === 'failed' ? 'Stopped' : now || 'Starting';
+  const at = names.indexOf(now);
+  $('steps').innerHTML = names.map((n, i) => '<li class="' + (i < at ? 'done' : i === at ? 'now' : '') + '">' + n + '</li>').join('');
+  const bar = $('bar');
+  bar.classList.toggle('busy', frac === null && s.phase !== 'failed');
+  bar.firstElementChild.style.width = frac === null ? '' : (100 * frac).toFixed(1) + '%';
+  $('detail').textContent = s.phase === 'failed' ? 'Check the reason below, then run the same command to resume from the saved state.' : detail;
+  $('wait-error').textContent = s.error || '';
+}
+
+function renderResult(s) {
+  show('result');
+  $('round').hidden = true;
+  advance.hidden = true;
+  // a new estimate after every round; the query keeps the browser from reusing the last one
+  const src = '/__vatl__/estimate?round=' + s.round;
+  if (estimateLoaded !== src) { $('estimate').src = src; estimateLoaded = src; }
+  const c = s.stopping, last = c && c.rounds.length ? c.rounds[c.rounds.length - 1] : null;
+  const done = s.phase === 'round_done', met = !!(last && last.met);
+  $('result-label').textContent = done ? 'Round ' + (s.round + 1) + ' trained' : 'Finished';
+  $('result-title').textContent = !done ? 'The session is complete' : met ? 'The stopping criterion is met' : c ? 'The stopping criterion is not met yet' : 'Check the estimates';
+  $('verdict').hidden = !last;
+  $('verdict').classList.toggle('pending', !met);
+  if (last) $('verdict').textContent = (met ? 'All ' : last.above + ' of ') + last.people + ' annotated people reach OKS ' + c.theta.toFixed(2)
+    + ' (lowest ' + last.lowest.toFixed(2) + ').';
+  $('result-history').hidden = !c;
+  if (c) { $('result-theta').textContent = c.theta.toFixed(2); $('result-table').innerHTML = historyRows(c.rounds); }
+  $('estimator').textContent = s.estimator || '';
+  // met: finishing comes first; otherwise the next round does
+  const next = 'Start round ' + (s.round + 2);
+  $('first').textContent = met ? 'Finish' : next;
+  $('first').dataset.path = met ? '/__vatl__/finish' : '/__vatl__/continue';
+  $('second').textContent = met ? 'Keep annotating' : 'Finish here';
+  $('second').dataset.path = met ? '/__vatl__/continue' : '/__vatl__/finish';
+  $('choice').hidden = !done || s.queued;
+  $('result-error').textContent = s.error || '';
+}
+
+async function update() {
+  let s;
+  try { s = await (await fetch('/__vatl__/state')).json(); }
+  catch (e) { $('wait-error').textContent = 'Lost the connection. Check the terminal that started the tool.'; return; }
+  if (s.phase === 'waiting_annotation') renderWork(s);
+  else if (s.phase === 'round_done' || s.phase === 'completed') renderResult(s);
+  else renderWait(s);
+}
+
+async function post(path) {
+  const r = await fetch(path, {method: 'POST', headers: {'X-VATL4POSE-Session': TOKEN}});
+  if (!r.ok) $('result-error').textContent = $('wait-error').textContent = await r.text();
+  update();
+}
+advance.onclick = () => { advance.disabled = true; post('/__vatl__/advance'); };
+for (const id of ['first', 'second']) $(id).onclick = () => { $('choice').hidden = true; post($(id).dataset.path); };
+update();
+setInterval(update, 1000);
+</script>
+</html>
