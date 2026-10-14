@@ -6,9 +6,14 @@ only names them, and the registry imports the plugin that holds a component on f
 :data:`vatl4pose.strategies.registry.PLUGIN_MODULES`), so the baseline presets build without the
 proposed method being imported.
 
-The presets with a ``coreset_duw`` selector carry the default weight ``lam = 0.01``. An experiment
-config overrides it with ``dataclasses.replace(PRESETS[name], params={"lam": ...})`` (PoseTrack21
-0.01, JRDB-Pose 1000). The ``VL4Pose`` preset names the scorer ``vl4pose`` of the VL4Pose baseline.
+The presets with a ``coreset_duw`` or ``coreset_duw_fixed`` selector carry the default weight
+``lam = 0.01``. An experiment config overrides it with
+``dataclasses.replace(PRESETS[name], params={"lam": ...})`` (PoseTrack21 0.01, JRDB-Pose 1000). The
+``VL4Pose`` preset names the scorer ``vl4pose`` of the VL4Pose baseline.
+
+The preset ``THC+WPU_Coresetfilter_fixed`` is the row "fixed" of the ablation in paper Table 3
+(PoseTrack21). It differs from the proposed method ``THC+WPU_Coresetfilter`` (the row "const") in
+the selector: ``coreset_duw_fixed`` weighs the uncertainty by ``lam`` alone.
 """
 
 from __future__ import annotations
@@ -49,6 +54,13 @@ PRESETS: dict[str, StrategyConfig] = {
             ("thc", "wpu"),
             "minmax_sum",
             "coreset_duw",
+            {"lam": DEFAULT_LAM},
+        ),
+        StrategyConfig(
+            "THC+WPU_Coresetfilter_fixed",
+            ("thc", "wpu"),
+            "minmax_sum",
+            "coreset_duw_fixed",
             {"lam": DEFAULT_LAM},
         ),
         StrategyConfig("VL4Pose", ("vl4pose",), "single", "topk", {}),

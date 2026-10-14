@@ -4,7 +4,8 @@ Importing this package registers
 
 * scorer ``thc``, the temporal heatmap continuity (:mod:`.thc`),
 * scorer ``wpu``, the whole-body pose uncertainty (:mod:`.wpu`),
-* selector ``coreset_duw``, the coreset with a dynamic uncertainty weight (:mod:`.duw`).
+* selector ``coreset_duw``, the coreset with a dynamic uncertainty weight (:mod:`.duw`),
+* selector ``coreset_duw_fixed``, the same coreset with a fixed uncertainty weight (:mod:`.duw`).
 
 The package is a plugin of the strategy framework: ``registry.PLUGIN_MODULES`` lists it, so a
 config that names one of these components works without importing the package, and no other module

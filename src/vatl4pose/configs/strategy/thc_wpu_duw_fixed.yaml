@@ -1,0 +1,7 @@
+# THC+WPU+DUW with a fixed uncertainty weight (ablation, paper Table 3).
+name: THC+WPU_Coresetfilter_fixed
+scorers: [thc, wpu]
+combiner: minmax_sum
+selector: coreset_duw_fixed
+params:
+  lam: ${lam}

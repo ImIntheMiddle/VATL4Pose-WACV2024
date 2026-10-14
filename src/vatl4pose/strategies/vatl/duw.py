@@ -1,4 +1,4 @@
-"""DUW: coreset with a dynamic uncertainty weight."""
+"""DUW: coreset with a dynamic uncertainty weight, and its fixed-weight ablation."""
 
 from __future__ import annotations
 
@@ -43,27 +43,56 @@ class DUWSelector:
             raise ValueError(f"lam must be finite and non-negative, got {lam}")
         self.lam = float(lam)
 
+    def _weights(self, ctx: RoundContext) -> tuple[float, float]:
+        """Weights ``(distance, uncertainty)`` of the two terms of a pick in this round."""
+        moks = float(ctx.moks_previous)
+        return 1 - moks, self.lam * moks
+
     def select(self, total: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
         unlabeled = unlabeled_for_query(ctx, k)
         if ctx.embeddings is None:
             raise ValueError(
-                "selector 'coreset_duw' needs ctx.embeddings; the pose model provides none"
+                f"selector {self.name!r} needs ctx.embeddings; the pose model provides none"
             )
         assert total.shape == (ctx.num_samples,), (
             f"total: expected shape ({ctx.num_samples},), got {total.shape}"
         )
         if not np.isfinite(total[unlabeled]).all():
             raise ValueError(
-                "selector 'coreset_duw': the total score has non-finite entries"
+                f"selector {self.name!r}: the total score has non-finite entries"
             )
-        moks = float(ctx.moks_previous)
+        w_distance, w_uncertainty = self._weights(ctx)
 
         def pick(min_distance: np.ndarray | None, candidates: np.ndarray) -> int:
             if min_distance is None:  # nothing labeled and nothing picked yet
                 return int(candidates[np.argmax(total[candidates])])
-            value = (1 - moks) * min_distance[candidates] + (
-                self.lam * moks * total[candidates]
+            value = w_distance * min_distance[candidates] + (
+                w_uncertainty * total[candidates]
             )
             return int(candidates[np.argmax(value)])
 
         return greedy_k_center(ctx.embeddings, ctx.labeled, k, pick)
+
+
+@register_selector("coreset_duw_fixed")
+class FixedDUWSelector(DUWSelector):
+    """DUW without the dynamic weight: greedy k-center with a constant uncertainty weight.
+
+    Every pick is the unlabeled sample that maximises ``d + lam * u``, with ``d`` and ``u`` as in
+    :class:`DUWSelector`; the previous round's mean OKS ``m`` does not enter. This is the
+    ``--fixed_lambda`` option of the 2023 code (the "fixed" row of paper Table 3), the ablation of
+    the dynamic weight ``(1 - m) * d + lam * m * u``. The first pick with nothing labeled, the
+    candidate handling and the unscaled distance are those of :class:`DUWSelector`. The legacy code
+    took its pure k-center branch at ``lam == 0`` before it looked at ``--fixed_lambda``; here
+    ``lam = 0`` keeps this selector, so that the distance alone decides after the first pick,
+    which is still the most uncertain sample.
+
+    Args:
+        lam: Weight of the uncertainty term (``lam >= 0``); the experiment configs set it, 0.01
+            for the paper's PoseTrack21 runs.
+    """
+
+    needs_embeddings = True
+
+    def _weights(self, ctx: RoundContext) -> tuple[float, float]:
+        return 1.0, self.lam
