@@ -1,10 +1,17 @@
-"""Launch the optional local video annotation application."""
+"""Launch the local video annotation application of the ``annotation/`` folder."""
 
 from __future__ import annotations
 import argparse
 import hashlib
 import os
 from pathlib import Path
+
+TOOLS_ENV = "VATL4POSE_ANNOTATION_ROOT"
+
+
+def default_tools_root() -> Path:
+    """The ``annotation/`` folder of the repository that holds this package."""
+    return Path(__file__).resolve().parents[3] / "annotation"
 
 
 def setup_ready(root: Path) -> bool:
@@ -24,10 +31,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--sample",
         action="store_true",
-        help="Use the prepared sample video through the same pipeline",
+        help="Use the local file annotation/samples/people.mp4 instead of a video path",
     )
     parser.add_argument(
-        "--tools", type=Path, help="Path to the optional tracking tools folder"
+        "--tools",
+        type=Path,
+        help="Path to the annotation folder; the default is annotation/ of the "
+        f"repository ({TOOLS_ENV} sets it too)",
     )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--gpu", type=int)
@@ -42,24 +52,22 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     if (args.video is None) == (not args.sample):
         parser.error("Provide one video path or --sample")
-    candidates = [
-        Path.cwd() / "tracking",
-        Path(__file__).resolve().parents[3] / "tracking",
-    ]
     if args.tools is not None:
         root = args.tools
-    elif "VATL4POSE_TRACKING_ROOT" in os.environ:
-        root = Path(os.environ["VATL4POSE_TRACKING_ROOT"])
+    elif TOOLS_ENV in os.environ:
+        root = Path(os.environ[TOOLS_ENV])
     else:
-        root = next((p for p in candidates if (p / "app.py").is_file()), candidates[0])
+        root = default_tools_root()
     root = root.resolve()
     if not (root / "app.py").is_file():
         parser.error(
-            "Install the optional tracking tools and provide --tools /path/to/tracking"
+            f"No annotation tool at {root}. Run vatl4pose from a clone of the repository, "
+            "or provide --tools /path/to/annotation"
         )
     video = (root / "samples/people.mp4") if args.sample else args.video.resolve()
     if not video.is_file():
-        parser.error(f"Video does not exist: {video}")
+        hint = "; the repository has no sample clip, put your own there" if args.sample else ""
+        parser.error(f"Video does not exist: {video}{hint}")
     if not setup_ready(root):
         from vatl4pose.execution.process import run_child
 
