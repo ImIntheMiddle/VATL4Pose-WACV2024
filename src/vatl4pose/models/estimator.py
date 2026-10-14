@@ -7,6 +7,10 @@ diversity-based query strategies cluster. HRNet-W32 is a reference network witho
 The parameter names equal the keys of the released checkpoints, so those load with ``strict=True``
 through :func:`build_estimator`. The checkpoint keys must equal the parameter names of the module;
 no key renaming happens at load time.
+
+The head layers start from PyTorch's default initialisation. ``build_estimator(init_head=True)``
+draws them as the 2023 training scripts did (``initialize_head``), which the initial training does
+for a network that starts from the ImageNet backbone.
 """
 
 from __future__ import annotations
@@ -138,6 +142,10 @@ class _ResNetEstimator(PoseEstimator):
     def _decode(self, features: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
+    def initialize_head(self) -> None:
+        """Draw the head layers as the 2023 ``_initialize`` did; the backbone stays as it is."""
+        raise NotImplementedError
+
     def backbone_features(self, x: torch.Tensor) -> torch.Tensor:
         self._check_input(x)
         features = self.preact(x)
@@ -176,6 +184,21 @@ class SimpleBaselineEstimator(_ResNetEstimator):
     def _decode(self, features: torch.Tensor) -> torch.Tensor:
         return self.final_layer(self.deconv_layers(features))
 
+    def initialize_head(self) -> None:
+        """Normal(0, 0.001) weights for the transposed convolutions and the output convolution.
+
+        The batch norms of the upsampling get weight 1 and bias 0, and the output bias is set to 0,
+        as in ``SimplePose._initialize`` of 2023.
+        """
+        for module in self.deconv_layers.modules():
+            if isinstance(module, nn.ConvTranspose2d):
+                nn.init.normal_(module.weight, std=0.001)
+            elif isinstance(module, nn.BatchNorm2d):
+                nn.init.constant_(module.weight, 1)
+                nn.init.constant_(module.bias, 0)
+        nn.init.normal_(self.final_layer.weight, std=0.001)
+        nn.init.constant_(self.final_layer.bias, 0)
+
     def _lr_modules(self) -> list[tuple[str, nn.Module, float]]:
         return [
             ("final_layer", self.final_layer, _OUTPUT_LR_MULT),
@@ -205,6 +228,14 @@ class FastPoseEstimator(_ResNetEstimator):
 
     def _decode(self, features: torch.Tensor) -> torch.Tensor:
         return self.conv_out(self.duc2(self.duc1(self.shuffle(features))))
+
+    def initialize_head(self) -> None:
+        """Normal(0, 0.001) weights and zero bias for the output convolution.
+
+        This is ``FastPose._initialize`` of 2023. The DUC blocks keep their default initialisation.
+        """
+        nn.init.normal_(self.conv_out.weight, std=0.001)
+        nn.init.constant_(self.conv_out.bias, 0)
 
     def _lr_modules(self) -> list[tuple[str, nn.Module, float]]:
         return [
@@ -263,11 +294,23 @@ def _load_checkpoint(model: PoseEstimator, path: pathlib.Path) -> None:
         ) from exc
 
 
-def build_estimator(cfg: EstimatorConfig, device: torch.device) -> PoseEstimator:
+def build_estimator(
+    cfg: EstimatorConfig, device: torch.device, *, init_head: bool = False
+) -> PoseEstimator:
     """Build the network of ``cfg`` on ``device``, in the default (training) mode.
 
     ``cfg.weights`` is loaded with ``torch.load(weights_only=True)`` and ``strict=True``. Without
     weights and without ``imagenet_init`` the network keeps its random initial values.
+
+    With ``init_head`` the head layers are drawn as the 2023 training scripts did for a network
+    without a checkpoint (``initialize_head``). The draw happens on the CPU before the network
+    moves to ``device``, so the global CPU generator decides it. The default keeps PyTorch's
+    initialisation.
+
+    Raises:
+        ValueError: If the arch is unknown, ``num_joints`` is not positive, or ``imagenet_init`` or
+            ``init_head`` cannot apply: HRNet-W32 has no ImageNet weights and keeps its own
+            initialisation, and a checkpoint would overwrite either.
     """
     if cfg.arch not in _ARCHS:
         raise ValueError(f"unknown arch {cfg.arch!r}; expected one of {sorted(_ARCHS)}")
@@ -281,10 +324,21 @@ def build_estimator(cfg: EstimatorConfig, device: torch.device) -> PoseEstimator
         raise ValueError(
             f"imagenet_init would be overwritten by weights {cfg.weights}; set only one"
         )
+    if init_head and cfg.arch == "hrnet_w32":
+        raise ValueError(
+            "init_head is defined for simplebaseline and fastpose only, not hrnet_w32"
+        )
+    if init_head and cfg.weights is not None:
+        raise ValueError(
+            f"init_head would be overwritten by weights {cfg.weights}; set only one"
+        )
     model = _ARCHS[cfg.arch](cfg.num_joints)
     if cfg.imagenet_init:
         assert isinstance(model, _ResNetEstimator)
         model.preact.load_imagenet_weights()
+    if init_head:
+        assert isinstance(model, _ResNetEstimator)
+        model.initialize_head()
     if cfg.weights is not None:
         _load_checkpoint(model, cfg.weights)
     return model.to(device)

@@ -10,7 +10,7 @@ defaults:
 run:
   name: simplebaseline_posetrack21
 
-# random weights with the ImageNet ResNet-50 backbone
+# the ImageNet ResNet-50 backbone and a head drawn as in the 2023 scripts (normal(0, 0.001) weights)
 estimator:
   weights: null
   imagenet_init: true

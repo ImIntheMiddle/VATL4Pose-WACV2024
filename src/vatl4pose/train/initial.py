@@ -6,6 +6,12 @@ retrains them. The recipe is that of the 2023 SimpleBaseline, FastPose and HRNet
 * Adam on all parameters at one learning rate (default 1e-3, no weight decay), and a
   :class:`~torch.optim.lr_scheduler.MultiStepLR` that multiplies the rate by 0.1 at the epochs in
   ``milestones`` (default 90 and 120). The scheduler steps once per epoch, after its batches.
+* A network that starts from the ImageNet backbone (``EstimatorConfig(imagenet_init=True)``) gets
+  the head initialisation of the 2023 scripts: normal(0, 0.001) weights for the upsampling and the
+  output layers, see :meth:`~vatl4pose.models.estimator.SimpleBaselineEstimator.initialize_head`
+  and :meth:`~vatl4pose.models.estimator.FastPoseEstimator.initialize_head`. A network that loads a
+  checkpoint (``weights`` or ``InitialTrainConfig.init_weights``) and one without ImageNet weights
+  (HRNet-W32, or ``imagenet_init=False``) keeps the initialisation it is built with.
 * The loss is ``0.5 * MSE(output * weight, target * weight)`` (:func:`heatmap_loss`), the loss of
   the per-round fine-tuning.
 * A training item is the crop of the ground-truth box of one person with a random scale, rotation
@@ -385,7 +391,7 @@ def train_estimator(
     # the global CPU state is restored afterwards, and the CUDA state is not touched
     with torch.random.fork_rng(devices=[]):
         torch.default_generator.manual_seed(derived_seed("initial", "model", seed))
-        model = build_estimator(est_cfg, device)
+        model = build_estimator(est_cfg, device, init_head=est_cfg.imagenet_init)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer, milestones=list(cfg.milestones), gamma=LR_GAMMA
