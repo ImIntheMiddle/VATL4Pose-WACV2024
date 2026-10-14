@@ -6,7 +6,8 @@ Directory layout below ``paths.output_root``::
                                                         because the id "00" of JRDB-Pose names a
                                                         different video in train, val and test
     cache/<dataset>[/<split>]/.locks/<video>/.lock      the lock of the cache build of one video
-    <run.name>/<estimator>/<strategy>/<video>/          atl: result.json, state/, log.jsonl,
+    <run.name>/<estimator>/<strategy>/<video>/          atl: result.json, predictions.json,
+                                                        predictions_ann.json, state/, log.jsonl,
                                                         settings.json, .done.json, .lock, oracle/
     <run.name>/tune/<estimator>/<strategy>/lam_<lam>/<video>/   tune: the same files per lambda
     <run.name>/summary/<estimator>[_<ids>]/             summarize

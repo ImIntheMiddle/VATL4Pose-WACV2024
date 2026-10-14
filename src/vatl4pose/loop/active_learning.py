@@ -27,6 +27,10 @@ remaining people in an extra round.
 
 Decisions of this implementation:
 
+* The last round writes the poses of everybody under the final model: ``predictions.json`` and
+  ``predictions_ann.json`` (see :mod:`.results`). They come from the inference of its step 1, the
+  one that step 2 evaluates, so the files hold the coordinates behind the last values of
+  ``performances`` and ``performances_ann``. They need no ground truth.
 * A query of size 0 (``int`` rounding on a small video) skips steps 3 to 7; the round still
   evaluates and is saved. Its mean query OKS does not exist, so it is ``None`` and the strategy's
   ``moks_previous`` stays at the last value that exists (0.0 before any).
@@ -87,7 +91,7 @@ from ..strategies.baselines.vl4pose import EXTRAS_KEY as VL4POSE_KEY
 from ..train import Finetuner
 from ..train._common import write_atomic
 from . import extras
-from .results import build_result, write_result
+from .results import build_predictions, build_result, write_predictions, write_result
 from .runs import video_seed
 from .state import (
     LoopState,
@@ -359,8 +363,9 @@ class ActiveLearningLoop:
             ``video_seed(cfg.seed, cache.video_id)``, so that one seed drives every part of a run.
         ae_ckpt: Pretrained whole-body autoencoder; required by strategies with the ``wpu`` scorer.
         cfg: Settings of the loop.
-        run_dir: Directory of the run; ``state/``, ``result.json``, ``final_estimator.pth`` and
-            ``estimator.pth`` go here. The CLI holds the per-video lock.
+        run_dir: Directory of the run; ``state/``, ``result.json``, ``predictions.json``,
+            ``predictions_ann.json``, ``final_estimator.pth`` and ``estimator.pth`` go here. The CLI
+            holds the per-video lock.
         device: Device of the inference and of the autoencoder.
         on_round: Called as ``on_round(round_index, record)`` after the state of every finished round
             is saved, for logging. It is not called for a round that stops with :class:`Pending`, and
@@ -579,6 +584,9 @@ class ActiveLearningLoop:
     ) -> tuple[_Evaluation, _Query | None]:
         """Steps 1 to 4: infer, evaluate and (if the round queries somebody) select.
 
+        The final round, which has no query, also writes the poses of everybody from its inference
+        (:meth:`_write_predictions`).
+
         Returns:
             The evaluation and the query; the query is ``None`` in the final round and for a query
             of size 0.
@@ -587,6 +595,8 @@ class ActiveLearningLoop:
             pool = self._infer()
         with clock.measure("eval"):
             evaluation = self._evaluate(pool)
+        if not self._has_query(round_index):
+            self._write_predictions(pool)
         size = 0
         if self._has_query(round_index):
             size = self._query_sizes[round_index] - int(self._labeled.sum())
@@ -870,6 +880,29 @@ class ActiveLearningLoop:
             ospa,
             ospa_ann,
             combine_weight,
+        )
+
+    def _write_predictions(self, pool: _Pool) -> None:
+        """Write ``predictions.json`` and ``predictions_ann.json`` from the final inference.
+
+        ``pool`` is the inference that :meth:`_evaluate` measured, so the coordinates are the ones
+        of the last ``performances``. The second file replaces the labeled people with a visible
+        joint by their labels, as ``performances_ann`` does.
+        """
+        arrays = self._arrays
+        estimated = pool.predictions
+        annotated = estimated.copy()
+        labeled = self._labeled_with_joints()
+        annotated[labeled] = self._labels[labeled]
+        score = pool.pose_score
+        write_predictions(
+            self.run_dir,
+            build_predictions(
+                estimated, score, arrays.ann_id, arrays.image_id, arrays.track_id
+            ),
+            build_predictions(
+                annotated, score, arrays.ann_id, arrays.image_id, arrays.track_id
+            ),
         )
 
     # ------------------------------------------------------------------ steps 3 and 4: query

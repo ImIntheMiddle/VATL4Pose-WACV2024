@@ -4,10 +4,12 @@
 
 For every video of the shard the command takes the lock of the video's output directory, skips the
 video if it is done, runs (or resumes) the loop, and marks the video done. The output is
-``<output_root>/<run.name>/<estimator>/<strategy.name>/<video>/result.json``. With
-``oracle=coco_file`` the run stops at a round whose annotations are not in place: the command
-prints a ``Pending`` line for that video, goes on with the next video, and exits with status 0;
-run it again after annotating.
+``<output_root>/<run.name>/<estimator>/<strategy.name>/<video>/result.json``. Next to it the last
+round writes ``predictions.json`` and ``predictions_ann.json``, the poses of every person of the
+video under the final model, without and with the annotated people's labels (see
+:mod:`vatl4pose.loop.results`). With ``oracle=coco_file`` the run stops at a round whose
+annotations are not in place: the command prints a ``Pending`` line for that video, goes on with
+the next video, and exits with status 0; run it again after annotating.
 
 The videos need their cache from ``vatl4pose-prepare``. Plots are made by ``vatl4pose-summarize``
 from the saved results, never here.
