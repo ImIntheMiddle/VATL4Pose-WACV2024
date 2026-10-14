@@ -29,8 +29,9 @@ model) and has ``null`` where the round computed nothing:
     an empty one, and when no queried person has a visible joint.
 ``stopping``
     The judgment of the stopping criterion of the paper (SC_All) in the round with
-    ``loop.stopping``, as :attr:`~vatl4pose.loop.state.RoundRecord.stopping`; ``null`` without
-    it, in the final round, and when nobody labeled has a visible joint.
+    ``loop.stopping``, as :attr:`~vatl4pose.loop.state.RoundRecord.stopping`, with the judgment of
+    all people against the ground truth under ``oracle``; ``null`` without it, in the final
+    round, and when nobody labeled has a visible joint.
 ``timings``
     Seconds per step: ``infer``, ``eval``, ``select`` (the extras and the strategy), ``oracle``,
     ``retrain``, ``ae`` (the fine-tuning of the autoencoder) and ``total`` (the round without the

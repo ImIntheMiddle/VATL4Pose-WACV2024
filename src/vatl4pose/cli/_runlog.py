@@ -75,7 +75,7 @@ def round_line(video_id: str, round_index: int, record: RoundRecord) -> dict[str
 def _wandb_metrics(
     line: dict[str, Any], skip: tuple[str, ...] = ("video_id", "round")
 ) -> dict[str, float]:
-    """The scalars of a log line, with the nested dictionaries flattened to ``a/b`` keys.
+    """The scalars of a log line, with the nested dictionaries flattened to ``a/b/c`` keys.
 
     The keys in ``skip`` and the values that are ``None`` are left out.
     """
@@ -84,7 +84,7 @@ def _wandb_metrics(
         if key in skip or value is None:
             continue
         if isinstance(value, dict):
-            for inner, number in value.items():
+            for inner, number in _wandb_metrics(value, skip=()).items():
                 metrics[f"{key}/{inner}"] = number
         else:
             metrics[key] = value
