@@ -84,6 +84,12 @@ class RoundRecord:
         moks_queried: Mean OKS of the predictions for the queried people against their labels, from
             the model before it learned from them, over the people with a visible joint; ``None``
             without a query or when no queried person has a visible joint.
+        stopping: The stopping criterion of the paper (SC_All) judged in the round, with
+            ``loop.stopping``: ``theta`` (``retrain.finish_acc``), ``people`` (the labeled people
+            with a visible joint, the queried ones included), ``above`` (those whose OKS under
+            the model before the round's training exceeds ``theta``), ``lowest`` (their lowest
+            OKS) and ``met`` (``above == people``). ``None`` without ``loop.stopping``, without a
+            query and when nobody labeled has a visible joint.
         timings: Seconds of each step (``infer``, ``eval``, ``select``, ``oracle``, ``retrain``,
             ``ae``) and ``total``, the work of the whole round without the write of the state.
     """
@@ -98,6 +104,7 @@ class RoundRecord:
     queried: list[int] | None
     answers: list[list[list[float]]] | None
     moks_queried: float | None
+    stopping: dict[str, Any] | None
     timings: dict[str, float]
 
 

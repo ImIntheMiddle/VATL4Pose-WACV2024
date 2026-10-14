@@ -66,6 +66,7 @@ def round_line(video_id: str, round_index: int, record: RoundRecord) -> dict[str
         "ospa_ann": record.ospa_ann,
         "combine_weight": record.combine_weight,
         "moks_queried": record.moks_queried,
+        "stopping": record.stopping,
         "n_queried": None if record.queried is None else len(record.queried),
         "timings": record.timings,
     }

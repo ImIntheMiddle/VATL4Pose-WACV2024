@@ -111,7 +111,7 @@ _REPORT_INTERVAL = 0.5  # seconds between two epoch updates of progress.json
 
 _PEAK_CHUNK = 256
 # Settings that do not change what a round computes; a resume may differ in them.
-_RESUME_FREE = ("infer_batch_size", "save_final_model", "save_estimator")
+_RESUME_FREE = ("infer_batch_size", "save_final_model", "save_estimator", "stopping")
 
 
 @dataclass(frozen=True)
@@ -128,6 +128,11 @@ class LoopConfig:
         save_final_model: Write the state dict of the final model to ``final_estimator.pth``.
         save_estimator: Write the state dict of the estimator to ``estimator.pth`` after every
             round, so that a run stopped early leaves the model of its last finished round.
+        stopping: Judge the stopping criterion of the paper (SC_All) in every round with a query:
+            whether the OKS of every labeled person with a visible joint, the people queried in
+            the round included, exceeds ``retrain.finish_acc`` under the model before it learns
+            from the round. The round records the judgment (:attr:`RoundRecord.stopping`); the
+            loop does not stop by itself, so that the annotator decides.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.
         ae_finetune_epochs: Epochs of the autoencoder tuning after every retraining.
         ae_finetune_lr: Learning rate (Adam) of that tuning.
@@ -142,6 +147,7 @@ class LoopConfig:
     infer_batch_size: int = 256
     save_final_model: bool = False
     save_estimator: bool = False
+    stopping: bool = False
     seed: int = 166
     ae_finetune_epochs: int = 20
     ae_finetune_lr: float = 8e-5
@@ -510,6 +516,7 @@ class ActiveLearningLoop:
         queried: list[int] | None = None
         answers: np.ndarray | None = None
         moks: float | None = None
+        stopping: dict[str, Any] | None = None
         if self._has_query(round_index):
             queried = []
             if query is not None:
@@ -523,7 +530,7 @@ class ActiveLearningLoop:
                 answers = outcome
                 queried = query.queried.tolist()
                 with clock.measure("retrain"):
-                    moks = self._retrain(round_index, query, answers)
+                    moks, stopping = self._retrain(round_index, query, answers)
                 if self._uses_ae and self._has_query(round_index + 1):
                     with clock.measure("ae"):
                         self._finetune_ae()
@@ -541,6 +548,7 @@ class ActiveLearningLoop:
             queried=queried,
             answers=None if answers is None else answers.tolist(),
             moks_queried=moks,
+            stopping=stopping,
             timings=clock.timings(),
         )
         self._save(record)
@@ -952,14 +960,16 @@ class ActiveLearningLoop:
 
     def _retrain(
         self, round_index: int, query: _Query, answers: np.ndarray
-    ) -> float | None:
+    ) -> tuple[float | None, dict[str, Any] | None]:
         """Label the people, train the estimator on them, return their mean query OKS.
 
         The training set is the queried people plus the labeled people whose OKS (under the model
         before this training) is at most ``finish_acc + 0.05``; the number of epochs follows from
         the mean OKS of the queried people. People without a visible joint in their label are
         labeled but left out of both (see :meth:`_labeled_with_joints`). If no queried person has
-        a visible joint, the estimator is not trained and the result is ``None``.
+        a visible joint, the estimator is not trained and the mean OKS is ``None``. With
+        ``loop.stopping`` the second value is the judgment of :meth:`_stopping` on the OKS of the
+        labeled and the queried people, all under the model before this training.
         """
         picked, coords = query.queried, query.coords
         before = self._labeled_with_joints()
@@ -967,13 +977,21 @@ class ActiveLearningLoop:
         seen = (answers[:, :, 2] > 0).any(axis=1)
         self._labeled[picked] = True
         self._labels[picked] = answers
+        oks_queried = (
+            self._oks(coords, picked[seen], answers[seen]) if seen.any() else np.empty(0)
+        )
+        stopping = (
+            self._stopping(np.concatenate([oks_before, oks_queried]))
+            if self.cfg.stopping
+            else None
+        )
         if not seen.any():
             logger.warning(
                 "round %d: no queried person has a visible joint, so the estimator is not trained",
                 round_index,
             )
-            return None
-        moks = float(self._oks(coords, picked[seen], answers[seen]).mean())
+            return None, stopping
+        moks = float(oks_queried.mean())
         training = Finetuner.retrain_indices(
             before, oks_before, picked[seen], self.finetuner.cfg.finish_acc
         )
@@ -992,7 +1010,21 @@ class ActiveLearningLoop:
             epochs,
             on_epoch=lambda done, total: self._report(round_index, "retrain", done, total),
         )
-        return moks
+        return moks, stopping
+
+    def _stopping(self, oks: np.ndarray) -> dict[str, Any] | None:
+        """SC_All of the paper over the OKS of the annotated people; ``None`` without anybody."""
+        if oks.size == 0:
+            return None
+        theta = self.finetuner.cfg.finish_acc
+        above = int((oks > theta).sum())
+        return {
+            "theta": theta,
+            "people": int(oks.size),
+            "above": above,
+            "lowest": float(oks.min()),
+            "met": above == oks.size,
+        }
 
     # ------------------------------------------------------------------ step 7: autoencoder
 

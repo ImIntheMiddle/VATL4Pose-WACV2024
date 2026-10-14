@@ -27,6 +27,10 @@ model) and has ``null`` where the round computed nothing:
     The mean OKS of the people queried in the round, measured on the model before it learned
     from them, over the people whose label has a visible joint; ``null`` without a query, for
     an empty one, and when no queried person has a visible joint.
+``stopping``
+    The judgment of the stopping criterion of the paper (SC_All) in the round with
+    ``loop.stopping``, as :attr:`~vatl4pose.loop.state.RoundRecord.stopping`; ``null`` without
+    it, in the final round, and when nobody labeled has a visible joint.
 ``timings``
     Seconds per step: ``infer``, ``eval``, ``select`` (the extras and the strategy), ``oracle``,
     ``retrain``, ``ae`` (the fine-tuning of the autoencoder) and ``total`` (the round without the
@@ -165,6 +169,7 @@ def build_result(
         },
         "combine_weight": [r.combine_weight for r in rounds],
         "moks_queried": [r.moks_queried for r in rounds],
+        "stopping": [r.stopping for r in rounds],
         "timings": [r.timings for r in rounds],
         "n_samples": identity["n_samples"],
         "vatl4pose_version": vatl4pose.__version__,

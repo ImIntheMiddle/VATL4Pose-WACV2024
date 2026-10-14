@@ -176,6 +176,7 @@ class LoopSection:
     infer_batch_size: int = 256
     save_final_model: bool = False
     save_estimator: bool = False
+    stopping: bool = False
     seed: int = II("run.seed")
     ae_finetune_epochs: int = 20
     ae_finetune_lr: float = 8e-5

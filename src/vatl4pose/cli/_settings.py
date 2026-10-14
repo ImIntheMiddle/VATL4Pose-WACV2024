@@ -15,8 +15,8 @@ estimator architecture, its weights file (path and SHA-256),
 the autoencoder checkpoint (path and SHA-256), the oracle, the strategy (name, parts and parameters,
 ``lam`` included), the loop settings and the retraining settings. Settings that do not change what a
 round computes are left out, the same ones the loop leaves out when it resumes: the inference batch
-size, ``save_final_model``, ``save_estimator`` and the number of data-loader workers. The device is
-left out as well, so that a run may continue on another device.
+size, ``save_final_model``, ``save_estimator``, ``stopping`` and the number of data-loader workers.
+The device is left out as well, so that a run may continue on another device.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from ._common import Job
 
 SETTINGS_NAME = "settings.json"
-_LOOP_NEUTRAL = ("infer_batch_size", "save_final_model", "save_estimator")
+_LOOP_NEUTRAL = ("infer_batch_size", "save_final_model", "save_estimator", "stopping")
 _RETRAIN_NEUTRAL = ("num_workers",)
 _CHUNK = 1 << 20
 
