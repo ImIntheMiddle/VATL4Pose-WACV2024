@@ -172,9 +172,10 @@ def _frame_panel(
                 alpha=1.0 if this else 0.8,
             )
         )
+        # a box can reach past the frame (a crop margin), so the number stays inside the frame
         ax.text(
-            left,
-            y1,
+            min(max(left, 0.0), view.shape[1] - 1.0),
+            min(max(y1, 0.0), view.shape[0] - 1.0),
             str(rank_of[i]),
             color="black",
             fontsize=11 if this else 8,
