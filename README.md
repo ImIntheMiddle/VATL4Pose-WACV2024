@@ -189,6 +189,16 @@ With `oracle=coco_file` a person annotates the queries of every round.
 
 The loop reads each answer by the annotation `id` of the queries file, and `id` and `keypoints` are the only fields it uses. The answers have to contain every queried `id` once and no other `id`, and `keypoints` holds `x, y, visibility` for every joint with a visibility of 0, 1 or 2. The annotation tool has to keep the `id` values in its export, or an adapter must restore them. Label Studio's COCO export renumbers the annotation ids: keep the query id in each task's data, export JSON and convert the answers using that query id. CVAT's id preservation has not been checked. A rerun with other settings than the first run stops with an error that names the changed keys. Give new settings a new `run.name`.
 
+## Annotating your own video
+
+With the optional tracking tools installed beside this repository, `vatl4pose annotate /path/to/video.mp4` launches one local annotation session. [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE) ([CVsports 2026](https://arxiv.org/abs/2604.22162)), a tracking-by-segmentation method for crowded scenes, detects and tracks the people. The session then selects the people to annotate, opens a browser editor with the predicted keypoints without a separate login, and imports the saved answers and retrains the estimator when you press the continue button. The same command resumes the session. `--tools /path/to/tracking` locates an independently installed tools archive. The tools' README documents the prepared local sample; sample videos are not bundled with the public package.
+
+Each round asks for 5% of the people in the video, counting each person once per frame, and the rounds follow `loop.query_ratio` up to 100%. On a 40-frame clip with 277 people by this count, a round asked for 14, correcting one took a median of 35 seconds, and the retraining and selection of a round took about half a minute on a GPU. Before each retraining on a GPU, the session checks twice, three minutes apart, that no other process uses the GPU.
+
+You can stop after any round. After every round the session writes the retrained estimator to `atl/tracked/simplebaseline/THC+WPU_Coresetfilter/clip/estimator.pth` in the session directory (`outputs/annotation/<video>-<hash>/` by default), and `estimator.weights=<absolute path>` of the `vatl4pose-*` commands loads it.
+
+The editor page answers only requests to `localhost` or `127.0.0.1` at the port of the session (`--port`, 8765 by default). To annotate from another computer, forward the same port number, for example `ssh -L 8765:localhost:8765 user@server`.
+
 ## Citation
 
 If you use this code, please cite our work.
@@ -220,8 +230,6 @@ The v1 source tree is released under the MIT License (`LICENSE`). `third_party/h
 This work builds on [AlphaPose](https://github.com/MVIG-SJTU/AlphaPose), [ALiPy](https://github.com/NUAA-AL/ALiPy), [DeepAL+](https://github.com/SineZHAN/deepALplus) and [VL4Pose](https://github.com/meghshukla/ActiveLearningForHumanPose), whose authors we thank.
 
 ## Managing command execution
-
-With the optional tracking tools installed beside this repository, `vatl4pose annotate /path/to/video.mp4` launches one local annotation session. It tracks people, selects pose annotations, opens a browser editor without a separate login, and imports saved answers when you press the continue button. The same command resumes the session. `--tools /path/to/tracking` locates an independently installed tools archive. The tools' README documents the prepared local sample and remote port forwarding; sample videos are not bundled with the public package.
 
 The existing `vatl4pose-*` commands remain available. The `vatl4pose` entry point adds a sequential workflow runner and read-only status inspection:
 
