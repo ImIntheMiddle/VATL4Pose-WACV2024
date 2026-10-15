@@ -1,12 +1,12 @@
-"""OSPA (optimal sub-pattern assignment) of predicted poses against labelled poses.
+"""OSPA (optimal sub-pattern assignment) of predicted poses against labeled poses.
 
-For one image with ``n`` labelled poses and ``n`` predicted poses, the OSPA is the cost of the best
+For one frame with ``n`` labeled poses and ``n`` predicted poses, the OSPA is the cost of the best
 one-to-one assignment, where assigning prediction ``p`` to label ``g`` costs ``1 - OKS(g, p)``,
 divided by ``n``. A set of predictions with fewer or more poses than the labels would add the
 cardinality difference ``|n_gt - n_pred|`` to the numerator and divide by the larger count. Here
-every prediction belongs to exactly one labelled sample, so both sets have the same size in every
-image and that term is zero. The cutoff of the OSPA metric is c = 1, because ``1 - OKS`` lies in
-[0, 1], and its order is p = 1. The OSPA of a set of images is the mean over the images that have
+every prediction belongs to exactly one labeled person, so both sets have the same size in every
+frame and that term is zero. The cutoff of the OSPA metric is c = 1, because ``1 - OKS`` lies in
+[0, 1], and its order is p = 1. The OSPA of a set of frames is the mean over the frames that have
 labels; 0 is perfect and 1 is the worst value.
 """
 
@@ -27,18 +27,18 @@ def ospa(
     image_id: np.ndarray,
     sigmas: np.ndarray | Sequence[float],
 ) -> float:
-    """OSPA of one prediction per labelled person, averaged over the images.
+    """OSPA of one prediction per labeled person, averaged over the frames.
 
     Args:
         pred_kpt: ``(N, K, 2)`` predicted joint coordinates (``(N, K, 3)`` is accepted; the third
             column is ignored).
-        gt_kpt: ``(N, K, 3)`` labelled joints ``x, y, visibility``.
+        gt_kpt: ``(N, K, 3)`` labeled joints ``x, y, visibility``.
         gt_bbox_xywh: ``(N, 4)`` label boxes ``[x, y, w, h]``; ``w * h`` is the area in the OKS.
-        image_id: ``(N,)`` integer image id of every sample.
+        image_id: ``(N,)`` integer image id of every person.
         sigmas: ``(K,)`` OKS sigmas (``KeypointSpec.oks_sigmas``), the same as in :func:`keypoint_ap`.
 
     Returns:
-        The mean over the images of the per-image OSPA, in ``[0, 1]``.
+        The mean over the frames of the per-frame OSPA, in ``[0, 1]``.
 
     Raises:
         ValueError: If no sample is given.

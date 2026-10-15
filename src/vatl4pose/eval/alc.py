@@ -1,8 +1,8 @@
 """Area under the learning curve (ALC) of an active-learning run.
 
-A run reports a metric after every round, at the percentage of the samples that are labelled by
-then. The ALC is the area under that curve with both axes scaled to ``[0, 1]``, so a metric that
-is 1 from the start has the ALC 1.
+A run reports a metric after every round, at the share of labeled people by then, in percent. The
+ALC is the area under that curve with both axes scaled to ``[0, 1]``, so a metric that is 1 from
+the start has the ALC 1.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ from collections.abc import Sequence
 import numpy as np
 
 PERCENT_GRID: np.ndarray = np.linspace(0.0, 100.0, 1001)
-"""The grid of label percentages ``0, 0.1, ..., 100`` on which the summaries compare runs."""
+"""The grid ``0, 0.1, ..., 100`` of shares of labeled people, in percent, on which the summaries
+compare runs."""
 PERCENT_GRID.flags.writeable = False
 
 
@@ -38,7 +39,7 @@ def compute_alc(percentages: Sequence[float], performance: Sequence[float]) -> f
     The area is the trapezoid sum over the rounds of ``(0.01 * percentage, performance)``.
 
     Args:
-        percentages: Percentage of labelled samples after every round, from 0 to 100.
+        percentages: Share of labeled people after every round, in percent (0 to 100).
         performance: Metric after every round on the scale ``[0, 1]`` (AP, AR, OKS or OSPA).
             Callers that hold percent values divide them by 100 first.
 
@@ -65,13 +66,13 @@ def interpolate_curve(
     performance: Sequence[float],
     grid: np.ndarray = PERCENT_GRID,
 ) -> np.ndarray:
-    """Linear interpolation of a learning curve onto a grid of label percentages.
+    """Linear interpolation of a learning curve onto a grid of shares of labeled people.
 
     Args:
-        percentages: Percentage of labelled samples after every round.
+        percentages: Share of labeled people after every round, in percent.
         performance: Metric after every round, on any scale.
-        grid: Label percentages to evaluate at; every value must lie inside the range of
-            ``percentages``. The default is :data:`PERCENT_GRID`.
+        grid: Shares of labeled people, in percent, to evaluate at; every value must lie inside the
+            range of ``percentages``. The default is :data:`PERCENT_GRID`.
 
     Returns:
         ``(len(grid),)`` float64 values.

@@ -134,7 +134,7 @@ def multiple_peak_entropy(
     min_distance: int = MIN_DISTANCE,
     num_peaks: int = NUM_PEAKS,
 ) -> np.ndarray:
-    """Multiple peak entropy of every sample.
+    """Multiple peak entropy of every person.
 
     Per joint, the softmax of the values of its (at most ``num_peaks``) highest local peaks gives
     a distribution whose entropy is large when several peaks compete; a joint without a peak adds

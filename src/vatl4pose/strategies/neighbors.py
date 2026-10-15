@@ -1,4 +1,4 @@
-"""Aggregation of a per-neighbor value over the temporal neighbors of every sample."""
+"""Aggregation of a per-neighbor value over the temporal neighbors of every person."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ PairValue = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
 
 def temporal_neighbor_sum(ctx: RoundContext, pair_value: PairValue) -> np.ndarray:
-    """Sum ``pair_value`` over the previous and the next neighbor of every sample.
+    """Sum ``pair_value`` over the previous and the next neighbor of every person.
 
-    A sample with one neighbor gets twice that neighbor's value and a sample without neighbors
-    gets 0, so that every sample is on the same scale (the rule of TPC and THC).
+    A person with one neighbor gets twice that neighbor's value and a person without neighbors
+    gets 0, so that every person is on the same scale (the rule of TPC and THC).
 
     Args:
         ctx: The round; ``prev_index`` and ``next_index`` give the neighbors.

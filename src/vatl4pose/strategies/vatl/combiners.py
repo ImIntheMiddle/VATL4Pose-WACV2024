@@ -1,4 +1,7 @@
-"""Combiners of THC and WPU whose weights follow the share of labeled samples (ablation of Table 3)."""
+"""Combiners of THC and WPU whose weights follow the share of labeled people.
+
+They are the ablation rows "increase" and "decrease" of Table 3 of the paper.
+"""
 
 from __future__ import annotations
 
@@ -15,13 +18,13 @@ WEIGHED_SCORERS = ("thc", "wpu")
 
 
 class _ShareWeightedCombiner:
-    """Min-max normalise THC and WPU, weigh them by the labeled share ``r``, and normalise the sum.
+    """Weigh min-max normalized THC and WPU by the share ``r`` of labeled people.
 
-    ``r`` is the number of labeled samples at the start of the round divided by the number of all
-    samples of the video, 0 in round 0. The total score is ``w_thc * thc + w_wpu * wpu`` with
+    ``r`` is the number of labeled people at the start of the round divided by the number of all
+    people of the video, 0 in round 0. The total score is ``w_thc * thc + w_wpu * wpu`` with
     ``(w_thc, w_wpu) = (r, 1 - r)`` or ``(1 - r, r)`` (class attribute ``thc_weight_rises``),
-    min-max normalised over the unlabeled samples again. The two subclasses are the rows
-    "increase" and "decrease" of paper Table 3; the combiner ``minmax_sum`` is the row "const"
+    min-max normalized over the unlabeled people again. The two subclasses are the rows
+    "increase" and "decrease" of Table 3; the combiner ``minmax_sum`` is the row "const"
     (weights 1 and 1).
     """
 
@@ -49,20 +52,26 @@ class _ShareWeightedCombiner:
         return minmax_over_unlabeled(
             w_thc * thc + w_wpu * wpu,
             ctx.labeled,
-            "the weighted sum of the normalised scores of 'thc' and 'wpu'",
+            "the weighted sum of the normalized scores of 'thc' and 'wpu'",
             ctx.round_index,
         )
 
 
 @register_combiner("thc_wpu_increase")
 class IncreasingThcCombiner(_ShareWeightedCombiner):
-    """The weight of THC rises with the labeled share and the weight of WPU falls (``r`` and ``1 - r``)."""
+    """The weight of THC rises with the share of labeled people, that of WPU falls.
+
+    The weights are ``r`` and ``1 - r``.
+    """
 
     thc_weight_rises = True
 
 
 @register_combiner("thc_wpu_decrease")
 class DecreasingThcCombiner(_ShareWeightedCombiner):
-    """The weight of THC falls with the labeled share and the weight of WPU rises (``1 - r`` and ``r``)."""
+    """The weight of THC falls with the share of labeled people, that of WPU rises.
+
+    The weights are ``1 - r`` and ``r``.
+    """
 
     thc_weight_rises = False

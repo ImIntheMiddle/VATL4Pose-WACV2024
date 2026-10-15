@@ -1,4 +1,4 @@
-"""K-Means filter: query the sample nearest to each of ``k`` cluster centers."""
+"""K-Means filter: query the person nearest to each of ``k`` cluster centers."""
 
 from __future__ import annotations
 
@@ -51,10 +51,10 @@ def nearest_member_per_cluster(
 
 @register_selector("kmeans")
 class KMeansSelector:
-    """Cluster the unlabeled embeddings into ``k`` groups and query one sample per group.
+    """Cluster the unlabeled embeddings into ``k`` groups and query one person per group.
 
     ``KMeans(n_clusters=k, random_state=318, n_init=10, algorithm="lloyd")`` clusters the
-    embeddings of the unlabeled samples (in index order). The queried sample of a cluster is the
+    embeddings of the unlabeled people (in index order). The queried person of a cluster is the
     member nearest to the cluster center. The result is in cluster order.
     """
 
@@ -64,7 +64,7 @@ class KMeansSelector:
         unlabeled = unlabeled_for_query(ctx, k)
         if ctx.embeddings is None:
             raise ValueError(
-                "selector 'kmeans' needs ctx.embeddings; the pose model provides none"
+                "selector 'kmeans' needs ctx.embeddings; the pose estimator provides none"
             )
         x = ctx.embeddings[unlabeled]
         learner = KMeans(

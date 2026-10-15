@@ -1,6 +1,6 @@
 """Mean local peak of the heatmaps.
 
-The loop logs the mean of this value over the unlabeled samples as ``combine_weight``.
+The loop logs the mean of this value over the unlabeled people as ``combine_weight``.
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ _CHUNK = 128
 
 @torch.no_grad()
 def local_peak_mean(heatmaps: torch.Tensor, chunk: int = _CHUNK) -> np.ndarray:
-    """Mean of the strong local peaks of every sample.
+    """Mean of the strong local peaks of every person.
 
     A cell is a local peak when it equals the maximum of the 3 x 3 square around it (the border
     is padded with zeros). A peak is strong when it is at least half of the largest peak of its
-    heatmap. The strong peaks of all joints of a sample are pooled and averaged.
+    heatmap. The strong peaks of all joints of a person are pooled and averaged.
 
     Args:
         heatmaps: ``(N, K, 64, 48)`` float32.
@@ -32,7 +32,7 @@ def local_peak_mean(heatmaps: torch.Tensor, chunk: int = _CHUNK) -> np.ndarray:
         ``(N,)`` float64.
 
     Raises:
-        ValueError: If a sample has no strong peak in any joint (all heatmaps negative).
+        ValueError: If a person has no strong peak in any joint (all heatmaps negative).
     """
     assert heatmaps.ndim == 4 and tuple(heatmaps.shape[2:]) == HEATMAP_SIZE, (
         f"heatmaps: expected shape (N, K, {HEATMAP_SIZE[0]}, {HEATMAP_SIZE[1]}), "

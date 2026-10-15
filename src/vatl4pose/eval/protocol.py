@@ -1,4 +1,4 @@
-"""The metrics of one active-learning round, with the sigmas of the keypoint specification."""
+"""The metrics of one active-learning round, with the sigmas of the keypoint spec."""
 
 from __future__ import annotations
 
@@ -62,17 +62,17 @@ def evaluate_predictions(
     image_id: np.ndarray,
     spec: KeypointSpec,
 ) -> RoundMetrics:
-    """Keypoint AP and OSPA of one prediction per labelled person.
+    """Keypoint AP and OSPA of one prediction per labeled person.
 
     AP and OSPA use the same ``spec.oks_sigmas``.
 
     Args:
         pred_kpt: ``(N, K, 2)`` predicted joint coordinates (``(N, K, 3)`` is accepted).
         pred_score: ``(N,)`` score of every predicted pose.
-        gt_kpt: ``(N, K, 3)`` labelled joints ``x, y, visibility``.
+        gt_kpt: ``(N, K, 3)`` labeled joints ``x, y, visibility``.
         gt_bbox_xywh: ``(N, 4)`` label boxes ``[x, y, w, h]``.
-        image_id: ``(N,)`` integer image id of every sample.
-        spec: Keypoint specification of the dataset; its ``oks_sigmas`` must have ``K`` entries.
+        image_id: ``(N,)`` integer image id of every person.
+        spec: Keypoint spec of the dataset; its ``oks_sigmas`` must have ``K`` entries.
 
     Returns:
         :class:`RoundMetrics` with the ten values of :data:`vatl4pose.eval.METRIC_KEYS` and the OSPA.

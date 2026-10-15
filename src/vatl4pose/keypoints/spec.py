@@ -1,6 +1,6 @@
-"""Dataset-dependent keypoint specifications.
+"""Dataset-dependent keypoint specs.
 
-Every component that depends on the joint layout (heatmap heads, horizontal-flip
+Every component that depends on the keypoint spec (heatmap heads, horizontal-flip
 augmentation, OKS evaluation, the whole-body autoencoder input) derives its sizes
 from a :class:`KeypointSpec`. Presets exist for the datasets of the paper
 (``posetrack21``, ``jrdb_pose``) and for plain COCO (``coco17``). Other datasets
@@ -129,10 +129,10 @@ def _checked_index_tuples(
 
 @dataclass(frozen=True)
 class KeypointSpec:
-    """Joint layout of one pose dataset.
+    """Keypoint spec of one pose dataset.
 
     Attributes:
-        name: Identifier of the layout.
+        name: Identifier of the spec.
         joint_names: One unique name per joint; the order defines the joint indices.
         flip_pairs: Index swaps applied to the joints on a horizontal flip. The pairs form
             an ordered sequence: the flip helper swaps the first pair, then the second pair
@@ -417,7 +417,7 @@ _PRESETS: dict[str, KeypointSpec] = {
 
 
 def get_spec(name: str) -> KeypointSpec:
-    """Return the preset specification called ``name``.
+    """Return the preset keypoint spec called ``name``.
 
     Args:
         name: One of ``"posetrack21"``, ``"jrdb_pose"``, ``"coco17"``.
@@ -433,7 +433,7 @@ def get_spec(name: str) -> KeypointSpec:
 
 
 def spec_from_mapping(m: Mapping[str, Any]) -> KeypointSpec:
-    """Build a specification for a custom dataset from a mapping (e.g. a Hydra config node).
+    """Build a keypoint spec for a custom dataset from a mapping (e.g. a Hydra config node).
 
     The mapping must hold exactly the fields of :class:`KeypointSpec`: ``name``,
     ``joint_names``, ``flip_pairs``, ``skeleton``, ``oks_sigmas``, ``redundant_joints`` and

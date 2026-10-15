@@ -1,4 +1,4 @@
-"""DUW: coreset with a dynamic uncertainty weight, and its fixed-weight ablation."""
+"""DUW: Core-Set with Dynamic Uncertainty Weighting, and its fixed-weight ablation."""
 
 from __future__ import annotations
 
@@ -15,14 +15,14 @@ from ..registry import register_selector
 class DUWSelector:
     """Greedy k-center selection with an uncertainty term weighted by the previous round's mean OKS.
 
-    The total score ``u`` (the combiner output, min-max normalised over the unlabeled samples) is
-    the uncertainty. With ``d`` the Euclidean distance of a sample to the nearest labeled or already
-    picked sample and ``m = ctx.moks_previous`` the mean OKS of the samples queried in the previous
-    round (0 in round 0), every pick is the unlabeled sample that maximises
+    The total score ``u`` (the combiner output, min-max normalized over the unlabeled people) is
+    the uncertainty. With ``d`` the Euclidean distance of a person to the nearest labeled or already
+    picked person and ``m = ctx.moks_previous`` the mean OKS of the people queried in the previous
+    round (0 in round 0), every pick is the unlabeled person that maximizes
     ``(1 - m) * d + lam * m * u``. A small ``m`` (a poor previous round) weights the distance to the
     labeled set, a large ``m`` weights the uncertainty. With nothing labeled the first
-    pick is the most uncertain sample (``argmax(u)``); that pick is deterministic, where the
-    ``coreset`` selector draws it at random. Picked samples leave the candidates; the score
+    pick is the most uncertain person (``argmax(u)``); that pick is deterministic, where the
+    ``coreset`` selector draws it at random. Picked people leave the candidates; the score
     ``total`` is not changed.
 
     The distance is the unscaled Euclidean distance of the embeddings. With ``lam = 0`` and
@@ -51,7 +51,7 @@ class DUWSelector:
         unlabeled = unlabeled_for_query(ctx, k)
         if ctx.embeddings is None:
             raise ValueError(
-                f"selector {self.name!r} needs ctx.embeddings; the pose model provides none"
+                f"selector {self.name!r} needs ctx.embeddings; the pose estimator provides none"
             )
         assert total.shape == (ctx.num_samples,), (
             f"total: expected shape ({ctx.num_samples},), got {total.shape}"
@@ -77,11 +77,11 @@ class DUWSelector:
 class FixedDUWSelector(DUWSelector):
     """DUW without the dynamic weight: greedy k-center with a constant uncertainty weight.
 
-    Every pick is the unlabeled sample that maximises ``d + lam * u``, with ``d`` and ``u`` as in
+    Every pick is the unlabeled person that maximizes ``d + lam * u``, with ``d`` and ``u`` as in
     :class:`DUWSelector`; the previous round's mean OKS ``m`` does not enter. This is the
-    ``--fixed_lambda`` option of the 2023 code (the "fixed" row of paper Table 3), the ablation of
-    the dynamic weight ``(1 - m) * d + lam * m * u``. The first pick with nothing labeled is that of
-    :class:`DUWSelector`.
+    ``--fixed_lambda`` option of the 2023 code (the "fixed" row of Table 3 of the paper), the
+    ablation of the dynamic weight ``(1 - m) * d + lam * m * u``. The first pick with nothing
+    labeled is that of :class:`DUWSelector`.
 
     Args:
         lam: Weight of the uncertainty term (``lam >= 0``).

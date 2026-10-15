@@ -1,20 +1,20 @@
 """The stopping points of Table 5 of the paper, read from the result of one video.
 
-After every query three criteria are judged with the target OKS ``theta``
-(``retrain.finish_acc``), all on the OKS that the model reaches before its retraining:
+After every query three criteria are judged with the target OKS θ (``retrain.finish_acc``), all
+on the OKS that the pose estimator reaches before its retraining:
 
-* ``oracle``: every person of the video, labeled or not, has OKS >= theta.
+* ``oracle`` (the actual stop): every person of the video, labeled or not, has OKS >= θ.
 * ``min_error`` (SC_Min of the paper): the mean OKS of the people queried in the round is
-  >= theta.
+  >= θ.
 * ``sc_all`` (SC_All of the paper): every labeled person, the people queried in the round
-  included, has OKS >= theta.
+  included, has OKS >= θ.
 
 A criterion stops the annotation at the share of labeled people after the query of the first round
 that meets it, ``100 * labeled / n`` (``labeled`` counts the people queried so far, the round
 included). A criterion that is never met stops at 100 %. :func:`stop_points` computes these numbers
 for one video from a ``result.json`` of ``vatl4pose-atl`` run with ``loop.stopping``. It ignores the
-rounds after the oracle round and reads the AP at OKS ``theta`` (``performances_ann``) of the round
-whose label percentage is nearest to the stop (the first one on a tie).
+rounds after the round of the actual stop and reads the AP@θ (``performances_ann``) of the round
+whose share of labeled people is nearest to the stop (the first one on a tie).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ import numpy as np
 from .coco_ap import METRIC_KEYS
 
 CRITERIA = ("oracle", "min_error", "sc_all")
-"""The criteria of Table 5: the oracle stop ("actual"), SC_Min and SC_All."""
+"""The criteria of Table 5: the actual stop (key ``oracle``), SC_Min and SC_All."""
 _WITH_AP = ("min_error", "sc_all")  # the 2023 summary reads the AP of these two only
 
 
@@ -36,11 +36,11 @@ class StopPoints:
     """Where the three criteria stop the annotation of one video.
 
     Attributes:
-        theta: The target OKS of the judgments.
-        labeled: Percent of labeled people at the stop of every criterion; 100.0 when the criterion
-            is not met in any round up to the oracle round.
-        ap: AP at OKS ``theta`` in percent at the stop, for ``min_error`` and ``sc_all``; ``None``
-            when ``performances_ann`` holds no AP at that threshold (see :func:`ap_key`).
+        theta: The target OKS θ of the judgments.
+        labeled: Share of labeled people, in percent, at the stop of every criterion; 100.0 when the
+            criterion is not met in any round up to the round of the actual stop.
+        ap: AP@θ in percent at the stop, for ``min_error`` and ``sc_all``; ``None`` when
+            ``performances_ann`` holds no AP at that threshold (see :func:`ap_key`).
     """
 
     theta: float
@@ -49,7 +49,7 @@ class StopPoints:
 
 
 def ap_key(theta: float) -> str | None:
-    """The key of ``performances_ann`` with the AP at OKS ``theta`` (``"AP .6"`` for 0.6).
+    """The key of ``performances_ann`` that holds AP@θ (``"AP .6"`` for 0.6).
 
     Returns:
         The key, or ``None`` when the result holds no AP at that threshold (it has 0.5, 0.6, 0.7,
@@ -74,8 +74,8 @@ def stop_points(result: dict[str, Any]) -> StopPoints | None:
     Raises:
         ValueError: If a round that queried people has no judgment, a judgment has no ``oracle``
             record (the video has no ground truth), the judgments use different values of
-            ``theta``, or ``performances_ann`` has an entry without AP (a video without ground
-            truth).
+            the target OKS θ, or ``performances_ann`` has an entry without AP (a video without
+            ground truth).
     """
     judgments = result.get("stopping")
     if judgments is None or all(j is None for j in judgments):
@@ -86,7 +86,7 @@ def stop_points(result: dict[str, Any]) -> StopPoints | None:
     thetas = {float(j["theta"]) for j in judgments if j is not None}
     if len(thetas) != 1:
         raise ValueError(
-            f"the stopping judgments use several values of theta: {sorted(thetas)}"
+            f"the stopping judgments use several values of the target OKS θ: {sorted(thetas)}"
         )
     (theta,) = thetas
 
@@ -128,7 +128,7 @@ def stop_points(result: dict[str, Any]) -> StopPoints | None:
             "the result has no AP (a video without ground truth has no Table 5 row)"
         )
     if oracle_round is not None:
-        # the 2023 run ended in the oracle round; its later records repeat that round
+        # the 2023 run ended in the round of the actual stop; its later records repeat that round
         performances = performances[: oracle_round + 1] + [
             performances[oracle_round]
         ] * (len(performances) - oracle_round - 1)

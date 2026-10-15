@@ -1,7 +1,7 @@
 """VL4Pose: the pose whose link lengths are least likely is queried first (Shukla et al., BMVC 2022).
 
 An auxiliary network (:class:`~vatl4pose.models.auxnet.AuxNet`) predicts, for every skeleton link,
-a Gaussian over the link length from the backbone features of the sample. The score of a sample is
+a Gaussian over the link length from the backbone features of the person. The score of a person is
 the negative log-likelihood of the link lengths of its predicted pose under those Gaussians.
 
 The predicted pose has one peak per joint: the arg-max cell of the heatmap. A link length is the
@@ -9,10 +9,10 @@ distance between the arg-max cells of its two joints, in heatmap cells (not in i
 depend on the crop box). With one peak per joint the likelihood of the pose is the product of the
 likelihoods of its links, so the score is the sum over the links of ``gaussian_nll``.
 
-The links are the skeleton links of the dataset specification without those that touch a redundant
-joint (:func:`vl4pose_links`): a joint that is never annotated gives a link no training target.
+The links are the skeleton links of the keypoint spec without those that touch a redundant joint
+(:func:`vl4pose_links`): a joint that is never annotated gives a link no training target.
 The loop builds the auxiliary network with ``len(vl4pose_links(spec))`` links, trains it on these
-links, predicts the Gaussians of all samples with
+links, predicts the Gaussians of all people with
 :func:`~vatl4pose.models.auxnet.predict_link_gaussians` and hands them to the scorer as
 :class:`LinkGaussians` in ``ctx.extras["vl4pose"]``.
 """
@@ -35,7 +35,7 @@ EXTRAS_KEY = "vl4pose"
 
 @dataclass(frozen=True, eq=False)
 class LinkGaussians:
-    """The Gaussian over the length of every link, for every sample of the pool.
+    """The Gaussian over the length of every link, for every person of the pool.
 
     Attributes:
         mean: ``(N, L)`` float array, the predicted mean length of each link in heatmap cells.
@@ -113,7 +113,7 @@ class VL4PoseScorer:
 
     Raises:
         ValueError: From :meth:`score`, if ``ctx.extras["vl4pose"]`` is missing, is not a
-            :class:`LinkGaussians`, or does not have one Gaussian per sample and link.
+            :class:`LinkGaussians`, or does not have one Gaussian per person and link.
     """
 
     @torch.no_grad()
@@ -134,7 +134,7 @@ class VL4PoseScorer:
         if gaussians.mean.shape != expected:
             raise ValueError(
                 f"ctx.extras[{EXTRAS_KEY!r}] has shape {gaussians.mean.shape}, expected "
-                f"{expected}: one Gaussian per sample and per link of vl4pose_links(spec) of spec "
+                f"{expected}: one Gaussian per person and per link of vl4pose_links(spec) of spec "
                 f"{ctx.spec.name!r}"
             )
         lengths = link_lengths(heatmap_peaks(ctx.heatmaps).cpu().double(), links)

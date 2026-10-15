@@ -1,4 +1,4 @@
-"""Keypoint specifications of the supported pose datasets."""
+"""Keypoint specs of the supported pose datasets."""
 
 from .spec import (
     COCO17_SIGMAS,

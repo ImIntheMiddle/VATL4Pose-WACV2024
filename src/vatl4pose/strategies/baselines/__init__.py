@@ -1,4 +1,4 @@
-"""The baseline strategies: HP, TPC, MPE, VL4Pose, Random, K-Means and Coreset.
+"""The baseline strategies: HP, TPC, MPE, VL4Pose, Random, K-Means and Core-Set.
 
 Importing this package registers their components (see :mod:`vatl4pose.strategies.registry`).
 """

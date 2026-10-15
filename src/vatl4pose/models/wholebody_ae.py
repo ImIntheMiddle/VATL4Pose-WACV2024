@@ -1,12 +1,12 @@
-"""Whole-body autoencoder and the hybrid pose feature behind the WPU uncertainty.
+"""Whole-body autoencoder and the hybrid pose feature behind WPU.
 
-The whole-body pose uncertainty (WPU) of a predicted pose is the reconstruction error of a
+The Whole-body Pose Unnaturalness (WPU) of a predicted pose is the reconstruction error of a
 small autoencoder trained on natural poses. The autoencoder does not see raw coordinates. It sees
 the *hybrid feature* of :func:`compute_hybrid`:
 
 ``[ (x_j - c_x) / h  for every joint j ,  (y_j - c_y) / h  for every joint j ,  angles ]``
 
-where ``(c_x, c_y)`` is the centre of the joints weighted by their confidence or visibility,
+where ``(c_x, c_y)`` is the center of the joints weighted by their confidence or visibility,
 ``h`` is the height of the person box, and each angle is the angle at the middle joint of a
 triplet from :attr:`KeypointSpec.angle_triplets`. The vector has
 :attr:`KeypointSpec.ae_input_dim` entries.
@@ -14,12 +14,12 @@ triplet from :attr:`KeypointSpec.angle_triplets`. The vector has
 Three design points differ from the 2023 autoencoder, whose decoder ended in a sigmoid and saw
 joints without an annotation at the image corner:
 
-* The network works on *standardised* features. The mean and the standard deviation of every
+* The autoencoder works on *standardized* features. The mean and the standard deviation of every
   dimension, taken over the valid training entries, are the buffers ``feature_mean`` and
   ``feature_std`` of the model and part of its state dict (:meth:`WholeBodyAE.standardize`).
 * The decoder output is linear.
 * A joint that is not visible, and an angle that has an invisible joint among its three, is
-  *invalid*. Its entry is 0 in the standardised input and takes no part in any loss or score
+  *invalid*. Its entry is 0 in the standardized input and takes no part in any loss or score
   (:func:`hybrid_valid_mask`, :func:`masked_mse`, :func:`wpu_scores`).
 
 A checkpoint of the 2023 format has no ``feature_mean`` and ``feature_std``; the loaders refuse it.
@@ -40,19 +40,19 @@ _SLOPE_EPS = 1e-6
 
 # The first layer of the encoder fixes the length of the input vector.
 _FIRST_WEIGHT_KEY = "encoder.0.weight"
-# The normalisation buffers; a checkpoint of the 2023 format has neither.
+# The normalization buffers; a checkpoint of the 2023 format has neither.
 _NORMALIZATION_KEYS = ("feature_mean", "feature_std")
 
 
 class WholeBodyAE(nn.Module):
-    """Fully connected autoencoder on standardised hybrid features, with a linear output.
+    """Fully connected autoencoder on standardized hybrid features, with a linear output.
 
     The encoder is ``input_dim -> 24 -> 12 -> 7 -> z_dim`` with a ReLU after every layer except
     the last. The decoder mirrors it, ``z_dim -> 7 -> 12 -> 24 -> input_dim``, and has no output
     activation. The submodules are called ``encoder`` and ``decoder`` (``nn.Sequential``) as in the
     2023 checkpoints.
 
-    The module reads and writes standardised features. The buffers ``feature_mean`` and
+    The module reads and writes standardized features. The buffers ``feature_mean`` and
     ``feature_std`` (shape ``(input_dim,)``, initially 0 and 1) hold the statistics of the training
     features, and :meth:`standardize` applies them. They are not trained and travel with the state
     dict.
@@ -120,7 +120,7 @@ class WholeBodyAE(nn.Module):
             self.feature_std.copy_(std)
 
     def standardize(self, features: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
-        """Standardise raw hybrid features with the stored statistics; invalid entries become 0.
+        """Standardize raw hybrid features with the stored statistics; invalid entries become 0.
 
         Args:
             features: Raw features of shape ``(N, input_dim)``, floating point.
@@ -134,7 +134,7 @@ class WholeBodyAE(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Reconstruct the standardised features ``x``.
+        """Reconstruct the standardized features ``x``.
 
         Args:
             x: Floating-point tensor of shape ``(..., input_dim)``, the output of
@@ -190,7 +190,7 @@ def masked_mse(
 
     Args:
         prediction: ``(N, D)`` floating-point reconstruction.
-        target: ``(N, D)`` standardised features.
+        target: ``(N, D)`` standardized features.
         valid: ``(N, D)`` boolean mask; an entry that is not valid does not enter the loss and
             passes no gradient.
 
@@ -215,7 +215,7 @@ def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
 
     Raises:
         ValueError: If ``ckpt`` is no whole-body autoencoder state dict, or one of the 2023
-            format (without the normalisation buffers), or the buffers do not fit the encoder.
+            format (without the normalization buffers), or the buffers do not fit the encoder.
     """
     state = torch.load(ckpt, map_location="cpu", weights_only=True)
     if (
@@ -261,13 +261,13 @@ def load_wholebody_ae(
 
     Args:
         ckpt: State dict saved with ``torch.save(model.state_dict(), ...)``.
-        spec: Keypoint specification; the checkpoint must have been trained on vectors of
+        spec: Keypoint spec; the checkpoint must have been trained on vectors of
             ``spec.ae_input_dim`` entries.
         z_dim: Latent size the checkpoint was trained with.
         device: Device of the returned model.
 
     Returns:
-        The model in evaluation mode, with every parameter and both normalisation buffers taken
+        The model in evaluation mode, with every parameter and both normalization buffers taken
         from the checkpoint.
 
     Raises:
@@ -297,7 +297,7 @@ def hybrid_valid_mask(keypoint_weights: np.ndarray, spec: KeypointSpec) -> np.nd
     Args:
         keypoint_weights: Weights of the joints, shape ``(N, spec.num_joints)``; the third column
             of the keypoints that :func:`compute_hybrid` takes.
-        spec: Joint layout.
+        spec: Keypoint spec.
 
     Returns:
         Boolean array of shape ``(N, spec.ae_input_dim)``, in the order of the feature:
@@ -342,7 +342,7 @@ def compute_hybrid(
 ) -> np.ndarray:
     """Hybrid feature of ``N`` people (see the module docstring).
 
-    The centre ``c`` of a person is ``sum_j w_j p_j / sum_j w_j``. Every angle is
+    The center ``c`` of a person is ``sum_j w_j p_j / sum_j w_j``. Every angle is
     ``arctan(|(m1 - m2) / (1 + m1 * m2 + eps)|)`` with the slopes ``m1 = (y_b - y_a) /
     (x_b - x_a + eps)`` and ``m2 = (y_c - y_b) / (x_c - x_b + eps)`` of the triplet ``(a, b, c)``
     and ``eps = 1e-6``, so it lies in ``[0, pi / 2)``.
@@ -351,7 +351,7 @@ def compute_hybrid(
         bbox_xywh: Person boxes ``(x, y, w, h)``, shape ``(N, 4)``. Only the height ``h`` is used.
         keypoints: ``(x, y, weight)`` of every joint, shape ``(N, spec.num_joints, 3)``. The
             weight is the confidence of a predicted joint or the visibility of an annotated one.
-        spec: Joint layout that defines the angle triplets.
+        spec: Keypoint spec that defines the angle triplets.
 
     Returns:
         Array of shape ``(N, spec.ae_input_dim)`` and dtype ``float64``.
@@ -383,7 +383,7 @@ def compute_hybrid(
     if bad_weight.size:
         row = int(bad_weight[0])
         raise ValueError(
-            f"row {row}: keypoint weights must have a positive sum, got {weight_sum[row]}"
+            f"row {row}: joint weights must have a positive sum, got {weight_sum[row]}"
         )
 
     center_x = (x * weight).sum(axis=1) / weight_sum
@@ -411,16 +411,16 @@ def wpu_scores(
     valid: np.ndarray,
     keep_index: np.ndarray | None,
 ) -> np.ndarray:
-    """Whole-body pose uncertainty: masked reconstruction error of each hybrid feature.
+    """Whole-body Pose Unnaturalness (WPU): masked reconstruction error of each hybrid feature.
 
-    The features are standardised with the statistics of the autoencoder (invalid entries become
-    0). The score of a row is the mean squared difference between the standardised input and the
+    The features are standardized with the statistics of the autoencoder (invalid entries become
+    0). The score of a row is the mean squared difference between the standardized input and the
     reconstruction over the kept columns that are valid in that row.
 
     Args:
         ae: Autoencoder that reconstructs the feature vectors.
         hybrid: Raw features of shape ``(N, ae.input_dim)`` from :func:`compute_hybrid`; they are
-            converted to ``float32`` for the network.
+            converted to ``float32`` for the autoencoder.
         valid: Boolean mask of the same shape from :func:`hybrid_valid_mask`.
         keep_index: Columns that enter the error, for example ``spec.wpu_keep_index()``, which
             leaves out the offsets of the redundant joints. ``None`` keeps every column.

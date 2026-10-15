@@ -4,7 +4,7 @@ For every skeleton link ``(u, v)`` the network predicts a Gaussian over the leng
 measured as the Euclidean distance between the heatmap peaks of joints ``u`` and ``v`` (in
 heatmap cells). The network reads the backbone features of the pose estimator and outputs a mean
 and a log-variance per link. It is trained with the Gaussian negative log-likelihood of the
-ground-truth link lengths on labeled samples; the pose estimator stays untouched, so the features
+ground-truth link lengths on labeled people; the pose estimator stays untouched, so the features
 that reach :func:`train_auxnet` are detached (stop-gradient). The query score is built from the
 same negative log-likelihood, see :mod:`vatl4pose.strategies.baselines.vl4pose`.
 """
@@ -139,7 +139,7 @@ def _link_nll(
 def gaussian_nll(
     lengths: torch.Tensor, mean: torch.Tensor, log_var: torch.Tensor
 ) -> torch.Tensor:
-    """Negative log-likelihood of the link lengths of every sample, summed over the links.
+    """Negative log-likelihood of the link lengths of every person, summed over the links.
 
     The link ``l`` has the density ``N(lengths[:, l]; mean[:, l], exp(log_var[:, l]))``, so the
     term of a link is ``0.5 * (log(2 pi) + log_var + (length - mean)^2 * exp(-log_var))``.
@@ -168,7 +168,7 @@ def train_auxnet(
     seed: int,
     joint_exist: torch.Tensor | None = None,
 ) -> list[float]:
-    """Train ``aux`` on labeled samples with Adam and the Gaussian negative log-likelihood.
+    """Train ``aux`` on labeled people with Adam and the Gaussian negative log-likelihood.
 
     The target of link ``(u, v)`` is the distance between the ground-truth positions of joints
     ``u`` and ``v`` in heatmap cells. The batches are drawn from a private generator seeded with
@@ -178,22 +178,22 @@ def train_auxnet(
 
     Args:
         aux: The network to train.
-        features: ``(N, C, H, W)`` float backbone features of the labeled samples, already
+        features: ``(N, C, H, W)`` float backbone features of the labeled people, already
             detached from the pose estimator (stop-gradient).
         gt_coords_hm: ``(N, K, 2)`` float32 ground-truth joint positions in heatmap cells.
         links: The ``aux.num_links`` links ``(u, v)``; the loop passes
             ``vl4pose_links(spec)`` (:mod:`vatl4pose.strategies.baselines.vl4pose`).
-        epochs: Number of passes over the samples.
+        epochs: Number of passes over the labeled people.
         lr: Learning rate of Adam.
         batch_size: Samples per step.
         seed: Seed of the batch order.
         joint_exist: ``(N, K)`` bool, False for joints without a ground-truth position (not
             annotated or not visible). The loop passes the ground-truth visibility of the labeled
-            samples. A link enters the loss of a sample only when both of its joints exist.
+            people. A link enters the loss of a person only when both of its joints exist.
             ``None`` means that every joint exists.
 
     Returns:
-        The mean negative log-likelihood per sample of every epoch (``epochs`` floats), measured
+        The mean negative log-likelihood per person of every epoch (``epochs`` floats), measured
         on the batches while the network trains.
 
     Raises:
@@ -201,7 +201,7 @@ def train_auxnet(
             entry per output link of ``aux``.
     """
     assert not features.requires_grad, (
-        "features: the pose network is frozen, so the features must be detached "
+        "features: the pose estimator is frozen, so the features must be detached "
         "(stop-gradient), but they require grad"
     )
     assert (

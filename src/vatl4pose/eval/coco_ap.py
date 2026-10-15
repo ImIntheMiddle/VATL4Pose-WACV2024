@@ -10,10 +10,10 @@ differed from the stock evaluation in three places.
   as if it were ``[x1, y1, x2, y2]``, that is ``(w - x) * (h - y)`` for a box ``[x, y, w, h]``.
   The area is negative or wrong for most boxes, and an unmatched detection whose area lies outside
   the area range is ignored instead of counted as a false positive. The experiments of the paper
-  carry this behaviour, and :func:`keypoint_ap` keeps it so that the numbers stay comparable.
+  carry this behavior, and :func:`keypoint_ap` keeps it so that the numbers stay comparable.
   Stock ``loadRes`` uses ``w * h``; the detections are therefore built by hand with the area set
   explicitly.
-* Summary. The 2023 copy summarised a keypoint evaluation as the ten values of
+* Summary. The 2023 copy summarized a keypoint evaluation as the ten values of
   :data:`METRIC_KEYS`. Stock ``summarize`` returns ``AP, AP50, AP75, APm, APl, AR, AR50, AR75,
   ARm, ARl`` for 20 detections, so its entries shift against the 2023 key names (the entry at
   the position of ``AP .6`` is AP75). The values are computed here from ``eval["precision"]`` and
@@ -104,11 +104,11 @@ def coco_keypoint_ap(
     gt_image_id: np.ndarray,
     sigmas: np.ndarray | Sequence[float],
 ) -> dict[str, float]:
-    """Keypoint AP of a set of detections against labelled persons.
+    """Keypoint AP of a set of detections against labeled people.
 
-    Every labelled person is one ground-truth entry with ``area = w * h`` of its box. Every
+    Every labeled person is one ground-truth entry with ``area = w * h`` of its box. Every
     detection carries a box and gets the area ``(w - x) * (h - y)`` of that box read as
-    ``[x, y, w, h]`` (the 2023 behaviour, see the module docstring). Detections and labels
+    ``[x, y, w, h]`` (the 2023 behavior, see the module docstring). Detections and labels
     keep their input order; ties in the score are resolved by that order.
 
     Args:
@@ -117,7 +117,7 @@ def coco_keypoint_ap(
         det_score: ``(M,)`` score of every detection.
         det_bbox_xywh: ``(M, 4)`` box of every detection, ``[x, y, w, h]``.
         det_image_id: ``(M,)`` integer image id of every detection.
-        gt_kpt: ``(N, K, 3)`` labelled joints ``x, y, visibility``.
+        gt_kpt: ``(N, K, 3)`` labeled joints ``x, y, visibility``.
         gt_bbox_xywh: ``(N, 4)`` label boxes ``[x, y, w, h]``.
         gt_image_id: ``(N,)`` integer image id of every label.
         sigmas: ``(K,)`` OKS sigmas, already divided by 10 (``KeypointSpec.oks_sigmas``).
@@ -165,8 +165,9 @@ def coco_keypoint_ap(
     unlabeled = np.flatnonzero(n_visible == 0)
     if unlabeled.size:
         raise ValueError(
-            f"ground-truth sample {int(unlabeled[0])} has no visible keypoint; the evaluation "
-            "of 2023 never ignored a person for that, so such samples must be dropped before"
+            f"ground-truth sample {int(unlabeled[0])} has no visible joint; the 2023 evaluation "
+            "never ignored a person for that, so people without a visible joint must be "
+            "dropped before"
         )
 
     images = [{"id": int(i)} for i in image_ids]
@@ -252,9 +253,9 @@ def keypoint_ap(
     image_id: np.ndarray,
     sigmas: np.ndarray | Sequence[float],
 ) -> dict[str, float]:
-    """Keypoint AP of one prediction per labelled person (the active-learning evaluation).
+    """Keypoint AP of one prediction per labeled person (the active-learning evaluation).
 
-    Prediction ``i`` belongs to label ``i``: it lies in the same image and carries the box of
+    Prediction ``i`` belongs to label ``i``: it lies in the same frame and carries the box of
     the label, so its area is ``(w - x) * (h - y)`` of that box (see :func:`coco_keypoint_ap`).
     The labels have the area ``w * h``.
 
@@ -262,9 +263,9 @@ def keypoint_ap(
         pred_kpt: ``(N, K, 2)`` predicted joint coordinates (``(N, K, 3)`` is accepted; the
             third column is ignored).
         pred_score: ``(N,)`` score of every predicted pose.
-        gt_kpt: ``(N, K, 3)`` labelled joints ``x, y, visibility``.
+        gt_kpt: ``(N, K, 3)`` labeled joints ``x, y, visibility``.
         gt_bbox_xywh: ``(N, 4)`` label boxes ``[x, y, w, h]``.
-        image_id: ``(N,)`` integer image id of every sample.
+        image_id: ``(N,)`` integer image id of every person.
         sigmas: ``(K,)`` OKS sigmas (``KeypointSpec.oks_sigmas``), also used by :func:`ospa`.
 
     Returns:

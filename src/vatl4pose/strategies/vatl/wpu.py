@@ -1,4 +1,7 @@
-"""WPU: whole-body pose uncertainty. A pose that the autoencoder reconstructs badly is queried first."""
+"""WPU: Whole-body Pose Unnaturalness.
+
+A pose that the whole-body autoencoder reconstructs badly is queried first.
+"""
 
 from __future__ import annotations
 
@@ -36,9 +39,9 @@ class WPUScorer:
     ``ctx.coords`` weighted by their peak values ``ctx.maxvals``. A joint with a peak value of 0 or
     below is invalid (:func:`~vatl4pose.models.wholebody_ae.hybrid_valid_mask`) and does not enter
     the score. The autoencoder is ``ctx.extras["ae"]``. The score is the mean squared
-    reconstruction error in standardised feature space over the valid columns that
+    reconstruction error in standardized feature space over the valid columns that
     ``ctx.spec.wpu_keep_index()`` keeps, which leaves out the offsets of the redundant joints of the
-    dataset. The scorer takes no arguments: another set of columns is another specification,
+    dataset. The scorer takes no arguments: another set of columns is another keypoint spec,
     for example ``dataclasses.replace(spec, redundant_joints=())`` for all of them.
     """
 

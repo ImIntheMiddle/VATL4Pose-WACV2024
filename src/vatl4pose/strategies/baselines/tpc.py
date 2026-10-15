@@ -1,4 +1,4 @@
-"""TPC: temporal pose continuity. A pose that jumps between frames is queried first."""
+"""TPC: Temporal Pose Continuity. A pose that jumps between frames is queried first."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def moved_joints(
 ) -> np.ndarray:
     """Count, for every ``(sample, neighbor)`` pair, the joints that moved.
 
-    The neighbor's heatmaps are decoded against the crop box of the *sample*, so the distance
+    The neighbor's heatmaps are decoded against the crop box of the *person*, so the distance
     between the two poses is measured in one coordinate frame. A joint moved when its distance
     exceeds ``0.01 * sqrt(w * h)`` of that box.
 
@@ -53,8 +53,8 @@ def moved_joints(
 class TPCScorer:
     """Number of joints that moved against the previous and the next frame.
 
-    The counts of both neighbors are added; a sample with one neighbor gets twice its count and a
-    sample without neighbors gets 0.
+    The counts of both neighbors are added; a person with one neighbor gets twice its count and a
+    person without neighbors gets 0.
     """
 
     def score(self, ctx: RoundContext) -> np.ndarray:

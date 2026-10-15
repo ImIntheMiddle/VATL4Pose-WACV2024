@@ -1,4 +1,4 @@
-"""Coreset: k-center greedy selection in embedding space."""
+"""Core-Set: k-center greedy selection in embedding space."""
 
 from __future__ import annotations
 
@@ -11,27 +11,27 @@ from ..base import RoundContext, unlabeled_for_query
 from ..registry import register_selector
 
 PickRule = Callable[[np.ndarray | None, np.ndarray], int]
-"""``rule(min_distance, candidates) -> index`` chooses the next sample of the greedy selection.
+"""``rule(min_distance, candidates) -> index`` chooses the next person of the greedy selection.
 
-``min_distance`` is the ``(N,)`` distance from every sample to the nearest labeled or already
-picked sample, or ``None`` while there is no such sample. ``candidates`` holds the ascending
-indices of the unlabeled samples not picked yet. The rule returns one of them.
+``min_distance`` is the ``(N,)`` distance from every person to the nearest labeled or already
+picked person, or ``None`` while there is no such person. ``candidates`` holds the ascending
+indices of the unlabeled people not picked yet. The rule returns one of them.
 """
 
 
 def greedy_k_center(
     embeddings: np.ndarray, labeled: np.ndarray, k: int, pick: PickRule
 ) -> np.ndarray:
-    """Pick ``k`` unlabeled samples one at a time with a pick rule.
+    """Pick ``k`` unlabeled people one at a time with a pick rule.
 
-    The nearest-center distance of every sample (Euclidean, to the labeled samples and to the
-    samples picked so far) is updated after each pick and handed to ``pick``.
+    The nearest-center distance of every person (Euclidean, to the labeled people and to the
+    people picked so far) is updated after each pick and handed to ``pick``.
 
     Args:
         embeddings: ``(N, D)`` embeddings.
-        labeled: ``(N,)`` bool, True for samples that are centers from the start.
-        k: Number of samples to pick, at most the number of unlabeled samples.
-        pick: The rule that chooses the next sample.
+        labeled: ``(N,)`` bool, True for people who are centers from the start.
+        k: Number of people to pick, at most the number of unlabeled people.
+        pick: The rule that chooses the next person.
 
     Returns:
         ``(k,)`` int64 indices in pick order.
@@ -67,10 +67,10 @@ def greedy_k_center(
 
 @register_selector("coreset")
 class CoresetSelector:
-    """Pure k-center greedy: repeatedly pick the sample farthest from the labeled and picked ones.
+    """Pure k-center greedy: repeatedly pick the person farthest from the labeled and picked ones.
 
-    With nothing labeled the first pick is ``ctx.rng.choice`` over the unlabeled samples. Labeled
-    samples are never picked. The total score is ignored.
+    With nothing labeled the first pick is ``ctx.rng.choice`` over the unlabeled people. Labeled
+    people are never picked. The total score is ignored.
     """
 
     needs_embeddings = True
@@ -79,7 +79,7 @@ class CoresetSelector:
         unlabeled_for_query(ctx, k)
         if ctx.embeddings is None:
             raise ValueError(
-                "selector 'coreset' needs ctx.embeddings; the pose model provides none"
+                "selector 'coreset' needs ctx.embeddings; the pose estimator provides none"
             )
 
         def farthest(min_distance: np.ndarray | None, candidates: np.ndarray) -> int:

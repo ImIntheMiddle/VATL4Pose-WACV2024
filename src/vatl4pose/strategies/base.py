@@ -1,13 +1,13 @@
 """Building blocks of an active-learning query strategy.
 
-A query strategy answers one question per round: which ``k`` unlabeled samples go to the
+A query strategy answers one question per round: which ``k`` unlabeled people go to the
 oracle? It is assembled from three kinds of component, each looked up by name in the registry
 (:mod:`vatl4pose.strategies.registry`):
 
-* a **scorer** gives every sample one number (larger means query first), for example the
-  summed peak probability (HP) or the pose continuity between frames (TPC);
-* a **combiner** turns the scores of all scorers into one total score per sample;
-* a **selector** picks the ``k`` samples from the total score (and, for the filters, from the
+* a **scorer** gives every person one number (larger means query first), for example the
+  summed peak probability (HP) or the Temporal Pose Continuity (TPC);
+* a **combiner** turns the scores of all scorers into one total score per person;
+* a **selector** selects the ``k`` people from the total score (and, for the filters, from the
   embeddings).
 
 :class:`StrategyConfig` names the components and :class:`Strategy` runs them on a
@@ -31,24 +31,24 @@ from ..keypoints import KeypointSpec
 class RoundContext:
     """The pool of one active-learning round, as the strategies see it.
 
-    All arrays cover every sample of the video (``N`` samples), labeled ones included.
-    Neighbors are linked by frame: ``prev_index[i]`` is the sample of the same track in the
-    nearest earlier annotated frame and ``next_index[i]`` the one in the nearest later frame;
-    ``-1`` marks a missing neighbor.
+    All arrays cover every person of the video (``N`` samples), labeled ones included.
+    Neighbors are linked by frame: ``prev_index[i]`` is the index of the person of the same track
+    in the nearest earlier annotated frame and ``next_index[i]`` the index of the one in the
+    nearest later frame; ``-1`` marks a missing neighbor.
 
     Attributes:
         round_index: Index of the round, 0 for the first query.
-        spec: Joint layout of the dataset.
-        heatmaps: ``(N, K, 64, 48)`` float32 heatmaps that the current model predicts from the
-            crop of each sample.
+        spec: Keypoint spec of the dataset.
+        heatmaps: ``(N, K, 64, 48)`` float32 heatmaps that the current pose estimator predicts
+            from the crop of each person.
         coords: ``(N, K, 2)`` image coordinates decoded from ``heatmaps`` with ``bbox_crop``.
         maxvals: ``(N, K)`` peak values of ``heatmaps``.
         bbox_crop: ``(N, 4)`` crop boxes ``xmin, ymin, xmax, ymax``.
         prev_index: ``(N,)`` int64 index of the previous neighbor, or -1.
         next_index: ``(N,)`` int64 index of the next neighbor, or -1.
-        labeled: ``(N,)`` bool, True for samples that already have a label.
-        embeddings: ``(N, D)`` backbone embeddings, ``None`` for models that have none.
-        moks_previous: Mean OKS of the samples queried in the previous round, 0.0 in round 0.
+        labeled: ``(N,)`` bool, True for people who already have a label.
+        embeddings: ``(N, D)`` backbone embeddings, ``None`` for estimators that have none.
+        moks_previous: Mean OKS of the people queried in the previous round, 0.0 in round 0.
         rng: Source of randomness of the round. The strategies call ``rng.random(size)`` and
             ``rng.choice(array)`` only, so a ``numpy.random.Generator`` or a ``RandomState``
             wrapper both work.
@@ -132,12 +132,12 @@ class RoundContext:
 
     @property
     def unlabeled_index(self) -> np.ndarray:
-        """Ascending int64 indices of the unlabeled samples."""
+        """Ascending int64 indices of the unlabeled people."""
         return np.flatnonzero(~self.labeled).astype(np.int64)
 
 
 class Scorer(Protocol):
-    """Gives every sample a number; larger means query first."""
+    """Gives every person a number; larger means query first."""
 
     name: str
 
@@ -160,7 +160,7 @@ class Combiner(Protocol):
 
 
 class Selector(Protocol):
-    """Picks the samples to query.
+    """Selects the people to query.
 
     ``needs_embeddings`` tells the loop whether ``select`` reads ``ctx.embeddings``, so that the
     loop computes them. It is a class attribute, ``True`` for the selectors that cluster the
@@ -232,16 +232,16 @@ class StrategyConfig:
 
 
 def unlabeled_for_query(ctx: RoundContext, k: int) -> np.ndarray:
-    """Return the unlabeled indices after checking that ``k`` samples can be queried.
+    """Return the unlabeled indices after checking that ``k`` people can be queried.
 
     Raises:
-        ValueError: If ``k`` is below 1 or above the number of unlabeled samples.
+        ValueError: If ``k`` is below 1 or above the number of unlabeled people.
     """
     unlabeled = ctx.unlabeled_index
     if not 1 <= k <= unlabeled.shape[0]:
         raise ValueError(
-            f"cannot query k={k} samples: k must be between 1 and the number of unlabeled "
-            f"samples, {unlabeled.shape[0]}"
+            f"cannot query k={k} people: k must be between 1 and the number of unlabeled "
+            f"people, {unlabeled.shape[0]}"
         )
     return unlabeled
 
@@ -269,10 +269,10 @@ class Strategy:
     def query(
         self, ctx: RoundContext, k: int
     ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-        """Choose ``k`` unlabeled samples to query.
+        """Select ``k`` unlabeled people to query.
 
-        When ``k`` is at least the number of unlabeled samples, every choice is forced: the
-        method returns all unlabeled samples in index order, calls neither the scorers nor the
+        When ``k`` is at least the number of unlabeled people, every choice is forced: the
+        method returns all unlabeled people in index order, calls neither the scorers nor the
         selector, and the score dictionary is empty.
 
         Returns:
@@ -284,7 +284,7 @@ class Strategy:
             ValueError: If ``k`` is below 1, or if a component returns an invalid selection.
         """
         if k < 1:
-            raise ValueError(f"cannot query k={k} samples: k must be at least 1")
+            raise ValueError(f"cannot query k={k} people: k must be at least 1")
         unlabeled = ctx.unlabeled_index
         if k >= unlabeled.shape[0]:
             return unlabeled, {}
@@ -318,4 +318,4 @@ class Strategy:
         if np.unique(selected).shape[0] != k:
             raise ValueError(f"{who} returned duplicate indices")
         if ctx.labeled[selected].any():
-            raise ValueError(f"{who} returned an already labeled sample")
+            raise ValueError(f"{who} returned an already labeled person")

@@ -2,13 +2,13 @@
 
 Every estimator maps a ``(B, 3, 256, 192)`` crop to ``(B, K, 64, 48)`` heatmaps. SimpleBaseline and
 FastPose expose their backbone, so a pass can also return the ``(B, 2048)`` embedding that the
-diversity-based query strategies cluster. HRNet-W32 is a reference network without embeddings.
+diversity-based query strategies cluster. HRNet-W32 is a reference estimator without embeddings.
 
 The parameter names equal the keys of the released checkpoints, so those load with ``strict=True``
 through :func:`build_estimator` without key renaming.
 
-The head layers start from PyTorch's default initialisation; ``build_estimator(init_head=True)``
-draws them as the 2023 training scripts did (see its docstring).
+The head layers start from PyTorch's default initialization; ``build_estimator(init_head=True)``
+draws them as the 2023 code did (see its docstring).
 """
 
 from __future__ import annotations
@@ -30,12 +30,12 @@ HEATMAP_SIZE = (64, 48)  # stride 4
 BACKBONE_SIZE = (8, 6)  # stride 32
 NO_EMBEDDING_MESSAGE = "embeddings are defined for simplebaseline and fastpose only"
 
-# Learning-rate multipliers of the fine-tuning groups: the new head learns 10x or 5x faster than
+# Learning-rate multipliers of the retraining groups: the new head learns 10x or 5x faster than
 # the pretrained backbone.
 _OUTPUT_LR_MULT = 10.0
 _UPSAMPLE_LR_MULT = 5.0
 
-# HRNet-W32 stages; the field names are those the vendored network reads.
+# HRNet-W32 stages; the field names are those the vendored HRNet reads.
 _HRNET_W32_STAGES: dict[str, dict[str, Any]] = {
     "stage2": {
         "NUM_MODULES": 1,
@@ -66,9 +66,9 @@ _HRNET_W32_STAGES: dict[str, dict[str, Any]] = {
 
 @dataclass(frozen=True)
 class EstimatorConfig:
-    """Which network to build and where its weights come from.
+    """Which estimator to build and where its weights come from.
 
-    ``imagenet_init`` initialises the ResNet-50 backbone from the torchvision ImageNet weights, which
+    ``imagenet_init`` initializes the ResNet-50 backbone from the torchvision ImageNet weights, which
     downloads them. Use it only to train from scratch; it is refused together with ``weights``
     (the checkpoint would overwrite it) and for ``hrnet_w32`` (no ImageNet weights are defined).
     """
@@ -80,11 +80,11 @@ class EstimatorConfig:
 
 
 class PoseEstimator(nn.Module):
-    """Interface shared by the three networks."""
+    """Interface shared by the three estimators."""
 
     num_joints: int
     arch: str
-    """Name of the network in :class:`EstimatorConfig` and in the result files."""
+    """Name of the estimator in :class:`EstimatorConfig` and in the result files."""
     has_embedding: bool = False
     """Whether :meth:`forward_with_embedding` and :meth:`backbone_features` are defined."""
 
@@ -113,11 +113,11 @@ class PoseEstimator(nn.Module):
         raise NotImplementedError(NO_EMBEDDING_MESSAGE)
 
     def _lr_modules(self) -> list[tuple[str, nn.Module, float]]:
-        """``(group name, module, learning-rate multiplier)`` of every fine-tuning group."""
+        """``(group name, module, learning-rate multiplier)`` of every retraining group."""
         raise NotImplementedError
 
     def param_groups(self, base_lr: float) -> list[dict[str, Any]]:
-        """Optimizer groups, one per fine-tuning module of ``_lr_modules`` with its multiplier.
+        """Optimizer groups, one per retrained module of ``_lr_modules`` with its multiplier.
 
         Each parameter appears once.
         """
@@ -232,7 +232,7 @@ class FastPoseEstimator(_ResNetEstimator):
     def initialize_head(self) -> None:
         """Normal(0, 0.001) weights and zero bias for the output convolution.
 
-        This is ``FastPose._initialize`` of 2023. The DUC blocks keep their default initialisation.
+        This is ``FastPose._initialize`` of 2023. The DUC blocks keep their default initialization.
         """
         nn.init.normal_(self.conv_out.weight, std=0.001)
         nn.init.constant_(self.conv_out.bias, 0)
@@ -297,20 +297,20 @@ def _load_checkpoint(model: PoseEstimator, path: pathlib.Path) -> None:
 def build_estimator(
     cfg: EstimatorConfig, device: torch.device, *, init_head: bool = False
 ) -> PoseEstimator:
-    """Build the network of ``cfg`` on ``device``, in the default (training) mode.
+    """Build the estimator of ``cfg`` on ``device``, in the default (training) mode.
 
     ``cfg.weights`` is loaded with ``torch.load(weights_only=True)`` and ``strict=True``. Without
-    weights and without ``imagenet_init`` the network keeps its random initial values.
+    weights and without ``imagenet_init`` the estimator keeps its random initial values.
 
-    With ``init_head`` the head layers are drawn as the 2023 training scripts did for a network
-    without a checkpoint (``initialize_head``). The draw happens on the CPU before the network
+    With ``init_head`` the head layers are drawn as the 2023 code did for an estimator
+    without a checkpoint (``initialize_head``). The draw happens on the CPU before the estimator
     moves to ``device``, so the global CPU generator decides it. The default keeps PyTorch's
-    initialisation.
+    initialization.
 
     Raises:
         ValueError: If the arch is unknown, ``num_joints`` is not positive, or ``imagenet_init`` or
             ``init_head`` cannot apply: HRNet-W32 has no ImageNet weights and keeps its own
-            initialisation, and a checkpoint would overwrite either.
+            initialization, and a checkpoint would overwrite either.
     """
     if cfg.arch not in _ARCHS:
         raise ValueError(f"unknown arch {cfg.arch!r}; expected one of {sorted(_ARCHS)}")

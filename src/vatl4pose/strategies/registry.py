@@ -7,12 +7,12 @@ Every component registers itself under a name with a decorator::
         def score(self, ctx: RoundContext) -> np.ndarray: ...
 
 The package registers the baselines when it is imported. Another method (for example the
-proposed one, VATL) is a package of its own that registers its components when it is imported;
-nothing in the baselines changes. The module list :data:`PLUGIN_MODULES` names the packages that hold
-components. A name that no registry knows yet triggers the import of every listed module that is
-not imported yet, and the lookup is retried once, so a :class:`StrategyConfig` can name a
-component of a plugin without the caller importing the plugin. :func:`build_strategy` then builds
-a :class:`Strategy` from the config.
+proposed method in ``strategies/vatl/``) is a package of its own that registers its components
+when it is imported; nothing in the baselines changes. The module list :data:`PLUGIN_MODULES`
+names the packages that hold components. A name that no registry knows yet triggers the import of
+every listed module that is not imported yet, and the lookup is retried once, so a
+:class:`StrategyConfig` can name a component of a plugin without the caller importing the plugin.
+:func:`build_strategy` then builds a :class:`Strategy` from the config.
 
 The registries map a name to a factory (normally the class). A registered class gets its
 registry name as the class attribute ``name``.

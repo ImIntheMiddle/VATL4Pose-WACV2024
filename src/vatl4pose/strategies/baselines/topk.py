@@ -1,4 +1,4 @@
-"""Top-k: query the unlabeled samples with the highest total score."""
+"""Top-k: query the unlabeled people with the highest total score."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from ..registry import register_selector
 
 
 def rank_unlabeled(score: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
-    """Return the ``k`` unlabeled samples with the highest ``score``, highest first.
+    """Return the ``k`` unlabeled people with the highest ``score``, highest first.
 
-    Samples with equal scores keep their index order (the sort is stable).
+    People with equal scores keep their index order (the sort is stable).
     """
     unlabeled = unlabeled_for_query(ctx, k)
     values = score[unlabeled]
@@ -21,7 +21,7 @@ def rank_unlabeled(score: np.ndarray, ctx: RoundContext, k: int) -> np.ndarray:
 
 @register_selector("topk")
 class TopKSelector:
-    """The ``k`` unlabeled samples with the highest total score."""
+    """The ``k`` unlabeled people with the highest total score."""
 
     needs_embeddings = False
 

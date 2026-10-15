@@ -1,14 +1,14 @@
-"""Object keypoint similarity (OKS) between predicted and labelled poses.
+"""Object keypoint similarity (OKS) between predicted and labeled poses.
 
-The OKS of a predicted pose against a labelled person is the mean, over the labelled joints, of
+The OKS of a predicted pose against a labeled person is the mean, over the labeled joints, of
 
 ``exp(-d_j^2 / (2 * s^2 * k_j^2))``
 
-where ``d_j`` is the distance between the predicted and the labelled joint, ``s^2 = w * h`` is the
+where ``d_j`` is the distance between the predicted and the labeled joint, ``s^2 = w * h`` is the
 area of the person box and ``k_j = 2 * sigma_j`` is the tolerance of joint ``j``. A joint is
-labelled when its visibility flag is positive. For a person without any labelled joint the mean
+labeled when its visibility flag is positive. For a person without any labeled joint the mean
 runs over all joints and ``d_j`` is the distance from the predicted joint to the box enlarged to
-three times its width and height around its centre (zero inside that box).
+three times its width and height around its center (zero inside that box).
 
 All functions work on float64 internally. Poses are ``(K, 2)`` or ``(K, 3)`` arrays whose first two
 columns are ``x`` and ``y`` (a third column, the joint score, is ignored); labels are ``(K, 3)``
@@ -113,12 +113,12 @@ def oks_per_sample(
     gt_bbox_xywh: np.ndarray,
     sigmas: np.ndarray,
 ) -> np.ndarray:
-    """OKS of every predicted pose against the label of the same sample.
+    """OKS of every predicted pose against the label of the same person.
 
     Args:
         pred_xy: ``(N, K, 2)`` predicted joint coordinates (``(N, K, 3)`` is accepted; the third
             column is ignored).
-        gt_kpt: ``(N, K, 3)`` labelled joints ``x, y, visibility``.
+        gt_kpt: ``(N, K, 3)`` labeled joints ``x, y, visibility``.
         gt_bbox_xywh: ``(N, 4)`` label boxes ``x, y, w, h``; ``w * h`` is the area in the OKS.
         sigmas: ``(K,)`` per-joint sigmas, already divided by 10 (``KeypointSpec.oks_sigmas``).
 
@@ -149,7 +149,7 @@ def oks_matrix(
 
     Args:
         pred_xy: ``(P, K, 2)`` predicted joint coordinates (``(P, K, 3)`` is accepted).
-        gt_kpt: ``(G, K, 3)`` labelled joints.
+        gt_kpt: ``(G, K, 3)`` labeled joints.
         gt_bbox_xywh: ``(G, 4)`` label boxes; each box belongs to its label.
         sigmas: ``(K,)`` per-joint sigmas.
 

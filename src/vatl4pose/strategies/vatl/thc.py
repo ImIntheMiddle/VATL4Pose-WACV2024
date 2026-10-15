@@ -1,4 +1,4 @@
-"""THC: temporal heatmap continuity. A heatmap that changes between frames is queried first."""
+"""THC: Temporal Heatmap Continuity. A heatmap that changes between frames is queried first."""
 
 from __future__ import annotations
 
@@ -48,11 +48,11 @@ def l1_heatmap_distance(
 
 @register_scorer("thc")
 class THCScorer:
-    """L1 distance between a sample's heatmaps and those of its previous and next frame.
+    """L1 distance between a person's heatmaps and those of its previous and next frame.
 
-    The distances to both neighbors are added; a sample with one neighbor gets twice its distance
-    and a sample without neighbors gets 0. The neighbor heatmaps are the neighbor samples' own
-    heatmaps (``ctx.heatmaps``), which the model predicts from each sample's own crop.
+    The distances to both neighbors are added; a person with one neighbor gets twice its distance
+    and a person without neighbors gets 0. The neighbor heatmaps are the neighbors' own entries of
+    ``ctx.heatmaps``, which the pose estimator predicts from each person's own crop.
     """
 
     def score(self, ctx: RoundContext) -> np.ndarray:

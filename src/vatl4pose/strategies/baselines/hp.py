@@ -12,8 +12,8 @@ from ..registry import register_scorer
 class HPScorer:
     """Score ``-sum_j max(H_j)``: the negative sum of the joints' peak values.
 
-    The sum runs in the dtype of ``ctx.maxvals`` (float32 from the decoder), as in the legacy
-    code, so the scores and their ties equal the legacy ones bit for bit; the result is float64.
+    The sum runs in the dtype of ``ctx.maxvals`` (float32 from the decoder), as in the 2023
+    code, so the scores and their ties equal the 2023 ones bit for bit; the result is float64.
     """
 
     def score(self, ctx: RoundContext) -> np.ndarray:
