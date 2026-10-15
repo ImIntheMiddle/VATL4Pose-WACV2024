@@ -27,7 +27,7 @@ A session reads the SimpleBaseline estimator and the whole-body autoencoder of P
 Start one session from the root of the repository.
 
 ```bash
-annotation/.venv/bin/vatl4pose annotate /path/to/video.mp4
+annotation/.venv/bin/vatl4pose annotate /path/to/video.mp4 --learning-device cuda
 ```
 
 The command prints the URL of the page, `http://localhost:8765` by default. `annotation/app.py` is the session itself and takes the same arguments, except for `--sample` and `--tools` of `vatl4pose annotate`. These are the options.
@@ -36,7 +36,7 @@ The command prints the URL of the page, `http://localhost:8765` by default. `ann
 - `--gpu N` picks the physical GPU. Without it the tool picks an idle GPU and waits for one.
 - `--port N` sets the port of the page, 8765 by default.
 - `--max-frames N` tracks only the first N frames. SAM 2 offloads the frames and its state to CPU memory, so memory use grows with the number of frames, and a short clip is a good first test.
-- `--learning-device cpu|cuda` sets the device of the retraining and the selection of people, `cpu` by default. The GPU is then used for tracking only.
+- `--learning-device cpu|cuda` sets the device of the retraining and the selection of people, `cpu` by default. The GPU is then used for tracking only, and a round in which you moved joints takes minutes instead of seconds (see Measured effort). Choose the device at the first start, because a resume keeps it.
 - `--target-oks θ` turns on the stopping criterion of the paper with an accuracy θ, an OKS in (0, 1).
 - `--tools PATH` (`vatl4pose annotate` only) names the `annotation/` folder. The command finds `annotation/` of the repository by itself, and `VATL4POSE_ANNOTATION_ROOT` sets it as well.
 - `--sample` (`vatl4pose annotate` only) uses the local file `annotation/samples/people.mp4` instead of a video path. The repository does not contain this clip and git ignores `annotation/samples/`, so copy a short video of your own to that path before you use `--sample`.
@@ -94,7 +94,9 @@ The session prints this command when it starts. Label Studio runs on its own loc
 
 ## Measured effort
 
-A GPU that another training job loaded to about 90 % served all measurements below, so they are not times of a free GPU. On a 40-frame clip with 277 people, the rounds asked for 13 or 14 people, and correcting one person took a median of 35 seconds, taken from the Label Studio lead times of two rounds. Tracking took about 3 seconds per frame at 1280x720. From pressing Train to the results page took 14 to 15 seconds when the predictions were saved unchanged, and 34 to 52 seconds when the answers moved the joints and the retraining ran.
+The measurements of this paragraph come from sessions with `--learning-device cuda` on a GPU that another training job loaded to about 90 %, so they are not times of a free GPU. On a 40-frame clip with 277 people, the rounds asked for 13 or 14 people, and correcting one person took a median of 35 seconds, taken from the Label Studio lead times of two rounds. Tracking took about 3 seconds per frame at 1280x720. From pressing Train to the results page took 14 to 15 seconds when the predictions were saved unchanged, and 34 to 52 seconds when the answers moved the joints and the retraining ran.
+
+The learning device sets most of the wait after Train. On the first 30 frames of a 1280x720 clip, the first round asked for 12 people, and every joint of them was moved. From pressing Train to the results page took 24 seconds with `--learning-device cuda` on a free GPU, and 15.5 minutes with the default `cpu` on a 32-core CPU that other jobs kept busy.
 
 ## Advanced use of the manual cycle
 

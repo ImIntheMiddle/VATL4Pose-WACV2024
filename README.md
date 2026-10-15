@@ -45,10 +45,10 @@ done
 
 ```bash
 bash annotation/setup.sh       # once: the tool's environment, SAMIDARE, SAM 2 and their checkpoints
-annotation/.venv/bin/vatl4pose annotate my_video.mp4 --target-oks 0.8
+annotation/.venv/bin/vatl4pose annotate my_video.mp4 --target-oks 0.8 --learning-device cuda
 ```
 
-Open the address that the command prints, `http://localhost:8765` by default. On a remote server, forward the same port number (`ssh -L 8765:localhost:8765 user@server`). `--target-oks θ` shows the stopping criterion of the paper after every round. The estimator of the last round is `atl/tracked/simplebaseline/THC+WPU_Coresetfilter/clip/estimator.pth` in the session directory. [annotation/README.md](annotation/README.md) describes the options and the outputs.
+Open the address that the command prints, `http://localhost:8765` by default. On a remote server, forward the same port number (`ssh -L 8765:localhost:8765 user@server`). `--target-oks θ` shows the stopping criterion of the paper after every round. `--learning-device cuda` retrains the estimator on the GPU; without it the retraining runs on the CPU, and a round takes minutes instead of seconds. The estimator of the last round is `atl/tracked/simplebaseline/THC+WPU_Coresetfilter/clip/estimator.pth` in the session directory. [annotation/README.md](annotation/README.md) describes the options and the outputs.
 
 ## Your own videos
 
