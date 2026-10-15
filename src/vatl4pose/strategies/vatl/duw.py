@@ -22,18 +22,17 @@ class DUWSelector:
     ``(1 - m) * d + lam * m * u``. A small ``m`` (a poor previous round) weights the distance to the
     labeled set, a large ``m`` weights the uncertainty. With nothing labeled the first
     pick is the most uncertain sample (``argmax(u)``); that pick is deterministic, where the
-    ``coreset`` selector draws it at random. Picked samples leave the candidates, which has the effect
-    of the legacy ``u[pick] = 0``. The score ``total`` is not changed.
+    ``coreset`` selector draws it at random. Picked samples leave the candidates; the score
+    ``total`` is not changed.
 
-    The distance is the unscaled Euclidean distance of the embeddings, as in the legacy code. With
-    ``lam = 0`` and ``m < 1`` the distance alone decides after the first pick, which is still the
-    most uncertain sample. With ``lam = 0`` and ``m = 1`` every value is 0, so each pick is the
-    lowest candidate index. The legacy code switched to its k-center with a random first pick at
-    ``lam == 0``; that selection is the ``coreset`` selector here (preset ``_Coresetfilter``).
+    The distance is the unscaled Euclidean distance of the embeddings. With ``lam = 0`` and
+    ``m < 1`` the distance alone decides after the first pick; with ``lam = 0`` and ``m = 1``
+    every value is 0, so every pick is the lowest candidate index, except the first pick when
+    nothing is labeled. The 2023 code switched to k-center with a random first pick at
+    ``lam == 0``; that is the ``coreset`` selector here.
 
     Args:
-        lam: Weight of the uncertainty term (``lam >= 0``). The experiment configs set it:
-            0.01 for PoseTrack21, 1000 for JRDB-Pose.
+        lam: Weight of the uncertainty term (``lam >= 0``); the experiment config sets it.
     """
 
     needs_embeddings = True
@@ -81,15 +80,11 @@ class FixedDUWSelector(DUWSelector):
     Every pick is the unlabeled sample that maximises ``d + lam * u``, with ``d`` and ``u`` as in
     :class:`DUWSelector`; the previous round's mean OKS ``m`` does not enter. This is the
     ``--fixed_lambda`` option of the 2023 code (the "fixed" row of paper Table 3), the ablation of
-    the dynamic weight ``(1 - m) * d + lam * m * u``. The first pick with nothing labeled, the
-    candidate handling and the unscaled distance are those of :class:`DUWSelector`. The legacy code
-    took its pure k-center branch at ``lam == 0`` before it looked at ``--fixed_lambda``; here
-    ``lam = 0`` keeps this selector, so that the distance alone decides after the first pick,
-    which is still the most uncertain sample.
+    the dynamic weight ``(1 - m) * d + lam * m * u``. The first pick with nothing labeled is that of
+    :class:`DUWSelector`.
 
     Args:
-        lam: Weight of the uncertainty term (``lam >= 0``); the experiment configs set it, 0.01
-            for the paper's PoseTrack21 runs.
+        lam: Weight of the uncertainty term (``lam >= 0``).
     """
 
     needs_embeddings = True

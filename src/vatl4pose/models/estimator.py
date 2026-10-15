@@ -5,12 +5,10 @@ FastPose expose their backbone, so a pass can also return the ``(B, 2048)`` embe
 diversity-based query strategies cluster. HRNet-W32 is a reference network without embeddings.
 
 The parameter names equal the keys of the released checkpoints, so those load with ``strict=True``
-through :func:`build_estimator`. The checkpoint keys must equal the parameter names of the module;
-no key renaming happens at load time.
+through :func:`build_estimator` without key renaming.
 
-The head layers start from PyTorch's default initialisation. ``build_estimator(init_head=True)``
-draws them as the 2023 training scripts did (``initialize_head``), which the initial training does
-for a network that starts from the ImageNet backbone.
+The head layers start from PyTorch's default initialisation; ``build_estimator(init_head=True)``
+draws them as the 2023 training scripts did (see its docstring).
 """
 
 from __future__ import annotations
@@ -37,8 +35,7 @@ NO_EMBEDDING_MESSAGE = "embeddings are defined for simplebaseline and fastpose o
 _OUTPUT_LR_MULT = 10.0
 _UPSAMPLE_LR_MULT = 5.0
 
-# HRNet-W32: stage 2, 3 and 4 hold 1, 4 and 3 modules over 2, 3 and 4 branches of BASIC blocks.
-# The field names are those the vendored network reads.
+# HRNet-W32 stages; the field names are those the vendored network reads.
 _HRNET_W32_STAGES: dict[str, dict[str, Any]] = {
     "stage2": {
         "NUM_MODULES": 1,
@@ -120,7 +117,10 @@ class PoseEstimator(nn.Module):
         raise NotImplementedError
 
     def param_groups(self, base_lr: float) -> list[dict[str, Any]]:
-        """Optimizer groups with the legacy learning-rate multipliers; each parameter appears once."""
+        """Optimizer groups, one per fine-tuning module of ``_lr_modules`` with its multiplier.
+
+        Each parameter appears once.
+        """
         groups = [
             {"name": name, "params": list(module.parameters()), "lr": base_lr * mult}
             for name, module, mult in self._lr_modules()

@@ -7,9 +7,8 @@ only names them, and the registry imports the plugin that holds a component on f
 proposed method being imported.
 
 The presets with a ``coreset_duw`` or ``coreset_duw_fixed`` selector carry the default weight
-``lam = 0.01``. An experiment config overrides it with
-``dataclasses.replace(PRESETS[name], params={"lam": ...})`` (PoseTrack21 0.01, JRDB-Pose 1000). The
-``VL4Pose`` preset names the scorer ``vl4pose`` of the VL4Pose baseline.
+``lam = 0.01``. The experiment configs set the weight with the top-level key ``lam``
+(PoseTrack21 0.01, JRDB-Pose 1000), which the strategy YAML files read as ``${lam}``.
 
 The three presets ``THC+WPU_Coresetfilter_fixed``, ``..._increase`` and ``..._decrease`` are the
 rows "fixed", "increase" and "decrease" of the ablation in paper Table 3 (PoseTrack21). Each differs

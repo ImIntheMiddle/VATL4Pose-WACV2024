@@ -25,9 +25,8 @@ def minmax_over_unlabeled(
 
     A score without spread over the unlabeled samples (all values equal, or fewer than two
     unlabeled samples) normalises to zeros, and one ``logging.WARNING`` names the scorer and the
-    round. The legacy code divided by zero there: every normalised score became NaN, the sort over
-    NaN kept the samples in index order, and the query took the lowest indices. Zeros give the
-    same order through the stable top-k, without NaN.
+    round. (The 2023 code produced NaN here and queried the lowest indices; the stable top-k over
+    zeros gives the same order.)
 
     Args:
         score: ``(N,)`` scores of all samples.

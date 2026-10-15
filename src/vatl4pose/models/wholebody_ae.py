@@ -11,9 +11,8 @@ where ``(c_x, c_y)`` is the centre of the joints weighted by their confidence or
 triplet from :attr:`KeypointSpec.angle_triplets`. The vector has
 :attr:`KeypointSpec.ae_input_dim` entries.
 
-Three things separate this autoencoder from the one of the 2023 paper, which could not
-reconstruct a pose (its decoder ended in a sigmoid although more than 40 % of the feature entries
-are negative, and joints without an annotation entered the feature at the image corner):
+Three design points differ from the 2023 autoencoder, whose decoder ended in a sigmoid and saw
+joints without an annotation at the image corner:
 
 * The network works on *standardised* features. The mean and the standard deviation of every
   dimension, taken over the valid training entries, are the buffers ``feature_mean`` and
@@ -232,9 +231,9 @@ def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
     if missing:
         raise ValueError(
             f"{ckpt} is a whole-body autoencoder of the 2023 format (no {', '.join(missing)}: "
-            "sigmoid decoder on unscaled features). This version standardises the features and "
-            "needs the retrained weights WholeBodyAE_zdim4_v1.pth, or a new training with "
-            "vatl4pose-train train=ae_posetrack21 or train=ae_jrdb"
+            "sigmoid decoder on unscaled features). Use the retrained weights "
+            "WholeBodyAE_zdim4_v1.pth or train one with vatl4pose-train train=ae_posetrack21 "
+            "or train=ae_jrdb"
         )
     input_dim = int(state[_FIRST_WEIGHT_KEY].shape[1])
     for key in _NORMALISATION_KEYS:

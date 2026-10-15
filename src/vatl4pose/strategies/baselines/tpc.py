@@ -13,7 +13,6 @@ from ..registry import register_scorer
 # Pairs decoded at once; bounds the memory of the gathered neighbor heatmaps.
 _CHUNK = 256
 
-# A joint counts as moved when it is farther than this fraction of sqrt(box width * height).
 _THRESHOLD_RATIO = 0.01
 
 

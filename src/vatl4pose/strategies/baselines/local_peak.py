@@ -1,4 +1,7 @@
-"""Mean local peak of the heatmaps: the weight of the uncertainty term in the legacy logs."""
+"""Mean local peak of the heatmaps.
+
+The loop logs the mean of this value over the unlabeled samples as ``combine_weight``.
+"""
 
 from __future__ import annotations
 

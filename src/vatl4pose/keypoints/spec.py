@@ -78,11 +78,9 @@ LEGACY_JRDB_FLIP_SWAPS: tuple[tuple[int, int], ...] = (
     (6, 9),
     (8, 11),
 )
-"""The JRDB-Pose flip list of the 2023 code, as ordered swaps (the JRDB-Pose skeleton edges).
+"""The JRDB-Pose flip list of the 2023 code, as ordered swaps.
 
-Joints appear in several pairs, so the swaps compose to a permutation that is not a left/right
-mirror. The ``jrdb_pose`` preset uses the corrected left/right pairs instead; this constant only
-serves the comparison against the legacy behavior (``dataclasses.replace(spec, flip_pairs=...)``).
+Joints appear in several pairs, so the swaps do not form a left/right mirror.
 """
 
 LEGACY_COCO_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
@@ -99,9 +97,7 @@ LEGACY_COCO_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
 
 They index joints in COCO order. The ``posetrack21`` and ``coco17`` presets use them. The 2023 code
 applied the same indices to the JRDB-Pose joint order, where they name other body parts; the
-``jrdb_pose`` preset uses triplets at the JRDB-Pose joints of the same body parts instead. This
-constant serves the comparison with the legacy behavior
-(``dataclasses.replace(get_spec("jrdb_pose"), angle_triplets=LEGACY_COCO_ANGLE_TRIPLETS)``).
+``jrdb_pose`` preset uses triplets at the JRDB-Pose joints of the same body parts instead.
 """
 
 _JRDB_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
@@ -165,7 +161,8 @@ class KeypointSpec:
             on the result, and so on. Pairs may overlap, so a joint can be moved more than
             once and the order of the pairs changes the result. The presets list disjoint
             left/right pairs; joints without a partner are not listed.
-        skeleton: Joint pairs connected by a limb. Used for drawing only.
+        skeleton: Joint pairs connected by a limb (the links of the VL4Pose baseline, the skeleton
+            of exported COCO files, drawing).
         oks_sigmas: Per-joint OKS sigmas, already divided by 10.
         redundant_joints: Joints that are never annotated. They are excluded from the
             WPU error (see :meth:`wpu_keep_index`).
@@ -343,10 +340,7 @@ _POSETRACK21 = KeypointSpec(
     angle_triplets=LEGACY_COCO_ANGLE_TRIPLETS,
 )
 
-# The legacy JRDB reader listed these skeleton edges as its flip pairs, which swapped
-# unrelated joints under horizontal flip. The flip pairs below join the left and right
-# joints. The angle triplets name the JRDB-Pose joints of the body parts that the legacy
-# COCO-index triplets meant.
+# The flip pairs join the left and right joints.
 _JRDB_POSE = KeypointSpec(
     name="jrdb_pose",
     joint_names=(

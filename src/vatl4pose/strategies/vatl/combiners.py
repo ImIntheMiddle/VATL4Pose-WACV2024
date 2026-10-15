@@ -20,9 +20,9 @@ class _ShareWeightedCombiner:
     ``r`` is the number of labeled samples at the start of the round divided by the number of all
     samples of the video, 0 in round 0. The total score is ``w_thc * thc + w_wpu * wpu`` with
     ``(w_thc, w_wpu) = (r, 1 - r)`` or ``(1 - r, r)`` (class attribute ``thc_weight_rises``),
-    min-max normalised over the unlabeled samples again. The legacy code is the
-    ``--THCvsWPU increase`` and ``decrease`` branch of ``ActiveLearning.eval_and_query``; the
-    combiner ``minmax_sum`` is its ``const`` branch, with the weights 1 and 1.
+    min-max normalised over the unlabeled samples again. The two subclasses are the rows
+    "increase" and "decrease" of paper Table 3; the combiner ``minmax_sum`` is the row "const"
+    (weights 1 and 1).
     """
 
     name: str  # set by the registry

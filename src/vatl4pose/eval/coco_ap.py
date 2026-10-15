@@ -2,13 +2,8 @@
 
 The 2023 experiments evaluated with a modified copy of ``pycocotools``. This module reproduces
 that evaluation with the stock ``pycocotools`` from PyPI, set up through ``Params``. The 2023 copy
-differed from the stock evaluation in these places.
+differed from the stock evaluation in three places.
 
-* Label area. The OKS normalisation and the area ranges use ``w * h`` of the label box. Every
-  label carries its ``area`` here, which gives the same numbers.
-* ``num_keypoints``. The stock evaluation ignores a label with ``num_keypoints == 0``; the 2023 copy
-  never did. :func:`coco_keypoint_ap` rejects labels without a visible joint, so the flag is
-  never zero and the two agree.
 * ``maxDets``. The 2023 copy used 100 detections per image; stock keypoint evaluation uses 20.
   ``params.maxDets`` is set to ``[100]``.
 * Detection area. The 2023 copy set the area of a detection that carries a box from the box

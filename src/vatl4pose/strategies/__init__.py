@@ -5,11 +5,9 @@ A strategy is a scorer (or several), a combiner and a selector, named in a
 the baselines: scorers ``hp``, ``tpc``, ``mpe``, ``vl4pose``; combiners ``single``,
 ``minmax_sum``, ``none``; selectors ``topk``, ``random``, ``kmeans``, ``coreset``.
 
-Extension point. Another method is a package that registers its components with
-:func:`register_scorer`, :func:`register_combiner` and :func:`register_selector` when it is
-imported, plus one entry for that package in ``registry.PLUGIN_MODULES``. A config that names one
-of its components then works without any import by the caller: the first lookup of an unknown
-name imports the listed modules and retries. The baselines do not change.
+Extension point: see :mod:`vatl4pose.strategies.registry`. Another method registers its
+components with :func:`register_scorer`, :func:`register_combiner` and :func:`register_selector`
+and lists its package in ``registry.PLUGIN_MODULES``.
 """
 
 from . import combiners as combiners  # registers the combiners

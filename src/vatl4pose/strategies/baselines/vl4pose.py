@@ -64,9 +64,7 @@ class LinkGaussians:
 def vl4pose_links(spec: KeypointSpec) -> tuple[tuple[int, int], ...]:
     """The links of the baseline: ``spec.skeleton`` without the links that touch a redundant joint.
 
-    The order of the skeleton is kept. The loop passes these links to
-    :func:`~vatl4pose.models.auxnet.train_auxnet` and sizes the auxiliary network with their
-    number; the scorer uses the same links. PoseTrack21 has 19 skeleton links, 4 of which end in an
+    The order of the skeleton is kept. PoseTrack21 has 19 skeleton links, 4 of which end in an
     ear (a redundant joint), so it keeps 15; JRDB-Pose keeps its 15.
 
     Raises:
@@ -89,9 +87,8 @@ def vl4pose_links(spec: KeypointSpec) -> tuple[tuple[int, int], ...]:
 def heatmap_peaks(heatmaps: torch.Tensor) -> torch.Tensor:
     """Arg-max cell of every heatmap (the first one on ties).
 
-    The legacy code took the peak with ``peak_local_max(min_distance=8)``, which ignored the cells
-    within 8 cells of the border; v1 uses the same decoding as the rest of the package, the plain
-    arg-max cell.
+    The 2023 code took ``peak_local_max(min_distance=8)``, which skipped the cells near the border;
+    this is the plain arg-max of the rest of the package.
 
     Args:
         heatmaps: ``(N, K, H, W)`` float32.

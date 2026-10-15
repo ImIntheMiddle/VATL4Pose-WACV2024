@@ -1,27 +1,20 @@
 """The stopping points of Table 5 of the paper, read from the result of one video.
 
-After every query the 2023 code judged three criteria with the target OKS ``theta`` (the option
-``--retrain_thresh``, ``retrain.finish_acc`` here), all on the OKS that the model before its
-retraining reaches (``ActiveLearning.is_finished``, legacy tag ``wacv2024``):
+After every query three criteria are judged with the target OKS ``theta``
+(``retrain.finish_acc``), all on the OKS that the model reaches before its retraining:
 
-* ``oracle`` (``actual_finish``): every person of the video, labeled or not, has OKS >= theta.
-  The 2023 runs ended at the first round in which this held, and the records of the later rounds
-  repeat the evaluation of that round.
-* ``min_error`` (``finished_minerror``, SC_Min of the paper): the mean OKS of the people queried in
-  the round is >= theta.
-* ``sc_all`` (``finished_oursc``, SC_All of the paper): every labeled person, the people queried in
-  the round included, has OKS >= theta.
+* ``oracle``: every person of the video, labeled or not, has OKS >= theta.
+* ``min_error`` (SC_Min of the paper): the mean OKS of the people queried in the round is
+  >= theta.
+* ``sc_all`` (SC_All of the paper): every labeled person, the people queried in the round
+  included, has OKS >= theta.
 
 A criterion stops the annotation at the share of labeled people after the query of the first round
 that meets it, ``100 * labeled / n`` (``labeled`` counts the people queried so far, the round
-included). A criterion that is never met stops at 100 %. ``scripts/detailed_result.py`` of the
-legacy tag then reads the AP at OKS ``theta`` (``performances_ann``, the labeled people replaced by
-their labels) of the round whose label percentage is nearest to the stop (the first one on a tie)
-and averages the stops and the APs over the videos, the videos that never stop included.
-:func:`stop_points` computes these numbers for one video from a ``result.json`` of ``vatl4pose-atl``
-run with ``loop.stopping``, which does not end at the oracle round itself: it ignores the rounds
-after the oracle round, as the 2023 runs ended there, so that the AP of a criterion that fires in
-the oracle round is the AP of that round and not of the round that learned from its query.
+included). A criterion that is never met stops at 100 %. :func:`stop_points` computes these numbers
+for one video from a ``result.json`` of ``vatl4pose-atl`` run with ``loop.stopping``. It ignores the
+rounds after the oracle round and reads the AP at OKS ``theta`` (``performances_ann``) of the round
+whose label percentage is nearest to the stop (the first one on a tie).
 """
 
 from __future__ import annotations
@@ -80,8 +73,9 @@ def stop_points(result: dict[str, Any]) -> StopPoints | None:
 
     Raises:
         ValueError: If a round that queried people has no judgment, a judgment has no ``oracle``
-            record (written before it existed, or the video has no ground truth), or the judgments
-            use different values of ``theta``.
+            record (the video has no ground truth), the judgments use different values of
+            ``theta``, or ``performances_ann`` has an entry without AP (a video without ground
+            truth).
     """
     judgments = result.get("stopping")
     if judgments is None or all(j is None for j in judgments):
@@ -109,7 +103,7 @@ def stop_points(result: dict[str, Any]) -> StopPoints | None:
         if oracle is None:
             raise ValueError(
                 f"the stopping judgment of round {r} has no oracle record: run the video again "
-                "with this version, on a video whose people all have ground truth"
+                "with loop.stopping on a video whose people all have ground truth"
             )
         moks = result["moks_queried"][r]
         met["oracle"][r] = bool(oracle["met"])

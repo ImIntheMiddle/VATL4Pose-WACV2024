@@ -35,8 +35,7 @@ PLUGIN_MODULES: list[str] = [
     "vatl4pose.strategies.baselines",
     "vatl4pose.strategies.vatl",
 ]
-"""Modules whose import registers components. A method with its own components appends its
-package here; the entries are imported on the first lookup of a name that is not registered."""
+"""Packages whose import registers components (see the module docstring)."""
 
 
 def _register(
@@ -131,10 +130,7 @@ def build_strategy(cfg: StrategyConfig) -> Strategy:
 
     Scorer ``s`` is built with the mapping ``cfg.params[s]`` as keyword arguments (none if the
     key is absent). Every other entry of ``cfg.params`` is a keyword argument of the selector.
-    The combiner is built without arguments. A name that is not registered yet is looked up in
-    the plugin modules (:data:`PLUGIN_MODULES`) first; this includes the keys of ``cfg.params``
-    that are not among ``cfg.scorers``, so that a key naming a scorer of a plugin is recognised
-    as that scorer's.
+    The combiner is built without arguments. Plugin modules are imported when a name is unknown.
 
     Raises:
         ValueError: If a component name is not registered, or ``cfg.params`` names a registered
