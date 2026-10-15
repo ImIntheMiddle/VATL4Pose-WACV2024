@@ -1,7 +1,7 @@
 """Training augmentation: random scale, rotation and horizontal flip of a person crop.
 
 :func:`augment_and_crop` draws the augmentation of one person in training and returns the crop
-with the joints in crop coordinates. The draws follow the 2023 code, in this order:
+with the joints in crop coordinates. The draws are, in this order:
 
 1. Scale: the crop size is multiplied by ``clip(1 + sf * N(0, 1), 1 - sf, 1 + sf)``.
 2. Rotation: with probability ``rotation_prob`` the angle is ``clip(rf * N(0, 1), -2 rf, 2 rf)``
@@ -11,8 +11,7 @@ with the joints in crop coordinates. The draws follow the 2023 code, in this ord
    as an ordered sequence of swaps (see :func:`flip_joints`). No random number is drawn when
    ``flip`` is off.
 
-The half-body transform of the 2023 code is not ported: its probability is -1 in the configs of
-both datasets, so it never ran.
+There is no half-body transform.
 """
 
 from __future__ import annotations
@@ -74,8 +73,8 @@ def flip_joints(
     visibility), and the position of a joint that is not visible becomes ``(0, 0)``.
 
     The pairs are applied as an ordered sequence of swaps, first to last, each on the result of
-    the previous one, like the 2023 code. They need not be disjoint: a joint in two pairs is
-    moved twice, and the order of the pairs changes the result.
+    the previous one. They need not be disjoint: a joint in two pairs is moved twice, and the
+    order of the pairs changes the result.
 
     Args:
         joints: ``(K, 3)`` float array with columns x, y, visibility.

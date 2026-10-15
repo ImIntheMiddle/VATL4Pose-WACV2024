@@ -388,8 +388,7 @@ def tsne_map(embeddings: np.ndarray) -> np.ndarray:
     if n < 4:
         raise ValueError(f"a map of the embeddings needs at least 4 people, got {n}")
     perplexity = float(min(30.0, (n - 1) / 3))
-    # one OpenMP thread: with many threads on a busy machine the t-SNE of 100 people takes minutes,
-    # and the thread count of the machine does not change the picture
+    # one OpenMP thread; the thread count of the machine does not change the picture
     with threadpool_limits(limits=1, user_api="openmp"):
         xy = TSNE(
             n_components=2,

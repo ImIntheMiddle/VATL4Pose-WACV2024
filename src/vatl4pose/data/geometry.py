@@ -9,12 +9,13 @@ predicts one ``64 x 48`` heatmap per joint. This module holds the geometry aroun
 * decoding heatmaps into image coordinates (:func:`heatmaps_to_coords`, :func:`coords_in_box`),
 * Gaussian training targets (:func:`make_targets`).
 
-The numbers follow the 2023 code exactly, including its float32 steps:
+The arithmetic has these float32 steps:
 
 * The crop center and scale are float32. Both come from float64 arithmetic on the box.
 * The three reference points of the affine map are rounded to float32 before the 2x3 matrix is
   solved. :func:`heatmaps_to_coords` repeats this rounding, so decoded coordinates of large
-  images (JRDB-Pose frames are 3760 pixels wide) equal those of the 2023 code.
+  images (JRDB-Pose frames are 3760 pixels wide) equal those of
+  ``get_affine_transform(..., inv=True)``.
 * Both axes of the heatmap-to-image map use the box *width* divided by the heatmap width. A box
   with the crop aspect ratio makes this equal to height divided by heatmap height.
 * A crop is not clipped to the frame: parts outside the frame are black. With ``panorama`` the
@@ -143,7 +144,7 @@ def get_affine_transform(
     box width above the center (turned by ``rot`` degrees around the center) goes to the point
     half an output width above the output center. The third pair completes a right angle at the
     second point (the one above the center). The three source points are rounded to float32
-    first, like the 2023 code.
+    first.
 
     Args:
         center: ``(2,)`` crop center ``(x, y)`` in image pixels.
@@ -378,7 +379,7 @@ def _cells_to_image(
 
     Closed form of ``get_affine_transform(center, (w, h), 0, (hm_w, hm_h), inv=True)`` applied to
     each position. The reference points are rounded to float32 exactly as in that function, so
-    the rounding of the 2023 matrix is kept.
+    both give the same float32 rounding.
     """
     box = bbox_crop.to(torch.float64)
     w = box[:, 2] - box[:, 0]

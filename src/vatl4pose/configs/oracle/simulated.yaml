@@ -1,2 +1,2 @@
-# The ground truth of the dataset answers every query (paper reproduction, tuning).
+# The ground truth of the dataset answers every query (the experiments of the paper, tuning).
 name: simulated

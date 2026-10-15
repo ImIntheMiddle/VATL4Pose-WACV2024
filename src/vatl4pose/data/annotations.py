@@ -30,9 +30,7 @@ Conventions
 * Box. xywh becomes xyxy with ``xmax = x + max(w - 1, 0)`` and ``ymax = y + max(h - 1, 0)``;
   every coordinate is clipped to ``[0, W - 1]`` and ``[0, H - 1]``. PoseTrack21 and
   ``coco_custom`` skip an annotation whose clipped box has ``xmax <= xmin`` or
-  ``ymax <= ymin``. JRDB-Pose keeps such boxes: its 2023 test (``xmax < xmin``) cannot
-  fire after clipping, because ``xmax >= xmin`` holds by construction. JRDB-Pose skips
-  annotations without a ``bbox``.
+  ``ymax <= ymin``. JRDB-Pose keeps such boxes and skips annotations without a ``bbox``.
 * Panorama. A frame of a 360-degree video is a strip whose right edge continues at its left edge
   (a JRDB-Pose frame is 3760 pixels wide). The JRDB-Pose and ``coco_custom`` readers take
   ``panorama``. With it on, a person is placed in the unwrapped coordinates of the strip, next to
@@ -52,22 +50,23 @@ Conventions
     (JRDB-Pose skips no empty box). The sample order and the links between frames follow from the
     kept people.
 
-  With ``panorama`` off the readers behave as in the 2023 code.
+  With ``panorama`` off the boxes are clipped at all four edges and the joints stay where the
+  file records them.
 * Keypoints. ``(K, 3)`` array of x, y, visibility with visibility ``min(1, v)``. PoseTrack21 and
-  JRDB-Pose skip an annotation without a visible joint (this covers the 2023 test for an
-  all-zero annotation, which has no visible joint either) and require the ``keypoints`` key.
+  JRDB-Pose skip an annotation without a visible joint (an all-zero annotation has none) and
+  require the ``keypoints`` key.
   ``coco_custom`` keeps every annotation with a valid box: an annotation without a ``keypoints``
   key, or without a visible joint, becomes a person whose keypoints are all zeros (positions
   and visibility). Such a person has no ground truth: the cache marks it (``has_gt``) and the loop
   reports no metrics for a video that has one.
 * ``frame_index``. Position of the frame among the ``images`` of the annotation file when
   they are sorted by ``file_name``.
-* Sample order. PoseTrack21 and JRDB-Pose use the 2023 sort key
+* Sample order. PoseTrack21 and JRDB-Pose sort by the key
   ``int(str(ann_id)[-n:] + str(image_id))`` (``n = 2`` for PoseTrack21, ``3`` for
-  JRDB-Pose) over the people listed by ascending image id, so sample indices match the
-  2023 query lists. ``coco_custom`` orders by ``(track_id, frame_index)``.
-* Track id. PoseTrack21 prefixes the video id (``"000342" + "0"``), as the 2023 code
-  does; the other readers use ``str(track_id)``.
+  JRDB-Pose) over the people listed by ascending image id. ``coco_custom`` orders by
+  ``(track_id, frame_index)``.
+* Track id. PoseTrack21 prefixes the video id (``"000342" + "0"``); the other readers use
+  ``str(track_id)``.
 """
 
 from __future__ import annotations
@@ -107,8 +106,8 @@ class PersonRecord:
         track_id: Person identity within the video.
         image_path: Absolute path of the image file of the frame.
         image_size: ``(width, height)`` of the image in pixels.
-        bbox_xyxy: ``(4,)`` float64 box, converted and clipped by the 2023 convention. In a
-            panorama it is not clipped at the left and right edge (see the module docstring).
+        bbox_xyxy: ``(4,)`` float64 box, converted from xywh and clipped by the Box rule of the
+            module docstring. In a panorama it is not clipped at the left and right edge.
         keypoints: ``(K, 3)`` float64 array of x, y and visibility in ``{0, 1}``. All zeros for a
             ``coco_custom`` person without a visible joint (no ground truth). In a panorama the
             x of a joint is in the unwrapped coordinates of the box of the person.
@@ -286,7 +285,7 @@ def _require(mapping: Mapping[str, Any], key: str, owner: str) -> Any:
     return mapping[key]
 
 
-def _legacy_box_xyxy(
+def _xywh_to_clipped_xyxy(
     xywh: np.ndarray, width: int, height: int, panorama: bool = False
 ) -> np.ndarray:
     """xywh to xyxy with ``max(size - 1, 0)`` extents, clipped to ``[0, size - 1]``.
@@ -401,7 +400,7 @@ def _collect(
                 raise ValueError(
                     f"{owner}: bbox must hold 4 values, got {bbox_json.shape}"
                 )
-            bbox_xyxy = _legacy_box_xyxy(bbox_json, width, height, panorama)
+            bbox_xyxy = _xywh_to_clipped_xyxy(bbox_json, width, height, panorama)
             if skip_empty_box and (
                 bbox_xyxy[2] <= bbox_xyxy[0] or bbox_xyxy[3] <= bbox_xyxy[1]
             ):
@@ -489,8 +488,8 @@ def _find_annotation_file(directory: pathlib.Path, video_id: str) -> pathlib.Pat
     return matches[0]
 
 
-def _legacy_sort_key(digits: int) -> Callable[[_Raw], int]:
-    """Sort key of the 2023 code: the last ``digits`` digits of the annotation id, then image id."""
+def _ann_id_tail_sort_key(digits: int) -> Callable[[_Raw], int]:
+    """Sort key: the last ``digits`` digits of the annotation id, then the image id."""
 
     def key(raw: _Raw) -> int:
         return int(str(raw.ann_id)[-digits:] + str(raw.image_id))
@@ -531,7 +530,7 @@ def read_posetrack21_video(
         skip_without_bbox=False,
         require_keypoints=True,
     )
-    raws.sort(key=_legacy_sort_key(2))
+    raws.sort(key=_ann_id_tail_sort_key(2))
     return _build(
         "posetrack21",
         video_id,
@@ -553,9 +552,9 @@ def read_jrdb_pose_video(
     """Read one JRDB-Pose video.
 
     The frames of JRDB-Pose are 360-degree panoramas, so the reader treats the seam as part of
-    the frame by default (``panorama``, see the module docstring). ``panorama=False`` gives the
-    boxes and joints of the 2023 code, which clips the boxes at the left and right edge and
-    leaves the joints on the side of the frame where the file records them.
+    the frame by default (``panorama``, see the module docstring). ``panorama=False`` clips the
+    boxes at the left and right edge and leaves the joints on the side of the frame where the
+    file records them.
 
     Args:
         root: JRDB-Pose root; the annotation file is
@@ -584,7 +583,7 @@ def read_jrdb_pose_video(
         require_keypoints=True,
         panorama=panorama,
     )
-    raws.sort(key=_legacy_sort_key(3))
+    raws.sort(key=_ann_id_tail_sort_key(3))
     return _build(
         "jrdb_pose",
         video_id,

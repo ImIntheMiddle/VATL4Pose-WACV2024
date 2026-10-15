@@ -78,7 +78,7 @@ _CROP_SHAPE = (*INPUT_SIZE, 3)
 
 
 def read_image_rgb(path: pathlib.Path) -> np.ndarray:
-    """Read a frame as ``(H, W, 3)`` uint8 RGB, the way the 2023 code did.
+    """Read a frame as ``(H, W, 3)`` uint8 RGB.
 
     The frame is decoded with ``cv2.imread`` (which applies the EXIF orientation) and converted
     from BGR to RGB.

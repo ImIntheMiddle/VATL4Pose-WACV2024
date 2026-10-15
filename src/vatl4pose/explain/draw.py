@@ -19,9 +19,8 @@ THC_JOINTS = ((255, 159, 10), (50, 200, 230), (140, 220, 60))  # the joints that
 MIN_CONFIDENCE = 0.3
 """Lowest heatmap peak (``maxvals``) of a joint that a drawing of the predictions shows.
 
-A joint that the labels mark as not visible gets no training target, so its prediction can jump
-between frames. In the last rounds of the result videos of the project page, 97 to 100 % of the
-joints below 0.3 were not visible in the labels.
+A drawing leaves out the joints below this value, because a joint that the labels mark as not
+visible gets no training target, so its prediction can jump between frames.
 """
 
 

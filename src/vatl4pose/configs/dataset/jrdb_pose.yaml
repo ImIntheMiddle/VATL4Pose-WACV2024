@@ -1,8 +1,8 @@
 # JRDB-Pose as prepared for active learning (activelearning/<split>/<video>_jrdb-pose.json).
 # The frames are 360-degree panoramas 3760 pixels wide. With `panorama: true` the readers put the
 # joints of a person on the seam next to the box of the person and the crops continue across the
-# seam; `panorama: false` gives the behavior of the 2023 code (boxes clipped at the left and right
-# edge).
+# seam; `panorama: false` clips the boxes at the left and right edge and leaves each joint where the
+# file records it.
 name: jrdb_pose
 root: jrdb-pose
 split: test

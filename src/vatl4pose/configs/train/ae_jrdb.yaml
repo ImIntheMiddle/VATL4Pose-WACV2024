@@ -3,9 +3,7 @@
 # 10 training and 2 validation videos (paper: 10 and 2 videos). The features are standardized, the
 # loss is a masked MSE (invisible joints are left out), and the joints of a person on the seam of
 # the 360-degree frame are placed next to the person (dataset.panorama of jrdb_pose.yaml).
-# Epochs: at most 1000, stopped by patience 30 (the shipped run stopped at epoch 178, best epoch
-# 148). Batch size 256 gave the lower validation loss (masked MSE in standardized space, seed 166,
-# CPU, 4 threads) than 1000: 1.5901 against 1.6347. A run is reproducible byte for byte with the
+# Epochs: at most 1000, stopped by patience 30. A run is reproducible byte for byte with the
 # same number of CPU threads and differs a little with another.
 defaults:
   - override /dataset: jrdb_pose

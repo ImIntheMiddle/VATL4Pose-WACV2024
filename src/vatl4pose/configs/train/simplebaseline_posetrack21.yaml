@@ -1,7 +1,7 @@
 # @package _global_
-# Initial training of SimpleBaseline on PoseTrack21: the 2023 recipe on one device.
-# Paper: Adam, lr 1e-3, early stopping at epoch 62. 2023 configs/posetrack21/simplebaseline_posetrack21.yaml:
-#   batch 180, 200 epochs, Adam, lr 1e-3 with factor 0.1 at epochs 90 and 120.
+# Initial training of SimpleBaseline on PoseTrack21.
+# Paper: Adam, lr 1e-3, early stopping at epoch 62. Here: batch 180, 200 epochs, Adam, lr 1e-3 with
+# factor 0.1 at epochs 90 and 120.
 # The best epoch is chosen by the validation AP.
 defaults:
   - override /dataset: posetrack21
@@ -10,7 +10,7 @@ defaults:
 run:
   name: simplebaseline_posetrack21
 
-# the ImageNet ResNet-50 backbone and a head drawn as in the 2023 code (normal(0, 0.001) weights)
+# the ImageNet ResNet-50 backbone and a head with normal(0, 0.001) weights
 estimator:
   weights: null
   imagenet_init: true

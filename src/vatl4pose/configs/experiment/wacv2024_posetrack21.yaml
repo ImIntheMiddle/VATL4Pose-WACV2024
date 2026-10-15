@@ -21,7 +21,7 @@ ae:
 # weight of the uncertainty term of the DUW selector (strategy.params.lam of the DUW strategies)
 lam: 0.01
 
-# batch size of the 2023 code on PoseTrack21
+# the experiments of the paper used a batch size of 24 on PoseTrack21
 retrain:
   batch_size: 24
 

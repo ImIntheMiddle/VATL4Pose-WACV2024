@@ -1,7 +1,7 @@
 # @package _global_
-# Initial training of FastPose on PoseTrack21: the 2023 recipe on one device.
-# Paper: Adam, lr 1e-3, early stopping at epoch 57. 2023 configs/posetrack21/fastpose_posetrack21.yaml:
-#   batch 70, 200 epochs, lr 1e-3 with factor 0.1 at epochs 90 and 120.
+# Initial training of FastPose on PoseTrack21.
+# Paper: Adam, lr 1e-3, early stopping at epoch 57. Here: batch 70, 200 epochs, lr 1e-3 with
+# factor 0.1 at epochs 90 and 120.
 defaults:
   - override /dataset: posetrack21
   - override /estimator: fastpose
