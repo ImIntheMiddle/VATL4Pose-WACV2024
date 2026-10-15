@@ -614,8 +614,14 @@ class ActiveLearningLoop:
                 # a query that takes every unlabeled person is forced: nothing is scored
                 forced = size >= self.n - int(self._labeled.sum())
                 extra_inputs = {} if forced else self._extras(round_index, pool)
-                picked, score_means, selection = self._select(
-                    round_index, pool, size, extra_inputs, forced
+                picked, score_means, made = self._select(
+                    round_index, pool, size, extra_inputs
+                )
+            # the details are built outside the select time, which is the time of the method
+            if self.cfg.save_round_details:
+                ctx, raw, order = made
+                selection = round_details.selection_details(
+                    self.strategy, ctx, raw, order, forced
                 )
             self._check_scores(score_means, size)
             query = _Query(picked, pool.predictions, score_means)
@@ -956,13 +962,15 @@ class ActiveLearningLoop:
         pool: _Pool,
         size: int,
         extra_inputs: dict[str, Any],
-        forced: bool,
-    ) -> tuple[np.ndarray, dict[str, float], dict[str, np.ndarray]]:
+    ) -> tuple[
+        np.ndarray, dict[str, float], tuple[RoundContext, dict[str, np.ndarray], np.ndarray]
+    ]:
         """Ask the strategy for ``size`` people.
 
         Returns:
-            The people sorted, the mean raw scores and, with ``loop.save_round_details``, the keys
-            of :func:`vatl4pose.explain.record.selection_details` (else an empty dict).
+            The people sorted, the mean raw scores, and the context, the raw scores and the people
+            in the order of the selection, which :func:`vatl4pose.explain.record.selection_details`
+            reads.
         """
         arrays = self._arrays
         ctx = RoundContext(
@@ -983,14 +991,9 @@ class ActiveLearningLoop:
             extras=extra_inputs,
         )
         selected, raw = self.strategy.query(ctx, size)
-        selection = (
-            round_details.selection_details(self.strategy, ctx, raw, selected, forced)
-            if self.cfg.save_round_details
-            else {}
-        )
         unlabeled = ctx.unlabeled_index
         means = {name: float(score[unlabeled].mean()) for name, score in raw.items()}
-        return np.sort(selected), means, selection
+        return np.sort(selected), means, (ctx, raw, selected)
 
     def _write_details(
         self, round_index: int, pool: _Pool, selection: dict[str, np.ndarray]
