@@ -1,8 +1,24 @@
 # VATL4Pose
 
-Official implementation of [Active Transfer Learning for Efficient Video-Specific Human Pose Estimation](https://arxiv.org/abs/2311.05041) (WACV 2024). [Project page](https://iminthemiddle.github.io/VATL4Pose-Page/)
+[![Project page](https://img.shields.io/badge/Project-page-1f6feb)](https://iminthemiddle.github.io/VATL4Pose-Page/)
+[![WACV 2024](https://img.shields.io/badge/WACV-2024-0a66c2)](https://openaccess.thecvf.com/content/WACV2024/html/Taketsugu_Active_Transfer_Learning_for_Efficient_Video-Specific_Human_Pose_Estimation_WACV_2024_paper.html)
+[![arXiv](https://img.shields.io/badge/arXiv-2311.05041-b31b1b)](https://arxiv.org/abs/2311.05041)
+[![Video](https://img.shields.io/badge/Video-YouTube-ff0000)](https://www.youtube.com/watch?v=O3RBjwkGxyA)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+Official implementation of [Active Transfer Learning for Efficient Video-Specific Human Pose Estimation](https://arxiv.org/abs/2311.05041) (WACV 2024).
+
+<p align="center">
+  <img src="https://iminthemiddle.github.io/VATL4Pose-Page/static/images/readme_teaser.gif" width="100%" alt="PoseTrack21 video 018903 with the poses of the pretrained estimator and of the estimator adapted to this video">
+  <br>
+  <sub>PoseTrack21 video 018903. Left: the pretrained estimator. Right: the estimator adapted to this video with labels for about 9 % of its people.</sub>
+</p>
 
 VATL4Pose adapts a pretrained pose estimator to one video. Each round selects the people to annotate with THC, WPU and DUW, and retrains the estimator on the new labels. The code of the paper is at the tag `wacv2024`.
+
+<p align="center">
+  <img src="https://iminthemiddle.github.io/VATL4Pose-Page/static/images/overview.png" width="85%" alt="The active transfer learning cycle: the estimator predicts the poses in the video, THC, WPU and DUW select the people to annotate, and the estimator retrains on their labels">
+</p>
 
 ## Installation
 
@@ -49,6 +65,12 @@ annotation/.venv/bin/vatl4pose annotate my_video.mp4 --target-oks 0.8
 ```
 
 Open the address that the command prints, `http://localhost:8765` by default. On a remote server, forward the same port number (`ssh -L 8765:localhost:8765 user@server`). `--target-oks θ` shows the stopping criterion of the paper after every round. The estimator retrains on the GPU; `--learning-device cpu` frees the GPU after tracking, and a round then takes minutes instead of seconds. The estimator of the last round is `atl/tracked/simplebaseline/THC+WPU_Coresetfilter/clip/estimator.pth` in the session directory. [annotation/README.md](annotation/README.md) describes the options and the outputs.
+
+<p align="center">
+  <img src="https://iminthemiddle.github.io/VATL4Pose-Page/static/images/annotation_tool.webp" width="100%" alt="The annotation tool: the editor with the predicted joints of a selected person, and the track of that person beside it">
+  <br>
+  <sub>The editor shows the predicted joints of a selected person, and the video beside it plays the track of that person. Frame from <a href="https://commons.wikimedia.org/wiki/File:Appalchian_dancers_at_Rydale_Folk_Festival.webm">“Appalchian dancers at Rydale Folk Festival”</a> by Wulyum, CC BY-SA 4.0; the screenshot is under the same license.</sub>
+</p>
 
 ## Your own videos
 
