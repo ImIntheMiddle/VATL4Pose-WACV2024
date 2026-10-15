@@ -26,7 +26,7 @@ from collections.abc import Callable, Sequence
 import cv2
 import numpy as np
 
-from .draw import person_crop
+from .draw import person_crop, shown_joints
 from .figures import RoundData, Scene, build_round, build_scene, crop_samples
 from .load import (
     load_round,
@@ -204,29 +204,34 @@ def explain(
             )
     videos: dict[str, dict[str, str]] = {"round": {}, "compare": {}}
     if video:
-        base = (
-            data[0]
-            if data[0].index == 0
-            else None
-        )
+        base = data[0] if data[0].index == 0 else None
         if base is not None:
-            zero: tuple[np.ndarray, float] | None = (base.coords, base.percentage)
+            zero: tuple[np.ndarray, np.ndarray, float] | None = (
+                base.coords,
+                base.shown,
+                base.percentage,
+            )
         elif 0 in recorded:
             details = load_round(run_dir, 0)
-            zero = (details["coords"], float(details["percentage"]))
+            zero = (
+                details["coords"],
+                shown_joints(details["maxvals"]),
+                float(details["percentage"]),
+            )
         else:
             zero = None
             print("no compare videos: round 0 has no details", flush=True)
         for rd in data:
             name = f"round_{rd.index:02d}.mp4"
             text = f"round {rd.index}: {rd.percentage:.1f} % labeled"
-            write_h264(out / name, round_frames(scene, read, rd.coords, text))
+            write_h264(out / name, round_frames(scene, read, rd.coords, rd.shown, text))
             videos["round"][str(rd.index)] = name
             if rd.index != 0 and zero is not None:
                 name = f"compare_00_{rd.index:02d}.mp4"
-                before = (zero[0], f"round 0: {zero[1]:.1f} % labeled")
+                before = (zero[0], zero[1], f"round 0: {zero[2]:.1f} % labeled")
                 write_h264(
-                    out / name, compare_frames(scene, read, before, (rd.coords, text))
+                    out / name,
+                    compare_frames(scene, read, before, (rd.coords, rd.shown, text)),
                 )
                 videos["compare"][str(rd.index)] = name
             print(f"round {rd.index}: video written", flush=True)

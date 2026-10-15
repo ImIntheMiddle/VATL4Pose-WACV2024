@@ -116,9 +116,17 @@ def label_frame(image: np.ndarray, text: str) -> None:
 
 
 def draw_round_frame(
-    image: np.ndarray, scene: Scene, rows: np.ndarray, coords: np.ndarray, text: str
+    image: np.ndarray,
+    scene: Scene,
+    rows: np.ndarray,
+    coords: np.ndarray,
+    shown: np.ndarray,
+    text: str,
 ) -> np.ndarray:
-    """A copy of ``image`` with the skeletons of the people ``rows`` and a label."""
+    """A copy of ``image`` with the skeletons of the people ``rows`` and a label.
+
+    ``shown`` ``(N, K)`` selects the joints to draw, those confident enough.
+    """
     out = image.copy()
     height, width = out.shape[:2]
     spec, panorama = scene.info.spec, scene.info.panorama
@@ -126,7 +134,14 @@ def draw_round_frame(
         xy = coords[i].astype(np.float64)
         if panorama:
             xy[:, 0] = np.mod(xy[:, 0], width)
-        draw_pose(out, spec, xy, height / 480, width_x=width if panorama else None)
+        draw_pose(
+            out,
+            spec,
+            xy,
+            height / 480,
+            width_x=width if panorama else None,
+            shown=shown[i],
+        )
     label_frame(out, text)
     return out
 
@@ -135,20 +150,21 @@ def round_frames(
     scene: Scene,
     read_frame: Callable[[int], np.ndarray],
     coords: np.ndarray,
+    shown: np.ndarray,
     text: str,
 ) -> Iterator[np.ndarray]:
     """The frames of ``round_XX.mp4``: the video's frames with the poses of the round."""
     for position, (_, rows) in enumerate(scene.frames):
-        yield draw_round_frame(read_frame(position), scene, rows, coords, text)
+        yield draw_round_frame(read_frame(position), scene, rows, coords, shown, text)
 
 
 def compare_frames(
     scene: Scene,
     read_frame: Callable[[int], np.ndarray],
-    before: tuple[np.ndarray, str],
-    after: tuple[np.ndarray, str],
+    before: tuple[np.ndarray, np.ndarray, str],
+    after: tuple[np.ndarray, np.ndarray, str],
 ) -> Iterator[np.ndarray]:
-    """The frames of ``compare_00_XX.mp4``; ``before`` and ``after`` are ``(coords, label)``."""
+    """The frames of ``compare_00_XX.mp4``; ``before`` and ``after`` are ``(coords, shown, label)``."""
     axis = 0 if scene.info.panorama else 1
     for position, (_, rows) in enumerate(scene.frames):
         image = read_frame(position)

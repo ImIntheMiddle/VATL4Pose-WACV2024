@@ -77,7 +77,8 @@ def _wpu(figure: WpuFigure, person: int) -> dict:
         "predicted": _flat(figure.predicted),
         "reconstructed": _flat(figure.reconstructed),
         "worst": figure.worst.tolist(),
-        "error": np.round(figure.error.astype(np.float64), 4).tolist(),
+        "offsets": np.round(figure.offsets.astype(np.float64), 5).tolist(),
+        "angles": np.round(figure.angles.astype(np.float64), 5).tolist(),
     }
 
 
@@ -114,6 +115,7 @@ def _round(rd: RoundData) -> dict:
         "rank": rank.tolist(),
         "order": rd.order.tolist(),
         "coords": [_flat(c) for c in rd.coords],
+        "shown": rd.shown.astype(np.int64).tolist(),
         "map": None
         if rd.map_xy is None
         else np.round(rd.map_xy.astype(np.float64), 4).tolist(),

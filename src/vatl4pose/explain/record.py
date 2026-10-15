@@ -12,9 +12,10 @@ Keys (``N`` people, ``K`` joints, ``D`` autoencoder inputs, ``k`` picks, ``M`` s
   ``(N, K)``, ``labeled`` ``(N,)`` (before the selection of the round);
 * a round that selects: ``pick_order`` ``(k,)`` in the order of the selection;
 * a selection that scores (not a forced one): ``score/<scorer>`` and ``total`` ``(N,)``, the stored
-  heatmaps ``heatmap_index`` ``(M,)``, ``heatmaps`` ``(M, K, 64, 48)`` uint8 and
-  ``heatmap_scale`` ``(M, K)`` of the picks and their temporal neighbors (value = uint8 / 255 *
-  scale), and ``embeddings`` ``(N, E)`` float16 if the selector uses them;
+  heatmaps ``heatmap_index`` ``(M,)``, ``heatmaps`` ``(M, K, 64, 48)`` uint8, ``heatmap_low`` and
+  ``heatmap_high`` ``(M, K)`` of the picks and their temporal neighbors (value = low + uint8 / 255
+  * (high - low), so negative values keep their sign), and ``embeddings`` ``(N, E)`` float32 if
+  the selector uses them, the values of the selection without rounding;
 * with THC: ``thc_joint`` ``(N, K)``, the per-joint heatmap distance summed like the THC score
   (its mean over the joints is the THC score);
 * with WPU: ``wpu_input``, ``wpu_recon`` ``(N, D)`` standardised, ``wpu_valid`` ``(N, D)`` and
@@ -40,7 +41,7 @@ from ..strategies.base import RoundContext, Strategy
 from ..strategies.vatl.wpu import crop_boxes_xywh
 from ..train._common import write_atomic
 
-SCHEMA = "vatl4pose.round_details/1"
+SCHEMA = "vatl4pose.round_details/2"
 DETAILS_DIR = "details"
 _CHUNK = 128
 
@@ -119,7 +120,10 @@ def selection_details(
         )
     out.update(stored_heatmaps(ctx, order))
     if ctx.embeddings is not None:
-        out["embeddings"] = ctx.embeddings.astype(np.float16)
+        embeddings = ctx.embeddings.astype(np.float32)
+        # the loop widens the float32 embeddings of the estimator, so float32 keeps them exactly
+        assert np.array_equal(embeddings.astype(np.float64), ctx.embeddings)
+        out["embeddings"] = embeddings
     return out
 
 
@@ -235,15 +239,21 @@ def duw_trace(
 
 
 def stored_heatmaps(ctx: RoundContext, order: np.ndarray) -> dict[str, np.ndarray]:
-    """8-bit heatmaps of the picks and their previous and next neighbors."""
+    """8-bit heatmaps of the picks and their previous and next neighbors.
+
+    Each joint map is stored between its own lowest and highest value, so the negative cells,
+    which THC compares as well, keep their sign; a cell is off by at most half a step.
+    """
     linked = np.concatenate([order, ctx.prev_index[order], ctx.next_index[order]])
     index = np.unique(linked[linked >= 0]).astype(np.int64)
-    heatmaps = ctx.heatmaps[index].cpu().numpy().astype(np.float32)
-    scale = heatmaps.max(axis=(2, 3))
-    safe = np.where(scale > 0, scale, 1.0)[..., None, None]
-    quantised = np.rint(np.clip(heatmaps / safe, 0.0, 1.0) * 255.0).astype(np.uint8)
+    heatmaps = ctx.heatmaps[index].cpu().numpy().astype(np.float64)
+    low = heatmaps.min(axis=(2, 3))
+    high = heatmaps.max(axis=(2, 3))
+    span = np.where(high > low, high - low, 1.0)[..., None, None]
+    quantised = np.rint((heatmaps - low[..., None, None]) / span * 255.0).astype(np.uint8)
     return {
         "heatmap_index": index,
         "heatmaps": quantised,
-        "heatmap_scale": np.maximum(scale, 0.0).astype(np.float32),
+        "heatmap_low": low.astype(np.float32),
+        "heatmap_high": high.astype(np.float32),
     }

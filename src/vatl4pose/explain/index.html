@@ -126,14 +126,17 @@
   // ---------------------------------------------------------------- drawing helpers
   function sideColour(side) { return P.side[side]; }
 
-  function drawSkeleton(ctx, xy, scale, colour, width, wrapW) {
-    // xy: flat [x0, y0, x1, y1, ...]; wrapW: width of a panorama (limbs across its seam are skipped)
+  function drawSkeleton(ctx, xy, scale, colour, width, wrapW, shown) {
+    // xy: flat [x0, y0, x1, y1, ...]; wrapW: width of a panorama (limbs across its seam are skipped);
+    // shown: 0 or 1 per joint, the joints confident enough to draw (all of them when left out)
     var hidden = {};
     D.skeleton.hidden.forEach(function (j) { hidden[j] = true; });
     var t = width || Math.max(2, 2.2 * scale);
     ctx.lineCap = "round";
+    function drawn(j) { return !shown || shown[j] === 1; }
     D.skeleton.limbs.forEach(function (l) {
       var x1 = xy[2 * l[0]], y1 = xy[2 * l[0] + 1], x2 = xy[2 * l[1]], y2 = xy[2 * l[1] + 1];
+      if (!drawn(l[0]) || !drawn(l[1])) return;
       if (wrapW && Math.abs(x1 - x2) > wrapW / 2) return;
       ctx.strokeStyle = colour || sideColour(l[2]);
       ctx.lineWidth = t;
@@ -144,7 +147,7 @@
     });
     if (colour) return;
     for (var j = 0; j < K; j++) {
-      if (hidden[j]) continue;
+      if (hidden[j] || !drawn(j)) continue;
       ctx.fillStyle = "#141414";
       ctx.beginPath(); ctx.arc(xy[2 * j], xy[2 * j + 1], t + 1, 0, 2 * Math.PI); ctx.fill();
       ctx.fillStyle = "#ffffff";
@@ -178,7 +181,7 @@
     var W = D.video.panorama ? fr.width : 0;
     fr.people.forEach(function (p) {
       var xy = R.coords[p];
-      drawSkeleton(ctx, W ? wrapped(xy, W) : xy, scale, null, 0, W);
+      drawSkeleton(ctx, W ? wrapped(xy, W) : xy, scale, null, 0, W, R.shown[p]);
     });
     fr.people.forEach(function (p) {
       var b = D.people.box[p], rank = rankOf(p), picked = rank > 0, labeled = R.labeled[p] === 1;
@@ -250,7 +253,7 @@
 
   function thcSection(pick) {
     var thc = pick.thc, s = section("THC: how the heatmaps change over three frames");
-    s.appendChild(el("p", { class: "muted", text: "THC scores a person high when the heatmaps of its joints differ from those of the same track in the previous and next frame. The three joints that differ most are drawn in colour." }));
+    s.appendChild(el("p", { class: "muted", text: "THC scores a person high when the heatmaps of its joints differ from those of the same track in the previous and next frame. The three joints that differ most are drawn in colour; the colour shows the positive part of each heatmap, and THC also counts the negative cells." }));
     var canvas = el("canvas", { class: "figure", width: 3 * 192 + 2 * 8, height: 256 });
     s.appendChild(canvas);
     var ctx = canvas.getContext("2d");
@@ -284,7 +287,9 @@
 
   function wpuSection(pick) {
     var wpu = pick.wpu, s = section("WPU: how far the pose is from a plausible pose");
-    s.appendChild(el("p", { class: "muted", text: "An autoencoder trained on whole-body poses reconstructs the predicted pose. WPU scores a person high when the reconstruction differs from the prediction. Joints with the largest differences are circled in red." }));
+    var offsets = wpu.offsets.reduce(function (a, b) { return a + b; }, 0), angles = wpu.angles.reduce(function (a, b) { return a + b; }, 0);
+    var share = function (v) { return Math.round(100 * v / (offsets + angles)) + " %"; };
+    s.appendChild(el("p", { class: "muted", text: "An autoencoder trained on whole-body poses reconstructs the predicted pose. WPU scores a person high when the reconstruction differs from the prediction, in the joint offsets and in the angles at the joints. Of this score, the offsets hold " + share(offsets) + " and the angles " + share(angles) + "; the skeletons show the offsets only. The joints with the largest parts are circled in red." }));
     var canvas = el("canvas", { class: "figure", width: 192, height: 256 });
     s.appendChild(canvas);
     var ctx = canvas.getContext("2d");
@@ -301,7 +306,7 @@
     var legend = el("p", { class: "legend" });
     legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + P.recon }), document.createTextNode("autoencoder")]));
     legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:#888" }), document.createTextNode("estimator")]));
-    legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + P.gap }), document.createTextNode("largest gaps: " + wpu.worst.map(jointName).join(", "))]));
+    legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + P.gap }), document.createTextNode("largest parts: " + wpu.worst.map(function (j) { return jointName(j) + (wpu.angles[j] > wpu.offsets[j] ? " (angle)" : " (offset)"); }).join(", "))]));
     s.appendChild(legend);
   }
 

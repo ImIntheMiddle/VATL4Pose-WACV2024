@@ -153,7 +153,14 @@ def _frame_panel(
     for i in rows.tolist():
         xy = rd.coords[i].astype(np.float64)
         xy[:, 0] = shift(xy[:, 0])
-        draw_pose(view, spec, xy, height / 480, width_x=width if panorama else None)
+        draw_pose(
+            view,
+            spec,
+            xy,
+            height / 480,
+            width_x=width if panorama else None,
+            shown=rd.shown[i],
+        )
     ax.imshow(view)
     for i in rows.tolist():
         if i not in rank_of:
@@ -252,7 +259,8 @@ def _thc_panel(
         ncol=3,
         frameon=False,
         fontsize=8,
-        title="THC: joints whose heatmap changed most (L1 difference to the neighbors)",
+        title="THC: joints whose heatmap changed most (L1 difference to the neighbors;"
+        " the overlay shows the positive part)",
         title_fontsize=8,
         columnspacing=1.2,
         handlelength=1.2,
@@ -285,8 +293,17 @@ def _wpu_panel(ax: Axes, scene: Scene, wpu: WpuFigure, crop: np.ndarray) -> None
                 linewidth=2.5,
             )
         )
-    ax.set_title("WPU: predicted and reconstructed skeleton", fontsize=9)
-    names = ", ".join(_name(scene, j) for j in wpu.worst.tolist())
+    offsets, angles = float(wpu.offsets.sum()), float(wpu.angles.sum())
+    ax.set_title(
+        "WPU: predicted and reconstructed skeleton\n"
+        f"offsets {offsets / (offsets + angles):.0%}, angles {angles / (offsets + angles):.0%}"
+        " of the score",
+        fontsize=9,
+    )
+    names = ", ".join(
+        f"{_name(scene, j)} ({'angle' if wpu.angles[j] > wpu.offsets[j] else 'offset'})"
+        for j in wpu.worst.tolist()
+    )
     handles = [
         Line2D([], [], color=_rgb(RECON), linewidth=3.5, label="autoencoder"),
         Line2D([], [], color="gray", linewidth=1.8, label="estimator"),
@@ -297,7 +314,7 @@ def _wpu_panel(ax: Axes, scene: Scene, wpu: WpuFigure, crop: np.ndarray) -> None
             marker="o",
             markerfacecolor="none",
             linestyle="",
-            label=f"largest gaps: {names}",
+            label=f"largest parts: {names}",
         ),
     ]
     ax.legend(

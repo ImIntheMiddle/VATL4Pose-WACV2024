@@ -86,7 +86,7 @@ vatl4pose-explain outputs/mine/simplebaseline/THC+WPU_Coresetfilter/clip1
 ```
 
 - `index.html` opens from the file system. It switches between rounds and numbers the selected people; a click on a person shows the THC, WPU and DUW figures of that pick.
-- `round_XX.mp4` and `compare_00_XX.mp4` show the predictions of a round, alone and beside round 0.
+- `round_XX.mp4` and `compare_00_XX.mp4` show the predictions of a round, alone and beside round 0. They and the page leave out the joints whose heatmap peak is below 0.3, mostly joints that the labels mark as not visible, whose predictions jump between frames.
 - `picks/round_XX_rank_YY.png` explains one selected person in one picture.
 
 `--rounds 0,2` selects rounds, `--image-root DIR` replaces the location of the frames, `--max-picks N` limits the pictures per round (40 by default), and `--no-video` skips the videos.

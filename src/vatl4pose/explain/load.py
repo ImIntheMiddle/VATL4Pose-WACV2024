@@ -123,7 +123,7 @@ def load_round(run_dir: pathlib.Path, round_index: int) -> dict[str, np.ndarray]
     """The arrays of ``details/round_XX.npz``.
 
     Raises:
-        ValueError: If the file is not a round-details file of schema ``vatl4pose.round_details/1``
+        ValueError: If the file is not a round-details file of schema ``vatl4pose.round_details/2``
             or misses a key that every round has.
     """
     path = run_dir / DETAILS_DIR / f"round_{round_index:02d}.npz"

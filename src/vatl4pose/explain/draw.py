@@ -16,6 +16,20 @@ RECON = (232, 62, 140)  # the skeleton that the autoencoder reconstructs (WPU)
 GAP = (230, 40, 40)  # the joints whose reconstruction differs most (WPU)
 THC_JOINTS = ((255, 159, 10), (50, 200, 230), (140, 220, 60))  # the joints that changed most (THC)
 
+MIN_CONFIDENCE = 0.3
+"""Lowest heatmap peak (``maxvals``) of a joint that a drawing of the predictions shows.
+
+A joint that the labels mark as not visible gets no training target, so its prediction can jump
+between frames. In the last round of six videos of the project page (100 % labeled), the joints
+below 0.3 were not visible in the labels in 97 to 100 % of the cases and moved the most from frame
+to frame; the threshold left out 0.01 % of the visible joints there and 4.5 % in round 0.
+"""
+
+
+def shown_joints(maxvals: np.ndarray) -> np.ndarray:
+    """``(..., K)`` bool: the joints whose confidence reaches :data:`MIN_CONFIDENCE`."""
+    return np.asarray(maxvals) >= MIN_CONFIDENCE
+
 
 def limb_sides(spec: KeypointSpec) -> list[tuple[int, int, int]]:
     """The limbs to draw as ``(joint a, joint b, side)``; side 0 is left, 1 right and 2 the middle.
@@ -41,6 +55,7 @@ def draw_pose(
     scale: float,
     colour: tuple[int, int, int] | None = None,
     width_x: int | None = None,
+    shown: np.ndarray | None = None,
 ) -> None:
     """Draw the skeleton of one person into an RGB image, in place.
 
@@ -51,13 +66,20 @@ def draw_pose(
         scale: Line width factor; 1 is the width for an image 480 pixels high.
         colour: One RGB colour for the whole skeleton; ``None`` colours the limbs by side.
         width_x: The width of a panorama; a limb that crosses its seam is not drawn.
+        shown: ``(K,)`` bool, the joints to draw (:func:`shown_joints`); a limb is drawn when both
+            of its joints are. ``None`` draws every joint.
     """
     assert image.dtype == np.uint8 and image.ndim == 3 and image.shape[2] == 3
     assert xy.shape == (spec.num_joints, 2), xy.shape
+    if shown is None:
+        shown = np.ones(spec.num_joints, dtype=bool)
+    assert shown.shape == (spec.num_joints,) and shown.dtype == np.bool_, shown.shape
     skip = set(spec.redundant_joints)
     thickness = max(2, round(2.2 * scale))
     for a, b, side in limb_sides(spec):
         p, q = xy[a], xy[b]
+        if not (shown[a] and shown[b]):
+            continue
         if width_x is not None and abs(p[0] - q[0]) > width_x / 2:
             continue
         cv2.line(
@@ -69,7 +91,7 @@ def draw_pose(
             cv2.LINE_AA,
         )
     for j in range(spec.num_joints):
-        if j in skip:
+        if j in skip or not shown[j]:
             continue
         centre = tuple(np.round(xy[j]).astype(int).tolist())
         cv2.circle(image, centre, thickness + 1, (20, 20, 20), -1, cv2.LINE_AA)
