@@ -46,7 +46,7 @@ from vatl4pose.train._common import FixedOrderSampler, derived_seed, shuffle_ord
 
 # A labeled person is retrained while its OKS is at most ``finish_acc + FINISH_MARGIN``.
 FINISH_MARGIN = 0.05
-# SGD keeps the settings of the 2023 code: one group, momentum 0.9 and its own weight decay.
+# SGD: one group, momentum 0.9 and its own weight decay.
 _SGD_MOMENTUM = 0.9
 _SGD_WEIGHT_DECAY = 5e-4
 _STATE_KEYS = ("model", "optimizer", "scheduler", "seed", "epochs_trained")
@@ -58,7 +58,7 @@ class RetrainConfig:
 
     Attributes:
         optimizer: ``adamw`` uses the learning-rate groups of the estimator and ``weight_decay``.
-            ``adam`` and ``sgd`` follow the 2023 code: one group at ``lr`` for all parameters;
+            ``adam`` and ``sgd`` use one group at ``lr`` for all parameters;
             Adam without weight decay, SGD with momentum 0.9 and weight decay 5e-4. They ignore
             ``weight_decay``. Both datasets of the paper use ``adamw``.
         lr: Base learning rate.

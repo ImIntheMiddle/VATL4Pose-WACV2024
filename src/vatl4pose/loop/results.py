@@ -21,12 +21,12 @@ the last for the final estimator) and has ``null`` where the round computed noth
     round. ``null`` in the final round, for an empty query, and for a forced query that takes all
     unlabeled people (the strategy then scores nothing). Strategies without scorers give ``{}``.
 ``combine_weight``
-    The mean local peak of the heatmaps of the unlabeled people in the round (a field of the 2023
-    result files); ``null`` when nobody is unlabeled.
+    The mean local peak of the heatmaps of the unlabeled people in the round; ``null`` when nobody
+    is unlabeled.
 ``moks_queried``, ``stopping``, ``timings``
     As in :class:`~vatl4pose.loop.state.RoundRecord`, one entry per round.
 ``ap_protocol``
-    The name of the AP protocol (:data:`vatl4pose.eval.AP_PROTOCOL`): the 2023 protocol of the
+    The name of the AP protocol (:data:`vatl4pose.eval.AP_PROTOCOL`): the AP protocol of the
     paper, whose detection area differs from the standard COCO keypoint AP. The AP values of
     ``performances`` and ``performances_ann`` are comparable with the paper, not with another COCO
     evaluation.
@@ -50,9 +50,9 @@ keypoint results lists (the format of ``COCO.loadRes``), so that a run on your o
 ``predictions.json``
     The prediction for every person.
 ``predictions_ann.json``
-    The same list with the labels in place of the predictions for the labeled people (the
-    ``predicted_kpt_ann.json`` of the 2023 code). These are the poses that ``performances_ann``
-    evaluates: a labeled person whose label shows no joint keeps the prediction.
+    The same list with the labels in place of the predictions for the labeled people. These are
+    the poses that ``performances_ann`` evaluates: a labeled person whose label shows no joint
+    keeps the prediction.
 
 Each list has one entry per person in the sample order of the video, so entry ``i`` belongs to
 the sample index ``i`` of ``query_list``. An entry holds ``image_id`` and ``id`` (the image id and

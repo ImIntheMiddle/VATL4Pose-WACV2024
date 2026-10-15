@@ -25,7 +25,7 @@ Round ``r`` evaluates and then queries ``query_sizes[r] - n_labeled`` people wit
 of ``query_ratio`` below 1.0 ends the run at that share of labeled people (labeling under a
 budget).
 
-Decisions of this implementation:
+Details of the loop:
 
 * The last round writes the poses of everybody under the final estimator: ``predictions.json`` and
   ``predictions_ann.json`` (see :mod:`.results`). They come from the inference of its step 1, the
@@ -110,15 +110,15 @@ class LoopConfig:
         query_ratio: Share of labeled people after each query, strictly increasing in ``(0, 1]``.
             ``len(query_ratio)`` queries and one more evaluation make the rounds. The run ends
             once the last share of people is labeled: a last share below 1.0 stops there, which
-            labels under a budget on data of your own. The 2023 code queried all remaining people
-            in an extra round after the last share.
+            labels under a budget on data of your own.
         infer_batch_size: People per forward pass of the inference.
         save_final_model: Write the state dict of the final estimator to ``final_estimator.pth``.
         save_estimator: Write the state dict of the estimator to ``estimator.pth`` after every
             round, so that a run stopped early leaves the estimator of its last finished round.
         stopping: Judge the stopping criterion of the paper (SC_All) in every round with a query
-            (``>=``, as the 2023 code) and record it in :attr:`RoundRecord.stopping`; the loop
-            does not stop by itself, so that the annotator decides.
+            (a person is solved at the target OKS ``retrain.finish_acc`` or above) and record it
+            in :attr:`RoundRecord.stopping`; the loop does not stop by itself, so that the
+            annotator decides.
         save_round_details: Write ``details/round_XX.npz`` in every round
             (:mod:`vatl4pose.explain.record`); the selection and the results do not change.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.

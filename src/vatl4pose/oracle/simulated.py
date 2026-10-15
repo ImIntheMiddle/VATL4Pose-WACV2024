@@ -13,7 +13,7 @@ _MAX_IDS_SHOWN = 10
 
 
 class SimulatedOracle:
-    """Answers every request at once with the cached ground truth (paper reproduction).
+    """Answers every request at once with the cached ground truth (the experiments of the paper).
 
     A person without ground truth (``has_gt`` False, a box without keypoints) cannot be answered:
     its cached keypoints are zeros, not labels. A request for such a person raises.

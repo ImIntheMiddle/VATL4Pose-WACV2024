@@ -1,14 +1,13 @@
 """Training of the initial pose estimator, the starting weights of the active-learning loop.
 
-The released weights of 2023 came from two scripts that are not part of this package. This module
-trains them again. The recipe is that of the 2023 SimpleBaseline, FastPose and HRNet-W32 runs:
+The training recipe, the same for SimpleBaseline, FastPose and HRNet-W32:
 
 * Adam on all parameters at one learning rate (default 1e-3, no weight decay), and a
   :class:`~torch.optim.lr_scheduler.MultiStepLR` that multiplies the rate by 0.1 at the epochs in
   ``milestones`` (default 90 and 120). The scheduler steps once per epoch, after its batches.
 * An estimator that starts from the ImageNet backbone (``EstimatorConfig(imagenet_init=True)``)
-  gets the head initialization of the 2023 code: normal(0, 0.001) weights for the upsampling and
-  the output layers, see :meth:`~vatl4pose.models.estimator.SimpleBaselineEstimator.initialize_head`
+  gets normal(0, 0.001) weights for the upsampling and the output layers, see
+  :meth:`~vatl4pose.models.estimator.SimpleBaselineEstimator.initialize_head`
   and :meth:`~vatl4pose.models.estimator.FastPoseEstimator.initialize_head`. An estimator that
   loads a checkpoint (``weights`` or ``InitialTrainConfig.init_weights``) and one without ImageNet
   weights (HRNet-W32, or ``imagenet_init=False``) keeps the initialization it is built with.
@@ -26,9 +25,7 @@ The validation uses the evaluation of the active-learning loop: the person crops
 (:func:`~vatl4pose.eval.pose_score`), and :func:`~vatl4pose.eval.evaluate_predictions` with the OKS
 sigmas of the keypoint spec.
 
-Not ported from the 2023 code: the learning-rate restart and the "DPG" augmentation after epoch
-140, and the multiplication of the batch size by the number of GPUs with ``DataParallel``; this
-module trains on one device with the batch size given.
+The module trains on one device with the batch size given.
 
 Reproducibility: the augmentation of an item is drawn by the dataset from ``(seed, epoch, item)``,
 the order of the items in an epoch comes from
@@ -81,7 +78,7 @@ from vatl4pose.train._common import (
 from vatl4pose.train._files import prepare_output_dir
 from vatl4pose.train.finetune import heatmap_loss
 
-# Factor of the learning rate at every milestone (``LR_FACTOR`` of the 2023 configs).
+# Factor of the learning rate at every milestone.
 LR_GAMMA = 0.1
 # The three files of a run; a run does not start in a directory that holds one of them.
 _OUTPUT_FILES = ("best.pth", "last.pth", "log.jsonl")
@@ -95,8 +92,8 @@ class InitialTrainConfig:
         lr: Learning rate of Adam, the same for every parameter.
         milestones: Numbers of finished epochs at which the rate is multiplied by 0.1: with 90 the
             epoch with index 90, the 91st, is the first at the lower rate. Milestones beyond
-            ``epochs`` are never reached and do no harm: the JRDB-Pose recipe of 2023 trained 100
-            epochs with the milestones 90 and 120.
+            ``epochs`` are never reached and do no harm, so the milestones 90 and 120 work for 100
+            epochs.
         epochs: Number of training epochs.
         batch_size: Items per training and per validation batch.
         val_every: Validate after every ``val_every``-th epoch; the last epoch is always validated.
@@ -166,7 +163,7 @@ def ground_truth_arrays(
     Returns:
         ``(keypoints, boxes_xywh, image_id)`` with one row per person, video after video:
         ``(N, K, 3)`` float64 x, y and visibility; ``(N, 4)`` float64 boxes ``x, y, w, h`` with the
-        width and height counting both end pixels, the box of the 2023 evaluation; ``(N,)``
+        width and height counting both end pixels, the box of the AP protocol of the paper; ``(N,)``
         int64 image ids. Two frames of different videos get different ids, also when the files
         number their images alike.
     """

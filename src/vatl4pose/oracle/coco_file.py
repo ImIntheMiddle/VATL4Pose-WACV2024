@@ -21,7 +21,7 @@ Queries file (COCO keypoints, the format CVAT and Label Studio import)
 * ``annotations``: one per selected person, in ascending order of the sample index, so the file
   lists a set of people and does not depend on the order of the request. ``id`` is the annotation
   id of the source data, ``bbox`` is the raw ``[x, y, w, h]`` box of the source annotation (the
-  box an annotator sees in the original data), and ``attributes.vatl_sample_index`` is the sample
+  box an annotator sees in the source data), and ``attributes.vatl_sample_index`` is the sample
   index in the video cache. ``keypoints`` is the prediction of the estimator as the starting point
   for the annotator: each joint is ``x, y, 2`` where the predicted confidence is above 0 and
   ``x, y, 0`` (not labeled, position kept) otherwise.
@@ -146,29 +146,29 @@ def _first_difference(
     annotation ids are compared first, then the fields of each annotation in the order of
     ``requested``, then the images.
     """
-    old_images, old = _identity(existing, path)
-    new_images, new = _identity(requested, path)
-    only_old = [i for i in old if i not in new]
-    only_new = [i for i in new if i not in old]
-    if only_old or only_new:
+    file_images, in_file = _identity(existing, path)
+    request_images, in_request = _identity(requested, path)
+    only_in_file = [i for i in in_file if i not in in_request]
+    only_in_request = [i for i in in_request if i not in in_file]
+    if only_in_file or only_in_request:
         parts = []
-        if only_old:
-            parts.append(f"annotation id(s) only in the file: {_show(only_old)}")
-        if only_new:
-            parts.append(f"annotation id(s) only in the request: {_show(only_new)}")
+        if only_in_file:
+            parts.append(f"annotation id(s) only in the file: {_show(only_in_file)}")
+        if only_in_request:
+            parts.append(f"annotation id(s) only in the request: {_show(only_in_request)}")
         return "; ".join(parts)
-    for ann_id, fields in new.items():
+    for ann_id, fields in in_request.items():
         for name, value in fields.items():
-            if old[ann_id][name] != value:
+            if in_file[ann_id][name] != value:
                 return (
-                    f"annotation {ann_id}: {name} is {old[ann_id][name]!r} in the file but "
+                    f"annotation {ann_id}: {name} is {in_file[ann_id][name]!r} in the file but "
                     f"{value!r} in the request"
                 )
-    if old_images != new_images:
-        for position, (before, after) in enumerate(zip(old_images, new_images)):
+    if file_images != request_images:
+        for position, (before, after) in enumerate(zip(file_images, request_images)):
             if before != after:
                 return f"images[{position}] is {before!r} in the file but {after!r} in the request"
-        return f"images has {len(old_images)} entries in the file but {len(new_images)} in the request"
+        return f"images has {len(file_images)} entries in the file but {len(request_images)} in the request"
     return None
 
 

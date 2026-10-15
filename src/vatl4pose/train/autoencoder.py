@@ -2,7 +2,7 @@
 
 The autoencoder reconstructs the standardized hybrid feature of a person (:func:`compute_hybrid`).
 It trains on the ground-truth poses of the training split, and the active-learning loop later
-fine-tunes it on the labeled people of one video. The optimizer is that of the 2023 code:
+fine-tunes it on the labeled people of one video. The training:
 
 * AdamW (PyTorch defaults, so a weight decay of 0.01) at ``lr``, lowered to the rates of
   ``lr_steps`` at their epochs (counted from 0); batches of ``batch_size`` rows in a new random
@@ -23,8 +23,7 @@ fine-tunes it on the labeled people of one video. The optimizer is that of the 2
 The features are the hybrid features of the ground truth, one row per person: the raw ``bbox``
 of the annotation (height only), the keypoints with the visibility as the weight of every joint.
 The fine-tuning in the loop builds its features and masks the same way, from the labels of the
-oracle. Every row of the training set is its own person; the 2023 code reused one feature
-dictionary, so its rows were copies of the last person.
+oracle. Every row of the training set is the feature of its own person.
 
 Reproducibility: the order of the rows in an epoch comes from
 :func:`~vatl4pose.train._common.shuffle_order`, and the initial weights are drawn with a generator
@@ -56,7 +55,7 @@ from vatl4pose.models.wholebody_ae import (
 from vatl4pose.train._common import derived_seed, shuffle_order, write_atomic
 from vatl4pose.train._files import prepare_output_dir
 
-# Rows per batch of the validation loss; the 2023 code used 8000.
+# Rows per batch of the validation loss.
 VALID_BATCH_SIZE = 8000
 _OUTPUT_FILES = ("best.pth", "log.jsonl")
 
