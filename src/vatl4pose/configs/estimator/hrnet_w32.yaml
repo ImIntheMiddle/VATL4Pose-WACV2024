@@ -1,2 +1,1 @@
-# `estimator.weights` is set by the experiment or on the command line (null: random initial weights).
 arch: hrnet_w32

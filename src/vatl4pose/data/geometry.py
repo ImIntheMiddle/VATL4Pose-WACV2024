@@ -53,10 +53,8 @@ _CROP_ASPECT: float = INPUT_SIZE[1] / INPUT_SIZE[0]
 def init_loader_worker(worker_id: int) -> None:
     """``worker_init_fn`` of every data loader: run OpenCV on one thread in the worker.
 
-    OpenCV spreads each ``cv2.warpAffine`` over all cores of the host. A crop has only
-    ``INPUT_SIZE`` pixels, so that gains nothing, and the workers of one loader (and the runs of
-    several users on a shared host) then compete for the same cores. One thread per worker is the
-    fastest setting and changes no output.
+    A crop has ``INPUT_SIZE`` pixels, so a multi-threaded ``cv2.warpAffine`` gains nothing and the
+    workers only compete for cores. The output does not change.
     """
     cv2.setNumThreads(1)
 
@@ -144,7 +142,8 @@ def get_affine_transform(
     Three point pairs fix the map. The crop centre goes to the output centre. The point half a
     box width above the centre (turned by ``rot`` degrees around the centre) goes to the point
     half an output width above the output centre. The third pair completes a right angle at the
-    first point. The three source points are rounded to float32 first, like the legacy code.
+    second point (the one above the centre). The three source points are rounded to float32
+    first, like the legacy code.
 
     Args:
         center: ``(2,)`` crop centre ``(x, y)`` in image pixels.
@@ -305,8 +304,8 @@ def heatmaps_to_coords(
 
     Per joint: the arg-max cell (first one on ties) gives the position and its value gives the
     score. A joint with a score of 0 or less is placed on cell ``(0, 0)``. The position moves by
-    a quarter cell toward the larger neighbour along each axis when the cell is at least two cells
-    away from every border. The cell position is then mapped into ``bbox_crop``.
+    a quarter cell toward the larger neighbour along each axis when ``1 < col < hm_w - 1`` and
+    ``1 < row < hm_h - 1``. The cell position is then mapped into ``bbox_crop``.
 
     Args:
         heatmaps: ``(B, K, 64, 48)`` float32.

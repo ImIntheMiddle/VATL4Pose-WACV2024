@@ -1,8 +1,8 @@
 # @package _global_
 # Initial training of SimpleBaseline on PoseTrack21: the 2023 recipe on one device.
-# Paper: Adam, lr 1e-3, early stopping at epoch 62. Legacy configs/posetrack21/simplebaseline_posetrack21.yaml:
-#   BATCH_SIZE 180 (line 57), END_EPOCH 200 (59), OPTIMIZER adam (60), LR 0.001 (61), LR_FACTOR 0.1 (62),
-#   LR_STEP 90, 120 (63-65). The best epoch is chosen by the validation AP; select it against the paper's 62.
+# Paper: Adam, lr 1e-3, early stopping at epoch 62. 2023 configs/posetrack21/simplebaseline_posetrack21.yaml:
+#   batch 180, 200 epochs, Adam, lr 1e-3 with factor 0.1 at epochs 90 and 120.
+# The best epoch is chosen by the validation AP.
 defaults:
   - override /dataset: posetrack21
   - override /estimator: simplebaseline

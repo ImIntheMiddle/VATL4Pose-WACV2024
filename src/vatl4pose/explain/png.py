@@ -108,7 +108,7 @@ def render_pick(
                 )
                 column += 1
             if rd.map_xy is not None:
-                _duw_panel(figure.add_subplot(lower[0, column]), scene, rd, pick)
+                _duw_panel(figure.add_subplot(lower[0, column]), rd, pick)
     if pick.duw is not None:
         figure.text(0.02, 0.02, _duw_text(pick.duw, pick.rank), ha="left", va="bottom", fontsize=9)
     figure.suptitle(_title(scene, rd, pick), fontsize=12, x=0.02, ha="left")
@@ -330,7 +330,7 @@ def _number(value: float, digits: int = 3) -> str:
     return "n/a" if np.isnan(value) else f"{value:.{digits}g}"
 
 
-def _duw_panel(ax: Axes, scene: Scene, rd: RoundData, pick: Pick) -> None:
+def _duw_panel(ax: Axes, rd: RoundData, pick: Pick) -> None:
     assert rd.map_xy is not None
     xy = rd.map_xy
     picked = np.zeros(xy.shape[0], dtype=bool)

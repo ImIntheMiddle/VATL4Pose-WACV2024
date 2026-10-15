@@ -1,7 +1,5 @@
 # PoseTrack21 validation videos of the active-learning experiments (170 videos).
-# The 169 ids of the 2023 list (legacy configs/posetrack21/val_video_list.txt, in its order) plus 015241.
-# Video 015241 is in activelearning/val but was missing from the 2023 list; the 2023 runs and the
-# paper used all 170 videos.
+# The list has 170 videos, as used in the paper.
 000342
 000522
 000583

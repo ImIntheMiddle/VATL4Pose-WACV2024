@@ -126,7 +126,7 @@ def augment_and_crop(
             the unwrapped coordinates of the person (they may lie left of 0 or right of ``W - 1``),
             and the crop reads the frame as a periodic strip (:func:`~.geometry.warp_crop`). A
             flip mirrors the whole strip, so the mirrored person lies at ``W - 1 - x`` in the
-            mirrored strip; no random number is drawn differently.
+            mirrored strip. The random draws are the same as without panorama.
 
     Returns:
         ``(crop, joints, visibility)``: the ``(256, 192, 3)`` uint8 crop, the ``(K, 3)`` float32

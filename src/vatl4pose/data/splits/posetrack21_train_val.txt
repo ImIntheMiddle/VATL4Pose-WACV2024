@@ -1,5 +1,4 @@
 # PoseTrack21 validation videos of the initial training and of the lambda tuning, activelearning/train_val (14 videos).
-# Same ids as the 2023 list configs/posetrack21/trainval_video_list.txt.
 000001
 000002
 000003

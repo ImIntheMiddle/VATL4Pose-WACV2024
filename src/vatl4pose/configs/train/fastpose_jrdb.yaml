@@ -1,9 +1,8 @@
 # @package _global_
 # Training of FastPose on JRDB-Pose, starting from the FastPose retrained on PoseTrack21
 # (run `train=fastpose_posetrack21` first). Paper: 10 training videos, lr 5e-4, 40 epochs.
-# Legacy configs/jrdb-pose/fastpose_jrdb22.yaml: BATCH_SIZE 240 (line 60) on 2 GPUs (WORLD_SIZE 2, line 59;
-#   scripts/jrdbpose_train.py:7 uses GPUs 0 and 1) = 480, END_EPOCH 100 (62), LR 0.0005 (64), LR_FACTOR 0.1 (65),
-#   LR_STEP 90, 120 (66-68; never reached in 40 epochs).
+# 2023 configs/jrdb-pose/fastpose_jrdb22.yaml: batch 240 on 2 GPUs = 480, lr 5e-4, LR_STEP 90, 120
+# (never reached in 40 epochs).
 defaults:
   - override /dataset: jrdb_pose
   - override /estimator: fastpose

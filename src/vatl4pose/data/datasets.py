@@ -6,8 +6,8 @@
   and flip, and builds the heatmap target from the labels given by the oracle.
 
 The initial training of the estimator has no cache, because the people of a whole training split
-would need about 85 kB each. Two datasets read the frames of many :class:`VideoAnnotation` objects
-instead:
+would need one stored crop (147 kB before compression) each. Two datasets read the frames of many
+:class:`VideoAnnotation` objects instead:
 
 * :class:`PersonTrainDataset` yields augmented training items of every annotated person. Its
   augmentation is drawn like that of :class:`FinetuneDataset`.
@@ -196,7 +196,6 @@ class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
         self._augment = augment
         self._seed = seed
         self._round_index = round_index
-        # shared memory: the worker processes of a loader read the epoch that the main process sets
         self._epoch = torch.zeros((), dtype=torch.int64).share_memory_()
         self._frames: OrderedDict[str, np.ndarray] = OrderedDict()
         self._frame_bytes = 0
@@ -286,11 +285,8 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     is the same whenever it is read in the same epoch, whatever the order of reads, the batch size
     or the number of loader workers.
 
-    The epoch is set with :meth:`set_epoch`. It is held in a shared-memory tensor, so the worker
-    processes of a :class:`~torch.utils.data.DataLoader` see it, also when the loader keeps its
-    workers between epochs (``persistent_workers=True``). Call :meth:`set_epoch` between two
-    epochs, not while an iteration is running: a worker may already have prefetched items with
-    the previous epoch. This is the mechanism of :class:`FinetuneDataset`.
+    The epoch is set with :meth:`set_epoch`, as in :class:`FinetuneDataset` (call it between two
+    epochs, not while an iteration is running).
 
     Args:
         videos: Videos with the same keypoint spec and ``panorama`` setting and at least one
@@ -312,7 +308,6 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         self._panorama = videos[0].panorama
         self._augment = augment
         self._seed = seed
-        # shared memory: the worker processes of a loader read the epoch that the main process sets
         self._epoch = torch.zeros((), dtype=torch.int64).share_memory_()
 
     @property

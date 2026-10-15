@@ -1,14 +1,14 @@
 # @package _global_
 # Pretraining of the whole-body autoencoder on PoseTrack21. Paper: Adam, lr 1e-3, 300 epochs.
-# Legacy scripts/wholebodyAE_train.py: AdamW lr 0.001 (line 118), lr 0.0002 at epoch 12 and 0.00005 at
-# epoch 40 (137-140), batch 10000 (125), early stopping patience 30 on the validation loss (120).
+# 2023 script wholebodyAE_train.py: AdamW, lr 1e-3 with steps at epochs 12 (2e-4) and 40 (5e-5),
+# batch 10000, early stopping with patience 30.
 # The features are standardised and the loss is a masked MSE (invisible joints are left out).
-# Epochs: at most 1000, stopped by patience 30. The best epoch was 295 of 300 with the paper's 300
-# epochs, so that run had not converged; with 1000 the shipped run stopped at epoch 443 (best epoch 413).
-# Batch size: chosen by the validation loss (masked MSE in standardised space, seed 166, CPU, 4 threads)
-# among 256 and 1000, which gave 0.2547 (best epoch 413 of 443) and 0.2946 (best epoch 429 of 459);
-# 256, 1000 and 10000 gave 0.2494, 0.2977 and 0.4400 at 300 epochs. A run is reproducible byte for byte
-# with the same number of CPU threads and differs a little with another.
+# Epochs: at most 1000, stopped by patience 30 (the shipped run stopped at epoch 443, best epoch
+# 413; the paper's 300 epochs had not converged).
+# Batch size 256 gave the lowest validation loss (masked MSE in standardised space, seed 166, CPU,
+# 4 threads): 0.2547 against 0.2946 for 1000; at 300 epochs 256, 1000 and 10000 gave 0.2494, 0.2977
+# and 0.4400. A run is reproducible byte for byte with the same number of CPU threads and differs a
+# little with another.
 defaults:
   - override /dataset: posetrack21
 

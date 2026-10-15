@@ -20,9 +20,8 @@ MIN_CONFIDENCE = 0.3
 """Lowest heatmap peak (``maxvals``) of a joint that a drawing of the predictions shows.
 
 A joint that the labels mark as not visible gets no training target, so its prediction can jump
-between frames. In the last round of six videos of the project page (100 % labeled), the joints
-below 0.3 were not visible in the labels in 97 to 100 % of the cases and moved the most from frame
-to frame; the threshold left out 0.01 % of the visible joints there and 4.5 % in round 0.
+between frames. In the last rounds of the result videos of the project page, 97 to 100 % of the
+joints below 0.3 were not visible in the labels.
 """
 
 

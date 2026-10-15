@@ -24,19 +24,17 @@ fields of the keypoint spec, see :func:`spec_sha256`), ``annotation_sha256`` (of
 file, see :func:`annotation_sha256`), ``panorama``, ``created_utc`` and ``vatl4pose_version``.
 ``VideoCache`` compares the spec digest, so a cache is refused for a spec that differs in any field.
 
-``panorama`` tells that the frames are 360-degree panoramas: the crops read the frame as a periodic
-strip (:func:`~vatl4pose.data.geometry.warp_crop`) and the boxes and joints are in the unwrapped
-coordinates of the strip (see :mod:`vatl4pose.data.annotations`). The readers of the cache (the
-fine-tune dataset in particular) crop the original frames the same way when the cache says so, and
+``panorama`` is True for 360-degree frames: the crops, boxes and joints follow the unwrapped-strip
+convention of :mod:`vatl4pose.data.annotations` (crops: :func:`~vatl4pose.data.geometry.warp_crop`).
 ``VideoCache`` refuses a cache whose ``panorama`` differs from the one the caller works with.
 
 The cache holds no feature of the autoencoder. The loop computes the hybrid feature
 (:func:`~vatl4pose.models.wholebody_ae.compute_hybrid`) from ``bbox_json_xywh`` and the labels that
 the oracle returned, which are the ground truth only for the simulated oracle.
 
-``has_gt`` is True where ``keypoints_gt`` holds at least one visible joint. A person without one
-(a box from a detector and a tracker, see :func:`~vatl4pose.data.annotations.read_coco_custom_video`)
-has all-zero ``keypoints_gt``. The simulated oracle and the metrics of the loop need ``has_gt``.
+A person without a visible joint (a detector box, see
+:func:`~vatl4pose.data.annotations.read_coco_custom_video`) has ``has_gt`` False and all-zero
+``keypoints_gt``.
 
 Building decodes and crops the frames in a thread pool (OpenCV releases the interpreter lock).
 One task handles one frame: it decodes the frame once and crops every person in it. The calling
@@ -70,9 +68,7 @@ from .annotations import PersonRecord, VideoAnnotation
 from .geometry import INPUT_SIZE, crop_person, single_threaded_opencv
 
 CACHE_VERSION: int = 4
-"""Version of the file layout; a cache of another version is refused. Version 2 added ``has_gt``,
-version 3 dropped ``hybrid_gt``, which no code read, version 4 added the attribute ``panorama``
-(a cache of an older version holds crops and joints that were made without the seam)."""
+"""Version of the file layout; a cache of another version is refused."""
 
 # Frames handled per round of parallel work, per worker. The crops of a round wait in memory
 # (147 kB each) until the main thread has written them.
@@ -233,9 +229,8 @@ def build_video_cache(
     """Crop every person of ``video`` and write the cache file ``out_path``.
 
     The frames are decoded and cropped by ``num_workers`` threads, each frame once however many
-    people it shows. The file is the same for every ``num_workers``. It is written to ``<out_path>.partial`` and renamed after it is closed; if
-    anything fails, the partial file is removed and ``out_path`` stays as it was. An existing
-    ``out_path`` is replaced.
+    people it shows. The file is the same for every ``num_workers``. If anything fails, the partial
+    file is removed and ``out_path`` stays as it was. An existing ``out_path`` is replaced.
 
     Args:
         video: Samples of one video (any dataset).
@@ -386,6 +381,7 @@ class VideoCache:
             ``(B, 256, 192, 3)`` uint8 RGB tensor.
 
         Raises:
+            ValueError: If ``index`` is not a 1-D integer array.
             IndexError: If an index is outside ``[0, len(self))``.
         """
         idx = np.asarray(index)

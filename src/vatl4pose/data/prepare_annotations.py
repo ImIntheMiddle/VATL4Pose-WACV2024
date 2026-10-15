@@ -351,8 +351,8 @@ def build_jrdb_pose_video(
         image_id = annotation["image_id"]
         if image_id >= JRDB_IMAGE_ID_LIMIT:
             continue
-        # the legacy script took the image at position image_id - 1; v1 requires that this image
-        # has the id image_id, so that reading by position and by id give the same image
+        # the image at position image_id - 1 must have the id image_id, so that reading by
+        # position and by id give the same image
         position = image_id - 1
         if (
             not 0 <= position < len(pose_images)

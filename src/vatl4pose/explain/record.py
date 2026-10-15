@@ -5,17 +5,18 @@ predictions of the round and, for a round that selects people, the scores, the p
 inputs of the THC, WPU and DUW explanations. Building it reads the arrays of the round and draws no
 random numbers, so the selection and the results are the same with and without it.
 
-Keys (``N`` people, ``K`` joints, ``D`` autoencoder inputs, ``k`` picks, ``M`` stored heatmaps):
+Keys (``N`` people, ``K`` joints, ``D`` autoencoder inputs, ``E`` embedding size, ``k`` picks,
+``M`` stored heatmaps):
 
 * always: ``schema``, ``round_index``, ``percentage``, ``image_path``, ``frame_index``,
   ``track_id``, ``ann_id``, ``bbox_crop`` ``(N, 4)``, ``coords`` ``(N, K, 2)``, ``maxvals``
   ``(N, K)``, ``labeled`` ``(N,)`` (before the selection of the round);
 * a round that selects: ``pick_order`` ``(k,)`` in the order of the selection;
-* a selection that scores (not a forced one): ``score/<scorer>`` and ``total`` ``(N,)``, the stored
-  heatmaps ``heatmap_index`` ``(M,)``, ``heatmaps`` ``(M, K, 64, 48)`` uint8, ``heatmap_low`` and
-  ``heatmap_high`` ``(M, K)`` of the picks and their temporal neighbors (value = low + uint8 / 255
-  * (high - low), so negative values keep their sign), and ``embeddings`` ``(N, E)`` float32 if
-  the selector uses them, the values of the selection without rounding;
+* a selection that is not a forced one: the stored heatmaps ``heatmap_index`` ``(M,)``,
+  ``heatmaps`` ``(M, K, 64, 48)`` uint8, ``heatmap_low`` and ``heatmap_high`` ``(M, K)`` of the
+  picks and their temporal neighbors (value = low + uint8 / 255 * (high - low), so negative values
+  keep their sign), and ``embeddings`` ``(N, E)`` float32 if the selector uses them, stored
+  exactly; a strategy with scorers adds ``score/<scorer>`` and ``total`` ``(N,)``;
 * with THC: ``thc_joint`` ``(N, K)``, the per-joint heatmap distance summed like the THC score
   (its mean over the joints is the THC score);
 * with WPU: ``wpu_input``, ``wpu_recon`` ``(N, D)`` standardised, ``wpu_valid`` ``(N, D)`` and

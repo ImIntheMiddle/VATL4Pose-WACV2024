@@ -40,24 +40,20 @@ class RunInfo:
     """What the explanations need to know about the run of a video.
 
     Attributes:
-        run_dir: The directory of the video's run.
         video_id: The video.
         dataset: The dataset name of the run.
         estimator: The estimator architecture.
         strategy: The name of the strategy.
         scorers: The scorers of the strategy (``thc``, ``wpu``, ...), in the order of its settings.
-        selector: The selector of the strategy.
         spec: The keypoint layout that the skeleton is drawn with.
         panorama: Whether the frames are 360-degree strips.
     """
 
-    run_dir: pathlib.Path
     video_id: str
     dataset: str
     estimator: str
     strategy: str
     scorers: tuple[str, ...]
-    selector: str
     spec: KeypointSpec
     panorama: bool
 
@@ -87,13 +83,11 @@ def read_run_info(run_dir: pathlib.Path) -> RunInfo:
         ) from exc
     strategy = settings["strategy"]
     return RunInfo(
-        run_dir=run_dir,
         video_id=str(settings["video_id"]),
         dataset=str(settings["dataset"]),
         estimator=str(settings["estimator"]["arch"]),
         strategy=str(strategy["name"]),
         scorers=tuple(strategy["scorers"]),
-        selector=str(strategy["selector"]),
         spec=spec,
         panorama=bool(settings["panorama"]),
     )

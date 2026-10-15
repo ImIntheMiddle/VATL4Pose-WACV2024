@@ -8,7 +8,7 @@ indexes its arrays by the sample index defined here.
 
 Layouts
 -------
-PoseTrack21 and JRDB-Pose (per-video files made by the dataset preparation scripts)::
+PoseTrack21 and JRDB-Pose (per-video files made by ``vatl4pose-prepare-annotations``)::
 
     <root>/activelearning/<split>/<video_id>_*.json    exactly one match per video
     <root>/<file_name>                                 file_name is read from the JSON
@@ -309,12 +309,10 @@ def unwrap_keypoints(
 ) -> np.ndarray:
     """Move every joint with a position by a whole number of frame widths next to the box.
 
-    A joint is moved by ``k * width`` with ``k = floor((cx - x) / width + 0.5)``, ``cx`` the centre of
-    the box, so that it lies within half a frame width of ``cx``. A joint exactly half a frame width
-    from ``cx`` goes to the copy with the larger x (``np.round`` would round half to even, and send
-    such a joint to the left or the right by the parity of ``k``). Joints at ``(0, 0)`` (not
-    annotated) stay. The visibility column is not touched. The readers use it on the joints of a file, and the
-    COCO-file oracle on the joints that a human drew in the frame.
+    Every joint with a position moves to the copy nearest to the centre of the box (rule: module
+    docstring, Panorama). A joint exactly half a frame width away goes to the copy with the larger
+    x, which ``np.round`` would not do. Joints at ``(0, 0)`` (not annotated) and the visibility
+    column stay. Used by the readers and by the COCO-file oracle.
 
     Args:
         keypoints: ``(K, 3)`` float array of x, y and visibility.

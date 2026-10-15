@@ -333,7 +333,7 @@
 
   function duwSection(pick) {
     var R = round(), s = section("DUW: far from what is annotated, and uncertain");
-    s.appendChild(el("p", { class: "muted", text: "DUW takes the person whose embedding is far from the annotated and the already selected people, and who is uncertain under THC and WPU. The map is a t-SNE projection, so distances on it are only a rough guide; the numbers below are those of the original space." }));
+    s.appendChild(el("p", { class: "muted", text: "DUW takes the person whose embedding is far from the annotated and the already selected people, and who is uncertain under the scores of the strategy. The map is a t-SNE projection, so distances on it are only a rough guide; the numbers below are those of the original space." }));
     s.appendChild(mapCanvas(R, pick));
     var legend = el("p", { class: "legend" });
     [["#b9bec9", "not annotated"], ["#4a4f5c", "annotated"], [P.pick, "selected (numbers: order)"]].forEach(function (e) {
@@ -342,8 +342,8 @@
     s.appendChild(legend);
     var d = pick.duw, rows = [
       ["distance to the nearest annotated or earlier pick", d.distance === null ? "n/a (nobody annotated or selected yet)" : num(d.distance)],
-      ["uncertainty (THC and WPU)", num(d.uncertainty)],
-      ["m (mean OKS of the last round)", num(R.duw.m)],
+      ["uncertainty (total score of the strategy)", num(d.uncertainty)],
+      ["m (mean OKS of the people selected in the previous round)", num(R.duw.m)],
       ["lam", num(R.duw.lam)],
       ["value = (1 - m) * distance + lam * m * uncertainty", d.value === null ? "n/a" : num(d.value)]
     ];
