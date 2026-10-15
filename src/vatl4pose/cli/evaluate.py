@@ -107,7 +107,7 @@ def run(cfg: DictConfig) -> None:
     videos = [read_video(paths, dataset, i, dataset.split) for i in ids]
     spec = keypoint_spec(dataset)
     est_cfg = estimator_config(estimator, spec, paths.weights_root)
-    # the initial weights of a network without a checkpoint follow run.seed
+    # the initial weights of an estimator without a checkpoint follow run.seed
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(run_.seed)
         model = build_estimator(est_cfg, device)

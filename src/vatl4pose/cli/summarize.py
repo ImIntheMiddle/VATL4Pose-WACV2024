@@ -13,17 +13,17 @@ directory and every video of the id list (the dataset's, or ``summarize.ids_file
   ``alc_percent``), so compare ALC values of runs with the same range only. A video without
   ``result.json`` is counted as missing; a video whose curve of a metric holds ``-1`` (no ground
   truth in the area range) is left out of that metric and counted as skipped, as in the 2023
-  summaries. A video whose metrics are ``null`` (some person has no ground-truth keypoints, so the
+  code. A video whose metrics are ``null`` (some person has no ground-truth keypoints, so the
   loop computed no AP and no OSPA) is listed as "no ground truth" and left out of every mean and
   curve; it still counts in ``n_videos``.
 * ``learning_curves_<metric>.png``: the mean over the videos on the 0 to 100 % label grid, one line
   per strategy.
 * ``stopping`` in ``summary.json`` and the stopping table of ``summary.md`` (Table 5 of the paper)
   for a strategy whose videos ran with ``loop.stopping=true``: for each of the three criteria of
-  :mod:`vatl4pose.eval.stopping` (SC_Min, SC_All and the oracle stop) the mean over the videos of
-  the share of labeled people at the stop and, for SC_Min and SC_All, of the AP at OKS θ
+  :mod:`vatl4pose.eval.stopping` (SC_Min, SC_All and the actual stop) the mean over the videos of
+  the share of labeled people at the stop and, for SC_Min and SC_All, of AP@θ
   (``retrain.finish_acc``) at the stop. A video that never meets a criterion stops at 100 % and
-  counts in the means. The oracle stop and the AP come from the ground truth, so a video without it
+  counts in the means. The actual stop and the AP come from the ground truth, so a video without it
   is left out.
 
 The plots are made here, from the saved results, and nowhere else.
@@ -125,18 +125,17 @@ def collect(base: pathlib.Path, ids: list[str]) -> dict[str, dict[str, Any]]:
 def _stopping_summary(
     videos: list[tuple[str, dict[str, Any]]],
 ) -> Optional[dict[str, Any]]:
-    """Table 5 of the paper for the videos of one strategy, or ``None`` without judged videos.
+    """Table 5 for the videos of one strategy, or ``None`` without judged videos.
 
     Returns:
         ``{"theta", "ap_key", "n", criterion: {"labeled_mean", "n_never", "ap_mean"}}`` for
         ``oracle``, ``min_error`` and ``sc_all``. ``labeled_mean`` is the mean share of labeled
         people at the stop in percent and ``n_never`` the number of videos that stop at 100 %.
-        ``ap_mean`` is the mean AP at OKS ``theta`` in percent at the stop (``min_error`` and
-        ``sc_all`` only), ``None`` when the result holds no AP at ``theta`` (``ap_key`` is then
-        ``None`` too).
+        ``ap_mean`` is the mean AP@θ in percent at the stop (``min_error`` and ``sc_all`` only),
+        ``None`` when the result holds no AP@θ (``ap_key`` is then ``None`` too).
 
     Raises:
-        ValueError: If only some of the videos were judged, or they use different values of theta.
+        ValueError: If only some of the videos were judged, or they use different values of θ.
     """
     points = [(video, stop_points(result)) for video, result in videos]
     unjudged = [video for video, point in points if point is None]
@@ -152,8 +151,8 @@ def _stopping_summary(
     thetas = sorted({point.theta for point in stops})
     if len(thetas) != 1:
         raise ValueError(
-            f"the videos were judged with several values of theta: {thetas}; summarize one "
-            "value (one run.name per theta)"
+            f"the videos were judged with several values of the target OKS θ: {thetas}; "
+            "summarize one value (one run.name per θ)"
         )
     theta = thetas[0]
     summary: dict[str, Any] = {"theta": theta, "ap_key": ap_key(theta), "n": len(stops)}
@@ -171,7 +170,8 @@ def _stopping_summary(
 
 
 def _covered_range(results: list[dict[str, Any]]) -> Optional[list[float]]:
-    """``[low, high]``: the largest first and the smallest last label percentage of ``results``."""
+    """``[low, high]`` in percent: the largest first and the smallest last share of labeled people
+    over ``results``."""
     if not results:
         return None
     return [
@@ -251,14 +251,14 @@ def _markdown(title: str, summary: dict[str, dict[str, Any]], n_ids: int) -> str
 
 
 _CRITERION_LABELS = {
-    "min_error": "SC_Min (mean OKS of the queried people)",
-    "sc_all": "SC_All (every annotated person)",
+    "min_error": "SC_Min (mean OKS of the selected people)",
+    "sc_all": "SC_All (every labeled person)",
     "oracle": "actual (every person of the video)",
 }
 
 
 def _stopping_markdown(summary: dict[str, dict[str, Any]]) -> list[str]:
-    """The stopping table (Table 5 of the paper) of the strategies that have one; ``[]`` if none."""
+    """The stopping table (Table 5) of the strategies that have one; ``[]`` if none."""
     judged = {s: e["stopping"] for s, e in summary.items() if e["stopping"] is not None}
     if not judged:
         return []
@@ -269,9 +269,9 @@ def _stopping_markdown(summary: dict[str, dict[str, Any]]) -> list[str]:
         "Table 5 of the paper, with `loop.stopping=true` and θ = `retrain.finish_acc`. A criterion "
         "stops the annotation at the share of labeled people after the first round that meets "
         "it; a video that never meets it stops at 100 % and counts in the means. SC_Min: the "
-        "mean OKS of the people queried in the round reaches θ. SC_All: every person annotated "
+        "mean OKS of the people selected in the round reaches θ. SC_All: every person labeled "
         "so far reaches θ. Actual: every person of the video reaches θ, and the rounds after it "
-        "are ignored, as the 2023 runs ended there. AP@θ is the AP at OKS θ (`performances_ann`) "
+        "are ignored, as the 2023 code stopped there. AP@θ is the AP at OKS θ (`performances_ann`) "
         "in the round nearest to the stop, in percent; the means run over the videos.",
         "",
         "| strategy | θ | videos | criterion | AP@θ (%) | stopped (%) | stopped at 100 % |",
@@ -289,7 +289,7 @@ def _stopping_markdown(summary: dict[str, dict[str, Any]]) -> list[str]:
             )
         if entry["ap_key"] is None:
             notes.append(
-                f"- {strategy}: the results hold no AP at OKS {entry['theta']:g} (only 0.5, 0.6, "
+                f"- {strategy}: the results hold no AP@{entry['theta']:g} (only at 0.5, 0.6, "
                 "0.7, 0.75, 0.8 and 0.95), so AP@θ is not reported"
             )
     if notes:

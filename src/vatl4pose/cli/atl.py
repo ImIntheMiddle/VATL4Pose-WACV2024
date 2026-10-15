@@ -2,11 +2,11 @@
 
     vatl4pose-atl experiment=wacv2024_posetrack21 strategy=thc_wpu_duw run.device=cuda run.shard=0/4
 
-For every video of the shard the command takes the lock of the video's output directory, skips the
+For every video of the shard the command takes the lock of the run directory of the video, skips the
 video if it is done, runs (or resumes) the loop, and marks the video done. The output is
 ``<output_root>/<run.name>/<estimator>/<strategy.name>/<video>/result.json``. Next to it the last
 round writes ``predictions.json`` and ``predictions_ann.json``, the poses of every person of the
-video under the final model, without and with the annotated people's labels (see
+video under the final estimator, without and with the labels of the labeled people (see
 :mod:`vatl4pose.loop.results`). With ``oracle=coco_file`` the run stops at a round whose
 annotations are not in place: the command prints a ``Pending`` line for that video, goes on with
 the next video, and exits with status 0; run it again after annotating.

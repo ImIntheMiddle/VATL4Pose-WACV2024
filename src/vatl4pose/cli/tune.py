@@ -4,9 +4,9 @@
 
 For every lambda the loop runs on the validation videos of the config (``tune.split`` and
 ``tune.ids_file``; the experiments set the 14 PoseTrack21 and 2 JRDB-Pose validation videos) with
-the schedule ``tune.query_ratio`` and the simulated oracle. The objective is the one of the 2023
-tuning: the ALC of ``tune.metric`` (default ``AP .95``) on ``performances_ann``, averaged over the
-videos, on the 0 to 100 scale. The runs go to
+the schedule ``tune.query_ratio`` and the simulated oracle. The objective is the one of the tuning
+in the 2023 code: the ALC of ``tune.metric`` (default ``AP .95``) on ``performances_ann``, averaged
+over the videos, on the 0 to 100 scale. The runs go to
 ``<output_root>/<run.name>/tune/<estimator>/<strategy>/lam_<lam>/<video>/``. A finished run is not
 repeated.
 

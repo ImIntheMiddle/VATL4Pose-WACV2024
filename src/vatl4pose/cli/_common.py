@@ -145,8 +145,8 @@ def run_name(run: RunSection) -> str:
 def torch_device(run: RunSection) -> torch.device:
     """The device of ``run.device``; a CUDA device that does not exist is an error.
 
-    For a CUDA device, cuDNN runs deterministically with autotuning off, as in the 2023 runs of the
-    paper (``--seedfix``).
+    For a CUDA device, cuDNN runs deterministically with autotuning off, as the 2023 code did with
+    the option ``--seedfix`` that the runs of the paper used.
     """
     try:
         device = torch.device(run.device)
@@ -294,7 +294,7 @@ def run_dir_of(
     strategy_name: str,
     video_id: str,
 ) -> pathlib.Path:
-    """Output directory of the atl run of one video."""
+    """Run directory of the atl run of one video."""
     return (
         output_root(paths) / run_name(run) / estimator.arch / strategy_name / video_id
     )
@@ -387,7 +387,7 @@ def _build_loop(
     seed = video_seed(job.loop.seed, cache.video_id)
     spec = cache.spec
     est_cfg = estimator_config(job.estimator, spec, job.paths.weights_root)
-    # the initial weights of a network without a checkpoint follow the seed of the video
+    # the initial weights of an estimator without a checkpoint follow the seed of the video
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(seed)
         estimator = build_estimator(est_cfg, job.device)
@@ -438,7 +438,7 @@ def run_video(
         job: The settings of the run.
         video_id: The video.
         split: The ``activelearning`` sub-directory of the video, ``None`` for ``coco_custom``.
-        run_dir: Output directory of the run of this video.
+        run_dir: Run directory of this video.
         tag: Added to the W&B run name, to tell runs of one video apart (the lambda of ``tune``).
     """
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -581,7 +581,7 @@ def alc_percent(result: dict[str, Any], metric: str) -> Optional[float]:
     labeled people has an ALC of at most that range (a perfect curve up to 20 % gives 20).
 
     A value of ``-1`` (the metric has no ground truth in its area range) makes the curve undefined,
-    as in the 2023 summaries.
+    as in the 2023 code.
     """
     curve = metric_curve(result, metric)
     if any(v < 0.0 for v in curve):

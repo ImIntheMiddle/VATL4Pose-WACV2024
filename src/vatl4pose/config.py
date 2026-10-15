@@ -1,8 +1,8 @@
 """Structured configs of the commands and their conversion to the objects of the library.
 
 The YAML tree in :mod:`vatl4pose.configs` is composed by Hydra on top of the schema :class:`Config`,
-so a misspelt key or a value of the wrong type stops a command at start-up. A command reads only the
-sections it needs (:func:`section`); a section that stays ``???`` (missing) matters only to the
+so a misspelled key or a value of the wrong type stops a command at start-up. A command reads only
+the sections it needs (:func:`section`); a section that stays ``???`` (missing) matters only to the
 commands that read it.
 
 Paths. ``paths.data_root``, ``paths.weights_root`` and ``paths.output_root`` are the three places
@@ -92,13 +92,14 @@ class DatasetSection:
         ids: The video ids themselves; if set they replace ``ids_file``, so that
             ``dataset.ids=[000342]`` selects one video of an experiment. An id with leading zeros
             stays a string.
-        keypoints: The name of a keypoint preset (``coco17``, ``posetrack21``, ``jrdb_pose``) or a
-            mapping with the seven fields of :class:`~vatl4pose.keypoints.KeypointSpec`. Required
-            for ``coco_custom``. ``posetrack21`` and ``jrdb_pose`` use their own preset when it is
-            ``null``; set it to swap the joint definitions (flip pairs, OKS sigmas, angle triplets)
-            of the paper datasets, for example in an A/B run. The annotation files must have the
-            joint count of the spec, and a cache is bound to the spec (build it again with the new
-            spec, in another ``paths.output_root``).
+        keypoints: The name of a preset keypoint spec (``coco17``, ``posetrack21``,
+            ``jrdb_pose``) or a mapping with the seven fields of
+            :class:`~vatl4pose.keypoints.KeypointSpec`. Required for ``coco_custom``.
+            ``posetrack21`` and ``jrdb_pose`` use their own preset when it is ``null``; set it to
+            swap the keypoint spec (flip pairs, OKS sigmas, angle triplets) of the paper datasets,
+            for example in an A/B run. The annotation files must have the joint count of the
+            spec, and a cache is bound to the spec (build it again with the new spec, in another
+            ``paths.output_root``).
         panorama: Whether the frames are 360-degree panoramas whose right edge continues at the
             left edge. The JRDB-Pose frames are, so ``jrdb_pose.yaml`` sets it to ``true``; set it
             for ``coco_custom`` to treat your own 360-degree video the same way (the readers place
@@ -118,7 +119,7 @@ class DatasetSection:
 
 @dataclass
 class EstimatorSection:
-    """The pose network: ``simplebaseline``, ``fastpose`` or ``hrnet_w32``.
+    """The pose estimator: ``simplebaseline``, ``fastpose`` or ``hrnet_w32``.
 
     ``weights`` has no default, so that a run never starts from random weights by mistake: give a
     file (relative to ``paths.weights_root``) or ``null`` (random initial weights, or the ImageNet
@@ -132,7 +133,7 @@ class EstimatorSection:
 
 @dataclass
 class AESection:
-    """The pretrained whole-body autoencoder of the WPU uncertainty, relative to ``paths.weights_root``."""
+    """The pretrained whole-body autoencoder of WPU, relative to ``paths.weights_root``."""
 
     checkpoint: Optional[str] = None
 
@@ -150,7 +151,7 @@ class StrategySection:
 
 @dataclass
 class OracleSection:
-    """The source of the labels: ``simulated`` (the ground truth) or ``coco_file`` (a human)."""
+    """The source of the labels: ``simulated`` (ground truth) or ``coco_file`` (an annotator)."""
 
     name: str = "simulated"
 
@@ -190,7 +191,7 @@ class LoopSection:
 
 @dataclass
 class RetrainSection:
-    """Mirror of :class:`~vatl4pose.train.RetrainConfig`, the fine-tuning of every round."""
+    """Mirror of :class:`~vatl4pose.train.RetrainConfig`, the retraining of every round."""
 
     optimizer: str = "adamw"
     lr: float = 2.5e-4
@@ -290,8 +291,9 @@ class TuneSection:
     """``vatl4pose-tune``: the weights ``lams`` tried on the validation videos.
 
     The videos are ``split`` and ``ids_file`` (the experiments set them to the validation
-    videos). ``query_ratio`` replaces ``loop.query_ratio`` during the tuning (the 2023 tuning used
-    a shorter schedule); ``metric`` is the key of ``performances_ann`` whose ALC is compared.
+    videos). ``query_ratio`` replaces ``loop.query_ratio`` during the tuning (the tuning of the
+    2023 code used a shorter schedule); ``metric`` is the key of ``performances_ann`` whose ALC is
+    compared.
     """
 
     lams: list[float] = field(default_factory=list)

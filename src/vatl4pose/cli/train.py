@@ -4,7 +4,7 @@
     vatl4pose-train train=fastpose_jrdb run.device=cuda          # after fastpose_posetrack21
     vatl4pose-train train=ae_posetrack21
 
-The ``train`` configs hold the recipe of the 2023 runs (the learning rates, milestones and batch
+The ``train`` configs hold the 2023 recipe (the learning rates, milestones and batch
 sizes, with the validation AP of the loop selecting the best epoch). For your own data use
 ``train.target=estimator`` or ``train.target=ae`` with ``dataset=coco_custom``,
 ``train.train_ids_file`` and ``train.val_ids_file``. Outputs go to

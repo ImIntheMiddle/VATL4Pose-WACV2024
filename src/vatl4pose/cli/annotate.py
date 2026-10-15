@@ -1,4 +1,4 @@
-"""Launch the local video annotation application of the ``annotation/`` folder."""
+"""Launch the local video annotation application of the ``annotation/`` directory."""
 
 from __future__ import annotations
 import argparse
@@ -10,7 +10,7 @@ TOOLS_ENV = "VATL4POSE_ANNOTATION_ROOT"
 
 
 def default_tools_root() -> Path:
-    """The ``annotation/`` folder of the repository that holds this package."""
+    """The ``annotation/`` directory of the repository that holds this package."""
     return Path(__file__).resolve().parents[3] / "annotation"
 
 
@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--tools",
         type=Path,
-        help="Path to the annotation folder; the default is annotation/ of the "
+        help="Path to the annotation directory; the default is annotation/ of the "
         f"repository ({TOOLS_ENV} sets it too)",
     )
     parser.add_argument("--output", type=Path)
@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--target-oks",
         type=float,
-        help="Accuracy θ of the stopping criterion of the paper, an OKS in (0, 1)",
+        help="Target OKS θ of the stopping criterion of the paper, an OKS in (0, 1)",
     )
     args = parser.parse_args(argv)
     if (args.video is None) == (not args.sample):
@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> None:
         )
     video = (root / "samples/people.mp4") if args.sample else args.video.resolve()
     if not video.is_file():
-        hint = "; the repository has no sample clip, put your own there" if args.sample else ""
+        hint = "; the repository has no sample video, put your own there" if args.sample else ""
         parser.error(f"Video does not exist: {video}{hint}")
     if not setup_ready(root):
         from vatl4pose.execution.process import run_child

@@ -133,7 +133,7 @@ def check_settings(run_dir: pathlib.Path, current: dict[str, Any]) -> bool:
 
     A run directory holds a run once it has a ``state`` directory, ``oracle`` files, a result or a
     done marker. A start that failed before that (a missing autoencoder checkpoint, weights that do
-    not fit the network) leaves a ``settings.json`` that no run depends on, so other settings
+    not fit the estimator) leaves a ``settings.json`` that no run depends on, so other settings
     replace it and the corrected start needs no new ``run.name``.
 
     Returns:
