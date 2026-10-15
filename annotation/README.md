@@ -51,7 +51,7 @@ The tools cannot edit boxes or track IDs, and the tracking stays fixed for the s
 
 The cumulative share of annotated people follows `loop.query_ratio` of the package, which is 5, 10, 15, 20, 30, 40, 60, 80 and 100 % by default. The loop counts a person once per frame, so the first round asks for 5 % of the people.
 
-When you press Train, the session exports the answers from Label Studio, checks that every task has a saved answer and writes them as the answers of the round. It retrains the estimator on them, writes the estimator, selects the next people and renders the results video. The page then shows the results of the round. The left side plays a video of the keypoints of everyone in the clip under the retrained estimator. The right side shows the round, the path of `estimator.pth` and two buttons, "Start round N" and "Finish here". When the loop has labeled everybody, the page reports that the session is complete.
+When you press Train, the session exports the answers from Label Studio, checks that every task has a saved answer and writes them as the answers of the round. It retrains the estimator on them, writes the estimator, selects the next people and renders the results video. The page then shows the results of the round. The left side plays a video of the keypoints of everyone in the clip under the retrained estimator, without the joints whose confidence is below 0.3. The right side shows the round, the path of `estimator.pth` and two buttons, "Start round N" and "Finish here". When the loop has labeled everybody, the page reports that the session is complete.
 
 ## Stopping criterion
 

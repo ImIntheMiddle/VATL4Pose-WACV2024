@@ -4,8 +4,9 @@ After the training of round ``r`` the loop estimates the joints of every person 
 ``r + 1`` and keeps them in ``state/pending_{r+1}/predictions.npy``, in the order of the samples of
 the video cache. The video draws them on every frame of the video in the colours of the editor
 (left joints blue, right red, the others green), with the limbs of the keypoint spec. The joints
-that the spec never annotates are left out. The video of a round is written once, under
-``estimates/`` of the session.
+that the spec never annotates and those below the confidence threshold of the drawings
+(:data:`vatl4pose.explain.draw.MIN_CONFIDENCE`) are left out, with their limbs. The video of a
+round is written once, under ``estimates/`` of the session.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import numpy as np
 from annotation.labelstudio.queries_to_labelstudio import joint_color
 from annotation.videos import write_video, written_once
 from vatl4pose.data.cache import VideoCache
+from vatl4pose.explain.draw import shown_joints
 from vatl4pose.keypoints import KeypointSpec, get_spec
 
 
@@ -31,13 +33,18 @@ def _bgr(hex_colour: str) -> tuple[int, int, int]:
 def draw_people(
     image: np.ndarray, coords: np.ndarray, spec: KeypointSpec
 ) -> np.ndarray:
-    """``image`` with the skeletons of ``coords`` (``(n, K, >=2)`` x, y in pixels) drawn."""
-    assert coords.ndim == 3 and coords.shape[1] == spec.num_joints, coords.shape
+    """``image`` with the skeletons of ``coords`` drawn.
+
+    ``coords`` is ``(n, K, 3)``: x and y in pixels and the confidence of the joint.
+    """
+    assert coords.ndim == 3 and coords.shape[1:] == (spec.num_joints, 3), coords.shape
     out = image.copy()
-    skip = set(spec.redundant_joints)
     t = max(2, round(2.2 * image.shape[0] / 480))
-    for xy in coords[:, :, :2]:
-        points = [tuple(int(v) for v in np.round(p)) for p in xy]
+    for person in coords:
+        skip = set(spec.redundant_joints) | set(
+            np.flatnonzero(~shown_joints(person[:, 2])).tolist()
+        )
+        points = [tuple(int(v) for v in np.round(p)) for p in person[:, :2]]
         for a, b in spec.skeleton:
             if a in skip or b in skip:
                 continue
