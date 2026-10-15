@@ -1,10 +1,10 @@
 """``explain/index.html`` and ``explain/data.js``: the page for looking at one video.
 
 The page is one HTML file that runs from ``file://`` and loads nothing from the network. Its data
-is a script, ``data.js``, that sets ``window.VATL_EXPLAIN``: a script loads from a local folder where
-``fetch`` is blocked. The frames of the video are JPEG files of ``frames/``, the person crops that the
-figures show are JPEG files of ``crops/``; the browser draws the skeletons, boxes and figures
-itself from the numbers of ``data.js``.
+is a script, ``data.js``, that sets ``window.VATL_EXPLAIN``: a script loads from a local directory
+where ``fetch`` is blocked. The frames of the video are JPEG files of ``frames/``, the person crops
+that the figures show are JPEG files of ``crops/``; the browser draws the skeletons, boxes and
+figures itself from the numbers of ``data.js``.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def frame_name(position: int) -> str:
 
 
 def crop_name(sample: int) -> str:
-    """The path of the crop of person ``sample`` below ``explain/``."""
+    """The path of the crop of the person with sample index ``sample`` below ``explain/``."""
     return f"{CROPS_DIR}/person_{sample:06d}.jpg"
 
 

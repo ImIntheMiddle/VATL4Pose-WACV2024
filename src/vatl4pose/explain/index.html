@@ -247,7 +247,7 @@
 
   function thcSection(pick) {
     var thc = pick.thc, s = section("THC: how the heatmaps change over three frames");
-    s.appendChild(el("p", { class: "muted", text: "THC scores a person high when the heatmaps of its joints differ from those of the same track in the previous and next frame. The three joints that differ most are drawn in colour; the colour shows the positive part of each heatmap, and THC also counts the negative cells." }));
+    s.appendChild(el("p", { class: "muted", text: "THC scores a person high when the heatmaps of its joints differ from those of the same track in the previous and next frame. The three joints that differ most are drawn in color; the color shows the positive part of each heatmap, and THC also counts the negative cells." }));
     var canvas = el("canvas", { class: "figure", width: 3 * 192 + 2 * 8, height: 256 });
     s.appendChild(canvas);
     var ctx = canvas.getContext("2d");
@@ -283,7 +283,7 @@
     var wpu = pick.wpu, s = section("WPU: how far the pose is from a plausible pose");
     var offsets = wpu.offsets.reduce(function (a, b) { return a + b; }, 0), angles = wpu.angles.reduce(function (a, b) { return a + b; }, 0);
     var share = function (v) { return Math.round(100 * v / (offsets + angles)) + " %"; };
-    s.appendChild(el("p", { class: "muted", text: "An autoencoder trained on whole-body poses reconstructs the predicted pose. WPU scores a person high when the reconstruction differs from the prediction, in the joint offsets and in the angles at the joints. Of this score, the offsets hold " + share(offsets) + " and the angles " + share(angles) + "; the skeletons show the offsets only. The joints with the largest parts are circled in red." }));
+    s.appendChild(el("p", { class: "muted", text: "A whole-body autoencoder reconstructs the predicted pose. WPU scores a person high when the reconstruction differs from the prediction, in the joint offsets and in the angles at the joints. Of this score, the offsets hold " + share(offsets) + " and the angles " + share(angles) + "; the skeletons show the offsets only. The joints with the largest parts are circled in red." }));
     var canvas = el("canvas", { class: "figure", width: 192, height: 256 });
     s.appendChild(canvas);
     var ctx = canvas.getContext("2d");
@@ -326,16 +326,16 @@
   }
 
   function duwSection(pick) {
-    var R = round(), s = section("DUW: far from what is annotated, and uncertain");
-    s.appendChild(el("p", { class: "muted", text: "DUW takes the person whose embedding is far from the annotated and the already selected people, and who is uncertain under the scores of the strategy. The map is a t-SNE projection, so distances on it are only a rough guide; the numbers below are those of the original space." }));
+    var R = round(), s = section("DUW: far from the labeled people, and uncertain");
+    s.appendChild(el("p", { class: "muted", text: "DUW takes the person whose embedding is far from the labeled and the already selected people, and who is uncertain under the scores of the strategy. The map is a t-SNE projection, so distances on it are only a rough guide; the numbers below are those of the original space." }));
     s.appendChild(mapCanvas(R, pick));
     var legend = el("p", { class: "legend" });
-    [["#b9bec9", "not annotated"], ["#4a4f5c", "annotated"], [P.pick, "selected (numbers: order)"]].forEach(function (e) {
+    [["#b9bec9", "not labeled"], ["#4a4f5c", "labeled"], [P.pick, "selected (numbers: order)"]].forEach(function (e) {
       legend.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + e[0] }), document.createTextNode(e[1])]));
     });
     s.appendChild(legend);
     var d = pick.duw, rows = [
-      ["distance to the nearest annotated or earlier pick", d.distance === null ? "n/a (nobody annotated or selected yet)" : num(d.distance)],
+      ["distance to the nearest labeled person or earlier pick", d.distance === null ? "n/a (nobody labeled or selected yet)" : num(d.distance)],
       ["uncertainty (total score of the strategy)", num(d.uncertainty)],
       ["m (mean OKS of the people selected in the previous round)", num(R.duw.m)],
       ["lam", num(R.duw.lam)],
@@ -368,7 +368,7 @@
     box.appendChild(head);
     box.appendChild(el("p", { class: "muted", text: "round " + R.round + " (" + pct(R.percentage) + " labeled) · frame " + (D.people.frame[p] + 1) + " · track " + D.people.track[p] }));
     if (!rank) {
-      box.appendChild(el("p", { text: R.labeled[p] === 1 ? "This person was annotated before the round." : "The round did not select this person." }));
+      box.appendChild(el("p", { text: R.labeled[p] === 1 ? "This person was labeled before the round." : "The round did not select this person." }));
       return;
     }
     var pick = R.picks.filter(function (k) { return k.rank === rank; })[0];
@@ -431,10 +431,10 @@
   function renderLegend() {
     var box = $("legend");
     box.textContent = "";
-    [[P.pick, "selected, numbered in the order of the selection"], ["#00a99d", "annotated before the round (dashed)"]].forEach(function (e) {
+    [[P.pick, "selected, numbered in the order of the selection"], ["#00a99d", "labeled before the round (dashed)"]].forEach(function (e) {
       box.appendChild(el("span", {}, [el("i", { class: "swatch", style: "background:" + e[0] }), document.createTextNode(e[1])]));
     });
-    box.appendChild(el("span", { text: "Skeletons: the predictions of the model of this round." }));
+    box.appendChild(el("span", { text: "Skeletons: the predictions of the pose estimator of this round." }));
   }
 
   function setRound(index) {

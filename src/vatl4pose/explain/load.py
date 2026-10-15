@@ -1,9 +1,9 @@
 """Read the run directory of a video for the explanations.
 
 The explanations need three files of the directory that ``vatl4pose-atl`` wrote for a video:
-``settings.json`` (what the run was: keypoint layout, panorama, strategy), the ``details/round_XX.npz``
-files of :mod:`vatl4pose.explain.record`, and the images of the video, whose absolute paths the
-details hold.
+``settings.json`` (what the run was: keypoint spec, panorama, strategy), the
+``details/round_XX.npz`` files of :mod:`vatl4pose.explain.record`, and the frames of the video,
+whose absolute paths the details hold.
 """
 
 from __future__ import annotations
@@ -42,10 +42,10 @@ class RunInfo:
     Attributes:
         video_id: The video.
         dataset: The dataset name of the run.
-        estimator: The estimator architecture.
+        estimator: The pose estimator architecture.
         strategy: The name of the strategy.
         scorers: The scorers of the strategy (``thc``, ``wpu``, ...), in the order of its settings.
-        spec: The keypoint layout that the skeleton is drawn with.
+        spec: The keypoint spec that the skeleton is drawn with.
         panorama: Whether the frames are 360-degree strips.
     """
 
@@ -63,7 +63,7 @@ def read_run_info(run_dir: pathlib.Path) -> RunInfo:
 
     Raises:
         FileNotFoundError: If ``run_dir`` has no ``settings.json``, so it is no run directory.
-        ValueError: If the run used a keypoint layout of its own, which the settings do not hold
+        ValueError: If the run used a keypoint spec of its own, which the settings do not hold
             (only its name), so that the skeleton cannot be drawn.
     """
     path = run_dir / SETTINGS_NAME
@@ -78,7 +78,7 @@ def read_run_info(run_dir: pathlib.Path) -> RunInfo:
         spec = get_spec(name)
     except ValueError as exc:
         raise ValueError(
-            f"{path}: the run used the keypoint layout {name!r}, which is not a preset; the "
+            f"{path}: the run used the keypoint spec {name!r}, which is not a preset; the "
             "skeleton can be drawn for coco17, posetrack21 and jrdb_pose only"
         ) from exc
     strategy = settings["strategy"]
@@ -97,7 +97,7 @@ def recorded_rounds(run_dir: pathlib.Path) -> list[int]:
     """The rounds that have a details file, in ascending order.
 
     Raises:
-        FileNotFoundError: If the directory has no ``details/`` folder or no file in it; the run
+        FileNotFoundError: If the directory has no ``details/`` directory or no file in it; the run
             was made without ``loop.save_round_details=true``.
     """
     folder = run_dir / DETAILS_DIR
@@ -138,10 +138,10 @@ def load_round(run_dir: pathlib.Path, round_index: int) -> dict[str, np.ndarray]
 def neighbor_index(
     track_id: np.ndarray, frame_index: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """The sample of the same track in the nearest earlier and later frame, or ``-1``.
+    """The index of the person of the same track in the nearest earlier and later frame, or ``-1``.
 
     The same links as the ``prev_index`` and ``next_index`` of the video cache, which the details
-    do not hold: a frame where the track has no sample is skipped.
+    do not hold: a frame where the track has no person is skipped.
     """
     n = track_id.shape[0]
     assert frame_index.shape == (n,)
@@ -161,7 +161,7 @@ def neighbor_index(
 def frame_groups(
     image_path: np.ndarray, frame_index: np.ndarray
 ) -> list[tuple[str, np.ndarray]]:
-    """The frames of the video in order: ``(image path, samples in the frame)``.
+    """The frames of the video in order: ``(image path, sample indices of its people)``.
 
     Raises:
         ValueError: If two paths share a frame index, or one path has two frame indices.
@@ -185,7 +185,7 @@ def locate_images(
 ) -> dict[str, pathlib.Path]:
     """Where each recorded image path is now.
 
-    Without ``image_root`` an image is where the details say. With it, the folder that all the
+    Without ``image_root`` an image is where the details say. With it, the directory that all the
     images share is replaced by ``image_root`` and the names below it stay.
 
     Raises:
@@ -200,6 +200,6 @@ def locate_images(
     if missing:
         raise FileNotFoundError(
             f"{len(missing)} of {len(found)} images are missing, for example {missing[0]}; "
-            "give the folder that holds them now with --image-root"
+            "give the directory that holds them now with --image-root"
         )
     return found

@@ -5,8 +5,8 @@ predictions of the round and, for a round that selects people, the scores, the p
 inputs of the THC, WPU and DUW explanations. Building it reads the arrays of the round and draws no
 random numbers, so the selection and the results are the same with and without it.
 
-Keys (``N`` people, ``K`` joints, ``D`` autoencoder inputs, ``E`` embedding size, ``k`` picks,
-``M`` stored heatmaps):
+Keys (``N`` people, ``K`` joints, ``D`` inputs of the whole-body autoencoder, ``E`` embedding size,
+``k`` picks, ``M`` stored heatmaps):
 
 * always: ``schema``, ``round_index``, ``percentage``, ``image_path``, ``frame_index``,
   ``track_id``, ``ann_id``, ``bbox_crop`` ``(N, 4)``, ``coords`` ``(N, K, 2)``, ``maxvals``
@@ -19,11 +19,11 @@ Keys (``N`` people, ``K`` joints, ``D`` autoencoder inputs, ``E`` embedding size
   exactly; a strategy with scorers adds ``score/<scorer>`` and ``total`` ``(N,)``;
 * with THC: ``thc_joint`` ``(N, K)``, the per-joint heatmap distance summed like the THC score
   (its mean over the joints is the THC score);
-* with WPU: ``wpu_input``, ``wpu_recon`` ``(N, D)`` standardised, ``wpu_valid`` ``(N, D)`` and
+* with WPU: ``wpu_input``, ``wpu_recon`` ``(N, D)`` standardized, ``wpu_valid`` ``(N, D)`` and
   ``wpu_recon_coords`` ``(N, K, 2)``, the reconstructed joints in image coordinates;
 * with the DUW selector: ``duw_distance``, ``duw_uncertainty``, ``duw_value`` ``(k,)`` of every
   pick at the time of the pick, ``duw_moks`` and ``duw_lam``. A pick made with nothing labeled
-  and nothing picked has no distance and takes the most uncertain person; its distance and
+  and nothing selected has no distance and takes the most uncertain person; its distance and
   value are NaN.
 """
 
@@ -59,7 +59,7 @@ def prediction_details(
     maxvals: np.ndarray,
     labeled: np.ndarray,
 ) -> dict[str, np.ndarray]:
-    """The keys that every round has: who is where and what the model of the round predicts."""
+    """The keys that every round has: who is where and what the pose estimator predicts."""
     n = labeled.shape[0]
     assert coords.ndim == 3 and coords.shape[0] == n and coords.shape[2] == 2, (
         coords.shape
@@ -161,11 +161,11 @@ def thc_per_joint(ctx: RoundContext) -> np.ndarray:
 
 
 def wpu_details(ctx: RoundContext, ae: WholeBodyAE) -> dict[str, np.ndarray]:
-    """Standardised input, reconstruction and reconstructed joints of every person.
+    """Standardized input, reconstruction and reconstructed joints of every person.
 
     The hybrid feature starts with the joint offsets ``(x - c_x) / h`` and ``(y - c_y) / h``. The
-    reconstructed joints undo the standardisation of these columns and map them back with the
-    centre ``c`` and the box height ``h`` of the predicted pose.
+    reconstructed joints undo the standardization of these columns and map them back with the
+    center ``c`` and the box height ``h`` of the predicted pose.
     """
     spec = ctx.spec
     k = spec.num_joints

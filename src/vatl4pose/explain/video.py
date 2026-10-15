@@ -1,10 +1,10 @@
 """The prediction videos of the rounds, written as H.264.
 
-``round_XX.mp4`` shows the poses that the model of round ``XX`` predicts for everybody, drawn into
-the frames at their original resolution. ``compare_00_XX.mp4`` shows round 0 and round ``XX`` of the
-same frames side by side (one above the other for a panorama). The writer is the ffmpeg of the
-``imageio-ffmpeg`` package, an optional dependency (``pip install "vatl4pose[explain]"``): the pip
-build of OpenCV has no H.264 encoder.
+``round_XX.mp4`` shows the poses that the pose estimator of round ``XX`` predicts for everybody,
+drawn into the frames at their original resolution. ``compare_00_XX.mp4`` shows round 0 and round
+``XX`` of the same frames side by side (one above the other for a panorama). The writer is the
+ffmpeg of the ``imageio-ffmpeg`` package, an optional dependency
+(``pip install "vatl4pose[explain]"``): the pip build of OpenCV has no H.264 encoder.
 """
 
 from __future__ import annotations

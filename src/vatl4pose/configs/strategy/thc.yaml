@@ -1,4 +1,4 @@
-# THC: temporal heatmap consistency (proposed uncertainty, top-k selection).
+# Temporal Heatmap Continuity (THC): the proposed uncertainty with top-k selection.
 name: THC
 scorers: [thc]
 combiner: single

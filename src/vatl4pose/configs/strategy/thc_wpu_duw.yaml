@@ -1,4 +1,4 @@
-# THC+WPU+DUW: the proposed method, Core-Set selection weighted by THC+WPU (paper).
+# The proposed method (THC, WPU and DUW): Core-Set selection weighted by THC+WPU.
 name: THC+WPU_Coresetfilter
 scorers: [thc, wpu]
 combiner: minmax_sum

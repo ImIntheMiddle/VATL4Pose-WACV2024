@@ -110,7 +110,11 @@ def write_crops(
     files: dict[str, pathlib.Path],
     samples: list[int],
 ) -> dict[int, np.ndarray]:
-    """Write the crop of each of ``samples`` as ``crops/person_XXXXXX.jpg``; returns the crops."""
+    """Write the crop of each person in ``samples`` (sample indices) as ``crops/person_XXXXXX.jpg``.
+
+    Returns:
+        The crops by sample index.
+    """
     wanted = set(samples)
     crops: dict[int, np.ndarray] = {}
     for path, rows in scene.frames:
@@ -147,7 +151,7 @@ def explain(
     Args:
         run_dir: The run directory of one video.
         rounds: The rounds to explain; ``None`` takes every round with details.
-        image_root: The folder that holds the images now, if they are not where the details say.
+        image_root: The directory that holds the frames now, if they are not where the details say.
         max_picks: The number of picks of a round that get a figure and a PNG. All picks of a
             round are numbered in the page.
         video: Whether to write the videos, which need the ``explain`` extra.
@@ -263,13 +267,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--image-root",
         type=pathlib.Path,
         default=None,
-        help="folder that holds the images of the video now, if they moved",
+        help="directory that holds the frames of the video now, if they moved",
     )
     parser.add_argument(
         "--max-picks",
         type=int,
         default=DEFAULT_MAX_PICKS,
-        help="picks per round that get a figure and a PNG, first picked first "
+        help="picks per round that get a figure and a PNG, in the order of the selection "
         f"(default: {DEFAULT_MAX_PICKS})",
     )
     parser.add_argument(

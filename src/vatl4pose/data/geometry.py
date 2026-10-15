@@ -1,23 +1,23 @@
 """Person crops, heatmap decoding and training targets.
 
-Every pose model of the package reads a ``256 x 192`` (height x width) crop of one person and
+Every pose estimator of the package reads a ``256 x 192`` (height x width) crop of one person and
 predicts one ``64 x 48`` heatmap per joint. This module holds the geometry around that interface:
 
-* box to crop-centre and scale (:func:`box_to_center_scale`, :func:`center_scale_to_box`),
+* box to crop-center and scale (:func:`box_to_center_scale`, :func:`center_scale_to_box`),
 * the affine map between image and crop (:func:`get_affine_transform`),
-* cropping and normalising (:func:`crop_person`, :func:`warp_crop`, :func:`to_input_tensor`),
+* cropping and normalizing (:func:`crop_person`, :func:`warp_crop`, :func:`to_input_tensor`),
 * decoding heatmaps into image coordinates (:func:`heatmaps_to_coords`, :func:`coords_in_box`),
 * Gaussian training targets (:func:`make_targets`).
 
-The numbers follow the 2023 inference code of the paper exactly, including its float32 steps:
+The numbers follow the 2023 code exactly, including its float32 steps:
 
-* The crop centre and scale are float32. Both come from float64 arithmetic on the box.
+* The crop center and scale are float32. Both come from float64 arithmetic on the box.
 * The three reference points of the affine map are rounded to float32 before the 2x3 matrix is
   solved. :func:`heatmaps_to_coords` repeats this rounding, so decoded coordinates of large
-  images (JRDB-Pose frames are 3760 pixels wide) equal the legacy ones.
+  images (JRDB-Pose frames are 3760 pixels wide) equal those of the 2023 code.
 * Both axes of the heatmap-to-image map use the box *width* divided by the heatmap width. A box
   with the crop aspect ratio makes this equal to height divided by heatmap height.
-* A crop is not clipped to the image: parts outside the frame are black. With ``panorama`` the
+* A crop is not clipped to the frame: parts outside the frame are black. With ``panorama`` the
   left and right edges are the same seam: parts beyond them show the other end of the frame, and
   only the parts above and below the frame are black (:func:`warp_crop`).
 
@@ -73,7 +73,7 @@ def single_threaded_opencv() -> Iterator[None]:
 def box_to_center_scale(
     bbox_xyxy: np.ndarray, aspect: float = 192 / 256, scale_mult: float = 1.25
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Turn a box into the centre and the size of the region that is cropped.
+    """Turn a box into the center and the size of the region that is cropped.
 
     The box grows on one side until its width over height equals ``aspect``, then both sides are
     multiplied by ``scale_mult``. The width of the box is ``xmax - xmin`` (no ``+ 1``). A box with
@@ -111,11 +111,11 @@ def box_to_center_scale(
 
 
 def center_scale_to_box(center: np.ndarray, scale: np.ndarray) -> np.ndarray:
-    """Return the box ``(xmin, ymin, xmax, ymax)`` of a crop centre and size, in float64."""
+    """Return the box ``(xmin, ymin, xmax, ymax)`` of a crop center and size, in float64."""
     c = np.asarray(center, dtype=np.float64)
     s = np.asarray(scale, dtype=np.float64)
     assert c.shape == (2,) and s.shape == (2,), (
-        f"expected (2,) centre and scale, got {c.shape}, {s.shape}"
+        f"expected (2,) center and scale, got {c.shape}, {s.shape}"
     )
     xmin = c[0] - s[0] * 0.5
     ymin = c[1] - s[1] * 0.5
@@ -139,14 +139,14 @@ def get_affine_transform(
 ) -> np.ndarray:
     """Affine map between the crop region and the output crop, as a ``(2, 3)`` float64 matrix.
 
-    Three point pairs fix the map. The crop centre goes to the output centre. The point half a
-    box width above the centre (turned by ``rot`` degrees around the centre) goes to the point
-    half an output width above the output centre. The third pair completes a right angle at the
-    second point (the one above the centre). The three source points are rounded to float32
-    first, like the legacy code.
+    Three point pairs fix the map. The crop center goes to the output center. The point half a
+    box width above the center (turned by ``rot`` degrees around the center) goes to the point
+    half an output width above the output center. The third pair completes a right angle at the
+    second point (the one above the center). The three source points are rounded to float32
+    first, like the 2023 code.
 
     Args:
-        center: ``(2,)`` crop centre ``(x, y)`` in image pixels.
+        center: ``(2,)`` crop center ``(x, y)`` in image pixels.
         scale: ``(2,)`` crop size ``(width, height)`` in image pixels; only the width is used.
         rot: Rotation in degrees.
         output_size: ``(width, height)`` of the output crop.
@@ -193,7 +193,7 @@ def warp_crop(
     without ``panorama``; the frame is copied only when the crop reaches over a left or right edge.
 
     Args:
-        image_rgb: ``(H, W, 3)`` uint8 RGB image.
+        image_rgb: ``(H, W, 3)`` uint8 RGB frame.
         trans: ``(2, 3)`` float64 map from image pixels to crop pixels
             (:func:`get_affine_transform`), in the coordinates of the unwrapped strip.
         panorama: Whether the left and right edge of the frame are one seam.
@@ -253,7 +253,7 @@ def crop_person(
     """Crop one person from an RGB frame.
 
     Args:
-        image_rgb: ``(H, W, 3)`` uint8 RGB image.
+        image_rgb: ``(H, W, 3)`` uint8 RGB frame.
         bbox_xyxy: ``(4,)`` float box of the person in image pixels. With ``panorama`` its ``x``
             may lie left of 0 or right of ``W - 1``: the person stands on the seam.
         panorama: Whether the frame is a 360-degree panorama (see :func:`warp_crop`).
@@ -279,7 +279,7 @@ def crop_person(
 
 
 def to_input_tensor(crops_uint8: torch.Tensor) -> torch.Tensor:
-    """Convert uint8 crops ``(B, 256, 192, 3)`` to model input ``(B, 3, 256, 192)`` float32.
+    """Convert uint8 crops ``(B, 256, 192, 3)`` to estimator input ``(B, 3, 256, 192)`` float32.
 
     The values are divided by 255 and the per-channel mean :data:`PIXEL_MEAN_RGB` is subtracted.
     """
@@ -304,7 +304,7 @@ def heatmaps_to_coords(
 
     Per joint: the arg-max cell (first one on ties) gives the position and its value gives the
     score. A joint with a score of 0 or less is placed on cell ``(0, 0)``. The position moves by
-    a quarter cell toward the larger neighbour along each axis when ``1 < col < hm_w - 1`` and
+    a quarter cell toward the larger neighbor along each axis when ``1 < col < hm_w - 1`` and
     ``1 < row < hm_h - 1``. The cell position is then mapped into ``bbox_crop``.
 
     Args:
@@ -378,7 +378,7 @@ def _cells_to_image(
 
     Closed form of ``get_affine_transform(center, (w, h), 0, (hm_w, hm_h), inv=True)`` applied to
     each position. The reference points are rounded to float32 exactly as in that function, so
-    the rounding of the legacy matrix is kept.
+    the rounding of the 2023 matrix is kept.
     """
     box = bbox_crop.to(torch.float64)
     w = box[:, 2] - box[:, 0]

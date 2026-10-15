@@ -1,9 +1,9 @@
 """Per-video HDF5 cache of person crops and annotations.
 
-Inference needs the same normalised crop of every person in every active-learning round, and
+Inference needs the same normalized crop of every person in every active-learning round, and
 the crop has no random part. :func:`build_video_cache` therefore crops every annotated person
 of one video once and stores the crops together with the annotation arrays in one HDF5 file;
-:class:`VideoCache` reads that file back. Fine-tuning does not use the stored crops: it reads the
+:class:`VideoCache` reads that file back. Retraining does not use the stored crops: it reads the
 original frames, because its augmentation needs the pixels around the person.
 
 File layout (``N`` samples, ``K`` joints of the keypoint spec)::
@@ -28,7 +28,7 @@ file, see :func:`annotation_sha256`), ``panorama``, ``created_utc`` and ``vatl4p
 convention of :mod:`vatl4pose.data.annotations` (crops: :func:`~vatl4pose.data.geometry.warp_crop`).
 ``VideoCache`` refuses a cache whose ``panorama`` differs from the one the caller works with.
 
-The cache holds no feature of the autoencoder. The loop computes the hybrid feature
+The cache holds no feature of the whole-body autoencoder. The loop computes the hybrid feature
 (:func:`~vatl4pose.models.wholebody_ae.compute_hybrid`) from ``bbox_json_xywh`` and the labels that
 the oracle returned, which are the ground truth only for the simulated oracle.
 
@@ -118,11 +118,11 @@ def _crop_frame(
     """Decode one frame and crop every person of ``frame`` from it (runs in a worker thread).
 
     Args:
-        frame: Samples that all show the same image file; at least one.
+        frame: People that all show the same image file; at least one.
         panorama: Whether the frame is a 360-degree panorama (the crops wrap at the seam).
 
     Returns:
-        ``(crop, bbox_crop)`` of every sample, in the order of ``frame``.
+        ``(crop, bbox_crop)`` of every person, in the order of ``frame``.
     """
     image = read_image_rgb(frame[0].image_path)
     height, width = image.shape[:2]
@@ -130,7 +130,8 @@ def _crop_frame(
         if (width, height) != person.image_size:
             raise ValueError(
                 f"image {person.image_path} has size (width, height) = {(width, height)}, "
-                f"but the annotation of sample {person.sample_index} says {person.image_size}"
+                f"but the annotation of the person with sample index {person.sample_index} says "
+                f"{person.image_size}"
             )
     return [crop_person(image, person.bbox_xyxy, panorama) for person in frame]
 
@@ -171,8 +172,8 @@ def _write_cache(video: VideoAnnotation, path: pathlib.Path, num_workers: int) -
             chunks=(1, *_CROP_SHAPE),
             compression="lzf",
         )
-        # Samples of one frame are spread over the video (the sample order is not the frame
-        # order), so the crops are collected and written as soon as the next sample in order is
+        # People of one frame are spread over the video (the sample order is not the frame
+        # order), so the crops are collected and written as soon as the next person in order is
         # complete. That keeps the crops in the file in sample order, which is the order of
         # every full read.
         samples_of_frame: dict[pathlib.Path, list[int]] = {}
@@ -233,12 +234,12 @@ def build_video_cache(
     file is removed and ``out_path`` stays as it was. An existing ``out_path`` is replaced.
 
     Args:
-        video: Samples of one video (any dataset).
+        video: The people of one video (any dataset).
         out_path: Target file; its directory is created.
         num_workers: Number of threads that decode and crop frames.
 
     Raises:
-        ValueError: If ``num_workers`` is below 1, the video has no samples, a frame cannot be
+        ValueError: If ``num_workers`` is below 1, the video has no people, a frame cannot be
             decoded, or a frame has another size than its annotation says.
         FileNotFoundError: If a frame file does not exist.
     """
@@ -246,7 +247,7 @@ def build_video_cache(
         raise ValueError(f"num_workers must be at least 1, got {num_workers}")
     if len(video.people) == 0:
         raise ValueError(
-            f"video {video.video_id!r} ({video.annotation_path}) has no samples; "
+            f"video {video.video_id!r} ({video.annotation_path}) has no people; "
             "there is nothing to cache"
         )
     out_path = pathlib.Path(out_path)
@@ -273,8 +274,8 @@ class CacheArrays:
         image_id: ``(N,)`` int64 image ids.
         frame_index: ``(N,)`` int64 position of the frame in the video.
         track_id: ``(N,)`` object array of str.
-        prev_index: ``(N,)`` int64 sample of the same track in the previous annotated frame
-            or ``-1``.
+        prev_index: ``(N,)`` int64 index of the person of the same track in the previous annotated
+            frame or ``-1``.
         next_index: ``(N,)`` int64, likewise for the next annotated frame.
         image_path: ``(N,)`` object array of absolute path strings.
         has_gt: ``(N,)`` bool, True where ``keypoints_gt`` has a visible joint. A person without
@@ -350,7 +351,7 @@ class VideoCache:
 
     @property
     def video_id(self) -> str:
-        """Identifier of the video the cache was built from."""
+        """Id of the video the cache was built from."""
         return self._video_id
 
     @property
@@ -367,7 +368,7 @@ class VideoCache:
         return self._arrays
 
     def crops(self, index: np.ndarray) -> torch.Tensor:
-        """Read the crops of the samples ``index``.
+        """Read the crops of the people with the sample indices ``index``.
 
         Args:
             index: ``(B,)`` integer array of sample indices, in any order, repeats allowed.
@@ -431,7 +432,7 @@ class VideoCache:
         num_joints = int(handle["keypoints_gt"].shape[1])
         if num_joints != spec.num_joints:
             raise ValueError(
-                f"{self._path} holds {num_joints} joints per sample, spec {spec.name!r} "
+                f"{self._path} holds {num_joints} joints per person, spec {spec.name!r} "
                 f"has {spec.num_joints}"
             )
         built_hash = str(attribute("spec_sha256"))

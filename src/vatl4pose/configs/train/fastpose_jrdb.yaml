@@ -1,5 +1,5 @@
 # @package _global_
-# Training of FastPose on JRDB-Pose, starting from the FastPose retrained on PoseTrack21
+# Training of FastPose on JRDB-Pose, starting from the FastPose trained on PoseTrack21
 # (run `train=fastpose_posetrack21` first). Paper: 10 training videos, lr 5e-4, 40 epochs.
 # 2023 configs/jrdb-pose/fastpose_jrdb22.yaml: batch 240 on 2 GPUs = 480, lr 5e-4, LR_STEP 90, 120
 # (never reached in 40 epochs).

@@ -66,7 +66,7 @@ def render_pick(
         scene: The video.
         rd: The round of the pick.
         pick: The pick.
-        crops: ``(256, 192, 3)`` uint8 crops of the people that the figures show, by sample.
+        crops: ``(256, 192, 3)`` uint8 crops of the people that the figures show, by sample index.
         read_frame: The RGB frame at a position of ``scene.frames``.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -214,7 +214,7 @@ def _crop_axes(ax: Axes, crop: np.ndarray | None) -> None:
 
 
 def _heat_overlay(heat: np.ndarray, color: tuple[int, int, int]) -> np.ndarray:
-    """RGBA picture of a ``(64, 48)`` uint8 heatmap in one colour."""
+    """RGBA picture of a ``(64, 48)`` uint8 heatmap in one color."""
     assert heat.shape == HEATMAP_SIZE and heat.dtype == np.uint8
     level = heat.astype(np.float32) / 255.0
     rgba = np.zeros((*heat.shape, 4), dtype=np.float32)
@@ -305,7 +305,7 @@ def _wpu_panel(ax: Axes, scene: Scene, wpu: WpuFigure, crop: np.ndarray) -> None
         for j in wpu.worst.tolist()
     )
     handles = [
-        Line2D([], [], color=_rgb(RECON), linewidth=3.5, label="autoencoder"),
+        Line2D([], [], color=_rgb(RECON), linewidth=3.5, label="whole-body autoencoder"),
         Line2D([], [], color="gray", linewidth=1.8, label="estimator"),
         Line2D(
             [],
@@ -336,9 +336,9 @@ def _duw_panel(ax: Axes, rd: RoundData, pick: Pick) -> None:
     picked = np.zeros(xy.shape[0], dtype=bool)
     picked[rd.order] = True
     ax.scatter(
-        *xy[~rd.labeled & ~picked].T, s=7, color="#c8c8c8", label="not annotated"
+        *xy[~rd.labeled & ~picked].T, s=7, color="#c8c8c8", label="not labeled"
     )
-    ax.scatter(*xy[rd.labeled].T, s=9, color="#4a4a4a", label="annotated")
+    ax.scatter(*xy[rd.labeled].T, s=9, color="#4a4a4a", label="labeled")
     ax.scatter(*xy[rd.order].T, s=46, color=_rgb(PICK), label="selected")
     shown = {p.person: p.rank for p in rd.picks}
     for person, rank in shown.items():
@@ -383,8 +383,8 @@ def _duw_panel(ax: Axes, rd: RoundData, pick: Pick) -> None:
 
 def _duw_text(duw: DuwFigure, rank: int) -> str:
     return (
-        f"DUW of pick {rank}: distance {_number(duw.distance)} to the nearest annotated or earlier "
-        f"pick, uncertainty {_number(duw.uncertainty)}\n"
+        f"DUW of pick {rank}: distance {_number(duw.distance)} to the nearest labeled person or "
+        f"earlier pick, uncertainty {_number(duw.uncertainty)}\n"
         f"m = {_number(duw.moks)}, lam = {_number(duw.lam)}, "
         f"value = (1 - m) * distance + lam * m * uncertainty = {_number(duw.value)}"
     )

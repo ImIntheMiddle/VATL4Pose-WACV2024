@@ -37,7 +37,7 @@ class Scene:
 
     Attributes:
         info: The run of the video.
-        frames: ``(image path, samples)`` of every frame, in frame order.
+        frames: ``(image path, sample indices)`` of every frame, in frame order.
         frame_of: ``(N,)`` position of each person's frame in ``frames``.
         track_id: ``(N,)`` track of each person.
         bbox_crop: ``(N, 4)`` float32 box of the crop of each person.
@@ -59,7 +59,8 @@ class ThcFigure:
     """THC of one pick: the heatmaps of the joints that changed most over three frames.
 
     Attributes:
-        people: Previous, this and next sample of the track; ``-1`` where the track has none.
+        people: Sample indices of the previous, this and next person of the track; ``-1`` where the
+            track has none.
         joints: ``(3,)`` joints with the largest difference, largest first.
         values: ``(K,)`` the difference of every joint (``thc_joint``).
         heat: ``(3, 3, 64, 48)`` uint8 heatmaps ``[frame][joint]``, the positive part in units of
@@ -75,10 +76,10 @@ class ThcFigure:
 
 @dataclass(frozen=True)
 class WpuFigure:
-    """WPU of one pick: the predicted skeleton, the autoencoder's skeleton and their gap.
+    """WPU of one pick: the predicted skeleton, the whole-body autoencoder's skeleton and their gap.
 
     Attributes:
-        predicted: ``(K, 2)`` joints of the estimator in crop pixels (192 wide, 256 high).
+        predicted: ``(K, 2)`` joints of the pose estimator in crop pixels (192 wide, 256 high).
         reconstructed: ``(K, 2)`` joints of the autoencoder in the same pixels.
         offsets: ``(K,)`` the part of the WPU score in the x and y offset of each joint.
         angles: ``(K,)`` the part of the WPU score in the angles at each joint; the skeleton does
@@ -97,7 +98,7 @@ class WpuFigure:
 class DuwFigure:
     """DUW of one pick: the numbers of its value ``(1 - m) * distance + lam * m * uncertainty``.
 
-    ``distance`` and ``value`` are NaN for the pick that is made with nobody labeled or picked.
+    ``distance`` and ``value`` are NaN for the pick that is made with nobody labeled or selected.
     """
 
     distance: float
@@ -113,7 +114,7 @@ class Pick:
 
     Attributes:
         rank: 1 for the person that the strategy took first.
-        person: The sample index.
+        person: The sample index of the person.
         scores: ``{name: (value, percent of the candidates with a lower value)}`` of the scores
             that the selection computed (``thc``, ``wpu``, ..., ``total``); empty without them.
         thc: THC figure, or ``None`` if the strategy does not use THC.
@@ -136,7 +137,7 @@ class RoundData:
     Attributes:
         index: The round.
         percentage: Share of the people labeled before the round selected, in percent.
-        coords: ``(N, K, 2)`` joints that the model of the round predicts.
+        coords: ``(N, K, 2)`` joints that the estimator of the round predicts.
         shown: ``(N, K)`` bool, the joints confident enough to draw (:func:`.draw.shown_joints`).
         labeled: ``(N,)`` the people labeled before the selection.
         order: ``(k,)`` all people that the round selected, in the order of the selection; empty for
@@ -275,7 +276,8 @@ def _thc_figure(
     people = (int(scene.prev[person]), person, int(scene.next[person]))
     for sample in people:
         assert sample < 0 or sample in rows, (
-            f"the heatmaps of sample {sample}, a neighbor of pick {person}, were not recorded"
+            f"the heatmaps of the person with sample index {sample}, a neighbor of pick {person}, "
+            "were not recorded"
         )
     heat = np.zeros((3, joints.shape[0], *HEATMAP_SIZE), dtype=np.uint8)
     stored = details["heatmaps"]
@@ -327,7 +329,7 @@ def wpu_contributions(
 ) -> tuple[np.ndarray, np.ndarray]:
     """The WPU score of a person, split over its joints.
 
-    The score is the mean squared gap between the standardised input and its reconstruction over
+    The score is the mean squared gap between the standardized input and its reconstruction over
     the counted entries: those that WPU keeps (``spec.wpu_keep_index()``) and that hold a value
     (``wpu_valid``). Each counted entry adds its squared gap over the number of counted entries.
 

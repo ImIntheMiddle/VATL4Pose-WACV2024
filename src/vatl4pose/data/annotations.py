@@ -1,10 +1,10 @@
 """Per-video person records read from PoseTrack21, JRDB-Pose and ``coco_custom`` annotations.
 
-A *sample* is one annotated person in one frame. A reader turns the annotation file of one
-video into a :class:`VideoAnnotation`: the samples in a fixed order, plus for every sample
-the index of the same person (track) in the nearest earlier and later annotated frame
-(:func:`link_neighbors`). Every later component (heatmap cache, query scores, evaluation)
-indexes its arrays by the sample index defined here.
+A reader turns the annotation file of one video into a :class:`VideoAnnotation`: the people (one
+annotated person in one frame each) in a fixed order, plus for every person the index of the
+same track in the nearest earlier and later annotated frame (:func:`link_neighbors`). Every
+later component (heatmap cache, query scores, evaluation) indexes its arrays by the sample index
+defined here, the position of a person in that order.
 
 Layouts
 -------
@@ -30,7 +30,7 @@ Conventions
 * Box. xywh becomes xyxy with ``xmax = x + max(w - 1, 0)`` and ``ymax = y + max(h - 1, 0)``;
   every coordinate is clipped to ``[0, W - 1]`` and ``[0, H - 1]``. PoseTrack21 and
   ``coco_custom`` skip an annotation whose clipped box has ``xmax <= xmin`` or
-  ``ymax <= ymin``. JRDB-Pose keeps such boxes: its legacy test (``xmax < xmin``) cannot
+  ``ymax <= ymin``. JRDB-Pose keeps such boxes: its 2023 test (``xmax < xmin``) cannot
   fire after clipping, because ``xmax >= xmin`` holds by construction. JRDB-Pose skips
   annotations without a ``bbox``.
 * Panorama. A frame of a 360-degree video is a strip whose right edge continues at its left edge
@@ -42,7 +42,7 @@ Conventions
     ``x + w > W`` keeps its raw coordinates, so ``xmin`` may be negative and ``xmax`` may exceed
     ``W - 1``. ``bbox_json_xywh`` is the raw box in both modes.
   - Every joint with a position is moved by a whole number of frame widths ``k * W`` to the copy
-    nearest to the centre of the box, ``k = floor((cx - x) / W + 0.5)`` with
+    nearest to the center of the box, ``k = floor((cx - x) / W + 0.5)`` with
     ``cx = (xmin + xmax) / 2``. A joint exactly half a frame width from ``cx`` goes to the copy
     with the larger x. A joint that is not visible but has a position moves as well, and keeps
     its visibility 0. A joint at ``(0, 0)`` is the "not annotated" marker of the files and stays
@@ -52,21 +52,21 @@ Conventions
     (JRDB-Pose skips no empty box). The sample order and the links between frames follow from the
     kept people.
 
-  With ``panorama`` off the readers behave as in 2023.
+  With ``panorama`` off the readers behave as in the 2023 code.
 * Keypoints. ``(K, 3)`` array of x, y, visibility with visibility ``min(1, v)``. PoseTrack21 and
-  JRDB-Pose skip an annotation without a visible keypoint (this covers the legacy test for an
-  all-zero annotation, which has no visible keypoint either) and require the ``keypoints`` key.
+  JRDB-Pose skip an annotation without a visible joint (this covers the 2023 test for an
+  all-zero annotation, which has no visible joint either) and require the ``keypoints`` key.
   ``coco_custom`` keeps every annotation with a valid box: an annotation without a ``keypoints``
-  key, or without a visible keypoint, becomes a person whose keypoints are all zeros (positions
+  key, or without a visible joint, becomes a person whose keypoints are all zeros (positions
   and visibility). Such a person has no ground truth: the cache marks it (``has_gt``) and the loop
   reports no metrics for a video that has one.
-* ``frame_index``. Position of the image among the images of the annotation file when
+* ``frame_index``. Position of the frame among the ``images`` of the annotation file when
   they are sorted by ``file_name``.
-* Sample order. PoseTrack21 and JRDB-Pose use the legacy sort key
+* Sample order. PoseTrack21 and JRDB-Pose use the 2023 sort key
   ``int(str(ann_id)[-n:] + str(image_id))`` (``n = 2`` for PoseTrack21, ``3`` for
-  JRDB-Pose) over the samples listed by ascending image id, so sample indices match the
+  JRDB-Pose) over the people listed by ascending image id, so sample indices match the
   2023 query lists. ``coco_custom`` orders by ``(track_id, frame_index)``.
-* Track id. PoseTrack21 prefixes the video id (``"000342" + "0"``), as the legacy reader
+* Track id. PoseTrack21 prefixes the video id (``"000342" + "0"``), as the 2023 code
   does; the other readers use ``str(track_id)``.
 """
 
@@ -100,17 +100,17 @@ class PersonRecord:
     Equality is by identity (``eq=False``) because the fields hold arrays.
 
     Attributes:
-        sample_index: Position of the sample in its :class:`VideoAnnotation`.
+        sample_index: Position of the person in its :class:`VideoAnnotation`, the sample index.
         ann_id: Annotation id from the JSON file.
         image_id: Image id from the JSON file.
-        frame_index: Position of the image in the video, sorted by ``file_name``.
+        frame_index: Position of the frame in the video, sorted by ``file_name``.
         track_id: Person identity within the video.
-        image_path: Absolute path of the frame image.
+        image_path: Absolute path of the image file of the frame.
         image_size: ``(width, height)`` of the image in pixels.
-        bbox_xyxy: ``(4,)`` float64 box, converted and clipped by the legacy convention. In a
+        bbox_xyxy: ``(4,)`` float64 box, converted and clipped by the 2023 convention. In a
             panorama it is not clipped at the left and right edge (see the module docstring).
         keypoints: ``(K, 3)`` float64 array of x, y and visibility in ``{0, 1}``. All zeros for a
-            ``coco_custom`` person without a visible keypoint (no ground truth). In a panorama the
+            ``coco_custom`` person without a visible joint (no ground truth). In a panorama the
             x of a joint is in the unwrapped coordinates of the box of the person.
         bbox_json_xywh: ``(4,)`` float64 raw ``bbox`` of the annotation, unclipped.
     """
@@ -131,7 +131,7 @@ class PersonRecord:
         """True if the person has a visible ground-truth joint.
 
         False for a ``coco_custom`` box without keypoints, whose keypoints are all zeros. The
-        cache, the loop, ``vatl4pose-tune`` and the training and evaluation of an estimator all
+        cache, the loop, ``vatl4pose-tune`` and the training and evaluation of a pose estimator all
         use this one definition.
         """
         return bool(self.keypoints[:, 2].any())
@@ -171,18 +171,18 @@ class PersonRecord:
 
 @dataclass(frozen=True, eq=False)
 class VideoAnnotation:
-    """All samples of one video, in sample order, with their temporal neighbors.
+    """All people of one video, in sample order, with their temporal neighbors.
 
     Attributes:
         dataset: ``"posetrack21"``, ``"jrdb_pose"`` or ``"coco_custom"``.
-        video_id: Video identifier the reader was called with.
-        spec: Joint layout of the keypoints.
-        people: The samples; ``people[i].sample_index == i``.
-        prev_index: ``(N,)`` int64. Sample of the same track in the nearest earlier
+        video_id: Video id the reader was called with.
+        spec: The keypoint spec of the dataset.
+        people: The people in sample order; ``people[i].sample_index == i``.
+        prev_index: ``(N,)`` int64. Index of the person of the same track in the nearest earlier
             annotated frame, or ``-1``.
-        next_index: ``(N,)`` int64. Sample of the same track in the nearest later
+        next_index: ``(N,)`` int64. Index of the person of the same track in the nearest later
             annotated frame, or ``-1``.
-        annotation_path: Absolute path of the JSON file the samples were read from.
+        annotation_path: Absolute path of the JSON file the people were read from.
         panorama: Whether the frames are 360-degree panoramas and the people are placed in the
             unwrapped coordinates of the strip (see the module docstring). The crops of the cache
             and of the training read the frames the same way.
@@ -231,20 +231,20 @@ class VideoAnnotation:
 
 
 def link_neighbors(people: Sequence[PersonRecord]) -> tuple[np.ndarray, np.ndarray]:
-    """Link every sample to the same track in the nearest earlier and later annotated frame.
+    """Link every person to the same track in the nearest earlier and later annotated frame.
 
-    A frame where the track has no sample is skipped, so a gap is bridged. Samples of
+    A frame where the track has no person is skipped, so a gap is bridged. People of
     different tracks are never linked.
 
     Args:
-        people: The samples of one video, in any order.
+        people: The people of one video, in any order.
 
     Returns:
         ``(prev_index, next_index)``, both ``(N,)`` int64. Entry ``i`` holds the position
         in ``people`` of the neighbor of ``people[i]``, or ``-1`` if there is none.
 
     Raises:
-        ValueError: If a track has two samples in one frame; the neighbor is ambiguous.
+        ValueError: If a track has two people in one frame; the neighbor is ambiguous.
     """
     n = len(people)
     prev_index = np.full(n, -1, dtype=np.int64)
@@ -309,7 +309,7 @@ def unwrap_keypoints(
 ) -> np.ndarray:
     """Move every joint with a position by a whole number of frame widths next to the box.
 
-    Every joint with a position moves to the copy nearest to the centre of the box (rule: module
+    Every joint with a position moves to the copy nearest to the center of the box (rule: module
     docstring, Panorama). A joint exactly half a frame width away goes to the copy with the larger
     x, which ``np.round`` would not do. Joints at ``(0, 0)`` (not annotated) and the visibility
     column stay. Used by the readers and by the COCO-file oracle.
@@ -345,8 +345,8 @@ def _collect(
     """Read the people of one annotation file, ordered by image id and then by file order.
 
     With ``require_keypoints`` (the paper datasets) an annotation needs the ``keypoints`` key and
-    is skipped without a visible keypoint. Without it (``coco_custom``) the annotation is kept and
-    gets all-zero keypoints if the key is missing or no keypoint is visible. With ``panorama`` the
+    is skipped without a visible joint. Without it (``coco_custom``) the annotation is kept and
+    gets all-zero keypoints if the key is missing or no joint is visible. With ``panorama`` the
     box is not clipped at the left and right edge and the joints move next to it (see the module
     docstring).
     """
@@ -490,7 +490,7 @@ def _find_annotation_file(directory: pathlib.Path, video_id: str) -> pathlib.Pat
 
 
 def _legacy_sort_key(digits: int) -> Callable[[_Raw], int]:
-    """Legacy sort key: the last ``digits`` digits of the ann id followed by the image id."""
+    """Sort key of the 2023 code: the last ``digits`` digits of the annotation id, then image id."""
 
     def key(raw: _Raw) -> int:
         return int(str(raw.ann_id)[-digits:] + str(raw.image_id))
@@ -512,7 +512,7 @@ def read_posetrack21_video(
             ``root/<file_name>``.
         video_id: Video id such as ``"000342"``.
         split: Sub-directory of ``activelearning``.
-        spec: Joint layout; the ``posetrack21`` preset if omitted. A spec with another joint
+        spec: Keypoint spec; the ``posetrack21`` preset if omitted. A spec with another joint
             count than the annotation files raises.
 
     Raises:
@@ -553,8 +553,8 @@ def read_jrdb_pose_video(
     """Read one JRDB-Pose video.
 
     The frames of JRDB-Pose are 360-degree panoramas, so the reader treats the seam as part of
-    the image by default (``panorama``, see the module docstring). ``panorama=False`` gives the
-    boxes and joints of the 2023 reader, which clips the boxes at the left and right edge and
+    the frame by default (``panorama``, see the module docstring). ``panorama=False`` gives the
+    boxes and joints of the 2023 code, which clips the boxes at the left and right edge and
     leaves the joints on the side of the frame where the file records them.
 
     Args:
@@ -563,7 +563,7 @@ def read_jrdb_pose_video(
             ``root/<file_name>`` (for example ``images/image_stitched/<scene>/000001.jpg``).
         video_id: Video id such as ``"00"``.
         split: Sub-directory of ``activelearning``.
-        spec: Joint layout; the ``jrdb_pose`` preset if omitted. A spec with another joint
+        spec: Keypoint spec; the ``jrdb_pose`` preset if omitted. A spec with another joint
             count than the annotation files raises.
         panorama: Place the people in the unwrapped coordinates of the 360-degree strip.
 
@@ -602,14 +602,14 @@ def read_coco_custom_video(
     """Read one video of a ``coco_custom`` dataset (layout in the module docstring).
 
     Every annotation with a valid box becomes a person. An annotation without a ``keypoints`` key,
-    or with no visible keypoint, becomes a person with all-zero keypoints, which has no ground
+    or with no visible joint, becomes a person with all-zero keypoints, which has no ground
     truth.
 
     Args:
         root: Dataset root; the annotation file is ``root/annotations/<video_id>.json``
             and image paths are ``root/<file_name>``.
-        video_id: Video identifier.
-        spec: Joint layout; a ``keypoints`` list that is given needs ``3 * spec.num_joints``
+        video_id: Video id.
+        spec: Keypoint spec; a ``keypoints`` list that is given needs ``3 * spec.num_joints``
             values.
         panorama: Whether the frames are 360-degree panoramas (an own 360-degree video). The people
             are then placed in the unwrapped coordinates of the strip (see the module docstring).

@@ -1,4 +1,4 @@
-# TPC: temporal pose consistency across neighboring frames (baseline).
+# Temporal Pose Continuity (TPC) across neighboring frames (baseline).
 name: TPC
 scorers: [tpc]
 combiner: single

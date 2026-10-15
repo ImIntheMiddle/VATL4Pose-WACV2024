@@ -12,7 +12,7 @@ PoseTrack21 (``root`` is the directory of the release)::
     <root>/activelearning/<split>/<same file name>        output
 
 The release keeps the 593 training videos in ``posetrack_data/train``. The splits ``train`` and
-``train_val`` take their videos from that folder by id list (579 and 14 videos, as in the paper).
+``train_val`` take their videos from that directory by id list (579 and 14 videos, as in the paper).
 Their output holds every image and annotation of the video, with the size of each image added.
 The split ``val`` keeps, of the 33 frames around the middle frame of each validation video, those
 that carry labels (the *dense window*): the labeled images whose id lies within 16 of
@@ -31,7 +31,7 @@ The scene at position ``i`` of the scene list of a split is the video ``f"{i:02d
 the first 149 frames are kept (image ids below 150). An image gets the id
 ``int(f"1{video_id}{image_id:05d}")`` and an annotation the id ``int(f"{new_image_id}{track_id:03d}")``.
 The box and the area of an annotation come from the detection ``pedestrian:<track_id>`` of the
-same frame; an annotation without one is dropped, but its image stays in the file. A keypoint
+same frame; an annotation without one is dropped, but its image stays in the file. A joint
 visibility of 0 stays 0, any other value becomes 1.0.
 
 Image sizes are read from the image header, without decoding the pixels. A file that exists is
@@ -56,7 +56,7 @@ from PIL import Image
 _LOG = logging.getLogger(__name__)
 
 POSETRACK21_SPLITS = ("train", "train_val", "val")
-"""The splits of PoseTrack21; ``train`` and ``train_val`` share the raw folder ``train``."""
+"""The splits of PoseTrack21; ``train`` and ``train_val`` share the raw directory ``train``."""
 
 JRDB_POSE_SPLITS = ("train", "val", "test")
 """The splits of JRDB-Pose."""
@@ -329,7 +329,7 @@ def build_jrdb_pose_video(
     """The annotation of one JRDB-Pose scene, and the number of annotations left out.
 
     Args:
-        video_id: Two-digit id of the video, the position of the scene in its split.
+        video_id: Two-digit video id, the position of the scene in its split.
         pose: The parsed ``labels_2d_pose_stitched_coco`` file of the scene.
         detections: The parsed ``labels_2d_stitched`` file of the scene.
         image_root: Directory that ``images/<file_name>`` is relative to.

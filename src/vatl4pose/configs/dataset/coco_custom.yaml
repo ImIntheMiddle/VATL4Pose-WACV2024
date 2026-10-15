@@ -1,7 +1,7 @@
 # Your own data: images/<video>/... and annotations/<video>.json in COCO keypoint format with track
-# ids. Set `dataset.root` and `dataset.ids` (or `dataset.ids_file`); for another joint layout give
-# the seven fields of a keypoint spec under `dataset.keypoints`. For 360-degree videos (the right
-# edge of a frame continues at its left edge) set `dataset.panorama=true`.
+# ids. Set `dataset.root` and `dataset.ids` (or `dataset.ids_file`); for another keypoint spec give
+# its seven fields under `dataset.keypoints`. For 360-degree videos (the right edge of a frame
+# continues at its left edge) set `dataset.panorama=true`.
 name: coco_custom
 root: ???
 keypoints: coco17

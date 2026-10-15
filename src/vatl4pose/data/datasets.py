@@ -1,16 +1,16 @@
 """Torch datasets over a :class:`~vatl4pose.data.cache.VideoCache` and over annotated videos.
 
-* :class:`FinetuneDataset` yields augmented training items of the labeled samples. It reads the
-  original frame of each sample, crops it from the ground-truth box with a random scale, rotation
+* :class:`FinetuneDataset` yields augmented training items of the labeled people. It reads the
+  original frame of each person, crops it from the ground-truth box with a random scale, rotation
   and flip, and builds the heatmap target from the labels given by the oracle.
 
-The initial training of the estimator has no cache, because the people of a whole training split
+The initial training of the pose estimator has no cache, because the people of a whole training split
 would need one stored crop (147 kB before compression) each. Two datasets read the frames of many
 :class:`VideoAnnotation` objects instead:
 
 * :class:`PersonTrainDataset` yields augmented training items of every annotated person. Its
   augmentation is drawn like that of :class:`FinetuneDataset`.
-* :class:`PersonCropDataset` yields the normalised crop of every person and the box of the crop,
+* :class:`PersonCropDataset` yields the normalized crop of every person and the box of the crop,
   the same crop that the active-learning loop uses.
 """
 
@@ -47,12 +47,12 @@ def collect_people(
     """The people of all ``videos`` in order (video after video), and their keypoint spec.
 
     The training and the evaluation of an estimator read the keypoints of every person as labels,
-    so a person without a visible keypoint (a ``coco_custom`` box without keypoints) is refused.
+    so a person without a visible joint (a ``coco_custom`` box without keypoints) is refused.
     The videos must agree on ``panorama``: the datasets below crop every person the same way.
 
     Raises:
         ValueError: If the videos do not share one keypoint spec or one ``panorama`` setting, hold
-            no person, or hold a person without a visible keypoint.
+            no person, or hold a person without a visible joint.
     """
     specs = {video.spec for video in videos}
     if len(specs) > 1:
@@ -74,19 +74,19 @@ def collect_people(
         if without:
             raise ValueError(
                 f"video {video.video_id!r}: {len(without)} of {len(video.people)} people have no "
-                f"visible keypoint (annotation ids {without[:10]}); training and evaluation need "
+                f"visible joint (annotation ids {without[:10]}); training and evaluation need "
                 "ground-truth keypoints for every person"
             )
     return next(iter(specs)), people
 
 
 class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
-    """Augmented training items of the labeled samples of one video.
+    """Augmented training items of the labeled people of one video.
 
-    Item ``i`` belongs to the sample ``indices[i]`` of the cache. Its augmentation is drawn from
-    ``np.random.default_rng((seed, round_index, epoch, i))``, so an item is the same whenever it
-    is read in the same epoch, whatever the order of reads, the batch size or the number of
-    loader workers.
+    Item ``i`` belongs to the person with sample index ``indices[i]`` in the cache. Its
+    augmentation is drawn from ``np.random.default_rng((seed, round_index, epoch, i))``, so an
+    item is the same whenever it is read in the same epoch, whatever the order of reads, the
+    batch size or the number of loader workers.
 
     Every epoch of a round reads the same frames, so a dataset keeps the frames it decoded, read
     only, up to ``FRAME_CACHE_BYTES`` per process (each loader worker holds its own), and drops
@@ -333,7 +333,7 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
 
 class PersonCropDataset(Dataset[tuple[int, torch.Tensor, torch.Tensor]]):
-    """The normalised crop of every person of several videos, from the ground-truth box.
+    """The normalized crop of every person of several videos, from the ground-truth box.
 
     Item ``i`` belongs to the ``i``-th person of ``videos`` (video after video). The crop is the
     one of :func:`~vatl4pose.data.geometry.crop_person`, the one the active-learning loop caches.

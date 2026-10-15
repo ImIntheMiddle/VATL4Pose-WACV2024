@@ -1,4 +1,5 @@
-# THC+WPU+DUW with the weight of THC falling with the labeled share (ablation, paper Table 3).
+# THC, WPU and DUW with the weight of THC falling with the share of labeled people (ablation,
+# Table 3 of the paper).
 name: THC+WPU_Coresetfilter_decrease
 scorers: [thc, wpu]
 combiner: thc_wpu_decrease

@@ -8,11 +8,11 @@ import numpy as np
 from ..data.geometry import INPUT_SIZE, get_affine_transform, warp_crop
 from ..keypoints import KeypointSpec
 
-# RGB colours of the limbs: left side, right side and the middle of the body
+# RGB colors of the limbs: left side, right side and the middle of the body
 LEFT, RIGHT, CENTER = (255, 138, 61), (61, 165, 255), (155, 225, 93)
 SIDE_COLORS = (LEFT, RIGHT, CENTER)
 PICK = (255, 176, 0)  # the boxes and numbers of the selected people
-RECON = (232, 62, 140)  # the skeleton that the autoencoder reconstructs (WPU)
+RECON = (232, 62, 140)  # the skeleton that the whole-body autoencoder reconstructs (WPU)
 GAP = (230, 40, 40)  # the joints whose reconstruction differs most (WPU)
 THC_JOINTS = ((255, 159, 10), (50, 200, 230), (140, 220, 60))  # the joints that changed most (THC)
 
@@ -60,10 +60,10 @@ def draw_pose(
 
     Args:
         image: ``(H, W, 3)`` uint8 RGB image.
-        spec: The keypoint layout.
+        spec: The keypoint spec.
         xy: ``(K, 2)`` joint positions in pixels.
         scale: Line width factor; 1 is the width for an image 480 pixels high.
-        color: One RGB colour for the whole skeleton; ``None`` colours the limbs by side.
+        color: One RGB color for the whole skeleton; ``None`` colors the limbs by side.
         width_x: The width of a panorama; a limb that crosses its seam is not drawn.
         shown: ``(K,)`` bool, the joints to draw (:func:`shown_joints`); a limb is drawn when both
             of its joints are. ``None`` draws every joint.
@@ -102,7 +102,7 @@ def draw_pose(
 def person_crop(
     image_rgb: np.ndarray, bbox_crop: np.ndarray, panorama: bool
 ) -> np.ndarray:
-    """The ``(256, 192, 3)`` crop that the estimator sees for the box ``bbox_crop``.
+    """The ``(256, 192, 3)`` crop that the pose estimator sees for the box ``bbox_crop``.
 
     The region of the box is warped the way the cache crops a person
     (:func:`~vatl4pose.data.geometry.warp_crop`), a panorama read as a periodic strip.

@@ -1,4 +1,5 @@
-# WPU: whole-body pose uncertainty from the autoencoder (proposed uncertainty, top-k selection).
+# Whole-body Pose Unnaturalness (WPU) from the whole-body autoencoder (the proposed uncertainty with
+# top-k selection).
 name: WPU
 scorers: [wpu]
 combiner: single

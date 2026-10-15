@@ -1,4 +1,4 @@
-# THC+WPU+DUW with a fixed uncertainty weight (ablation, paper Table 3).
+# THC, WPU and DUW with a fixed uncertainty weight (ablation, Table 3 of the paper).
 name: THC+WPU_Coresetfilter_fixed
 scorers: [thc, wpu]
 combiner: minmax_sum

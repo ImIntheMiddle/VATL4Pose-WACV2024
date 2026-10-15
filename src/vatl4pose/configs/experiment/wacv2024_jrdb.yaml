@@ -1,5 +1,5 @@
 # @package _global_
-# WACV 2024, JRDB-Pose (paper Table 4): FastPose on the 15 test videos.
+# WACV 2024, JRDB-Pose (Table 4 of the paper): FastPose on the 15 test videos.
 # Run with `strategy=<name>`; the proposed method is `strategy=thc_wpu_duw` (the default).
 defaults:
   - override /dataset: jrdb_pose

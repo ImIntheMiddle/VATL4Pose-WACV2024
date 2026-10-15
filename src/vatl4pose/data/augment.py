@@ -1,18 +1,18 @@
 """Training augmentation: random scale, rotation and horizontal flip of a person crop.
 
-:func:`augment_and_crop` draws the augmentation of one training sample and returns the crop with
-the joints in crop coordinates. The draws follow the 2023 fine-tuning code, in this order:
+:func:`augment_and_crop` draws the augmentation of one person in training and returns the crop
+with the joints in crop coordinates. The draws follow the 2023 code, in this order:
 
 1. Scale: the crop size is multiplied by ``clip(1 + sf * N(0, 1), 1 - sf, 1 + sf)``.
 2. Rotation: with probability ``rotation_prob`` the angle is ``clip(rf * N(0, 1), -2 rf, 2 rf)``
    degrees, otherwise 0.
-3. Flip: with probability ``flip_prob`` the frame is mirrored, the crop centre is mirrored with
+3. Flip: with probability ``flip_prob`` the frame is mirrored, the crop center is mirrored with
    it (``x -> W - 1 - x``) and the joints swap along the flip pairs of the keypoint spec, applied
    as an ordered sequence of swaps (see :func:`flip_joints`). No random number is drawn when
    ``flip`` is off.
 
-The legacy half-body transform is not ported: its probability is -1 in the configs of both
-datasets, so it never ran.
+The half-body transform of the 2023 code is not ported: its probability is -1 in the configs of
+both datasets, so it never ran.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ class AugmentConfig:
     Attributes:
         scale_factor: ``sf``; the crop scale is drawn from ``1 +- sf`` (clipped normal draw).
         rotation_factor: ``rf``; the rotation in degrees is a clipped normal draw of std ``rf``.
-        rotation_prob: Probability that a sample is rotated at all.
+        rotation_prob: Probability that a person is rotated at all.
         flip: Whether horizontal flips are applied.
         flip_prob: Probability of a flip when ``flip`` is on.
     """
@@ -74,7 +74,7 @@ def flip_joints(
     visibility), and the position of a joint that is not visible becomes ``(0, 0)``.
 
     The pairs are applied as an ordered sequence of swaps, first to last, each on the result of
-    the previous one, like the legacy code. They need not be disjoint: a joint in two pairs is
+    the previous one, like the 2023 code. They need not be disjoint: a joint in two pairs is
     moved twice, and the order of the pairs changes the result.
 
     Args:
@@ -119,7 +119,7 @@ def augment_and_crop(
         bbox_xyxy: ``(4,)`` float box of the person in image pixels.
         keypoints: ``(K, 3)`` float array of x, y (image pixels) and visibility, ``K`` joints of
             ``spec``.
-        spec: Keypoint layout; ``spec.flip_pairs`` swap under a flip.
+        spec: Keypoint spec; ``spec.flip_pairs`` swap under a flip.
         cfg: Augmentation strengths and probabilities.
         rng: Source of all random draws (``standard_normal()`` and ``random()``).
         panorama: Whether the frame is a 360-degree panorama. The box and the joints are then in
