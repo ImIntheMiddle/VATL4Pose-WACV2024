@@ -4,19 +4,18 @@
         estimator.weights=posetrack21/simplebaseline_256x192.pth
 
 Every person is cropped from its ground-truth box, as in the loop, and the metrics are computed
-over all people of all videos of the id list together (micro average, like the 2023
-``poseestimator_eval``), with the OKS sigmas of the dataset's keypoint spec. The result goes to
-``eval.output`` or to ``<output_root>/eval/<name>.json``, where the name holds the dataset, split,
-estimator, the directory and the stem of the weights file, and the first 8 hex digits of the
-SHA-256 of the sorted video ids, so that evaluations of other weights or other videos never share
-a file. An existing file is not overwritten unless ``eval.overwrite=true``.
+over all people of all videos of the id list together (micro average), with the OKS sigmas of the
+dataset's keypoint spec. The result goes to ``eval.output`` or to
+``<output_root>/eval/<name>.json``, where the name holds the dataset, split, estimator, the
+directory and the stem of the weights file, and the first 8 hex digits of the SHA-256 of the
+sorted video ids, so that evaluations of other weights or other videos never share a file. An
+existing file is not overwritten unless ``eval.overwrite=true``.
 
 AP protocol. The AP is the AP of the paper, not the standard COCO keypoint AP: a detection that
-carries a box gets the area ``(w - x) * (h - y)`` of its box ``[x, y, w, h]``, as in the 2023
-evaluation (see :mod:`vatl4pose.eval.coco_ap`). On the 2023 predictions of JRDB-Pose video 00 in
-round 0, the AP@0.6 is 0.592 with this rule and 0.458 with the standard area ``w * h``. The file
-records the protocol in ``ap_protocol``, the ``panorama`` setting that the labels and crops
-followed, and the video ids, device, seed, weight digest and keypoint-spec digest.
+carries a box gets the area ``(w - x) * (h - y)`` of its box ``[x, y, w, h]`` (see
+:mod:`vatl4pose.eval.coco_ap`). The file records the protocol in ``ap_protocol``, the ``panorama``
+setting that the labels and crops followed, and the video ids, device, seed, weight digest and
+keypoint-spec digest.
 """
 
 from __future__ import annotations

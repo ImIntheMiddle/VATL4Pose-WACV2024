@@ -291,9 +291,8 @@ class TuneSection:
     """``vatl4pose-tune``: the weights ``lams`` tried on the validation videos.
 
     The videos are ``split`` and ``ids_file`` (the experiments set them to the validation
-    videos). ``query_ratio`` replaces ``loop.query_ratio`` during the tuning (the tuning of the
-    2023 code used a shorter schedule); ``metric`` is the key of ``performances_ann`` whose ALC is
-    compared.
+    videos). ``query_ratio`` is the schedule of the tuning and replaces ``loop.query_ratio``;
+    ``metric`` is the key of ``performances_ann`` whose ALC is compared.
     """
 
     lams: list[float] = field(default_factory=list)

@@ -189,9 +189,9 @@ def _check_autoencoders(
 ) -> list[CheckResult]:
     """Check the input dimension of the Hybrid autoencoder files listed in the manifest.
 
-    A file must be a state dict of the current format, with ``feature_mean`` and ``feature_std``;
-    an autoencoder of the 2023 format fails its row. Only files of the selected ``datasets`` are
-    read. A file of no dataset is already a failed ``weight:`` row.
+    A file must be a state dict with ``feature_mean`` and ``feature_std``; a file without them
+    fails its row. Only files of the selected ``datasets`` are read. A file of no dataset is
+    already a failed ``weight:`` row.
     """
     from vatl4pose.models.wholebody_ae import read_input_dim
 

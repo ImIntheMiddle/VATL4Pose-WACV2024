@@ -145,8 +145,7 @@ def run_name(run: RunSection) -> str:
 def torch_device(run: RunSection) -> torch.device:
     """The device of ``run.device``; a CUDA device that does not exist is an error.
 
-    For a CUDA device, cuDNN runs deterministically with autotuning off, as the 2023 code did with
-    the option ``--seedfix`` that the runs of the paper used.
+    For a CUDA device, cuDNN runs deterministically with autotuning off.
     """
     try:
         device = torch.device(run.device)
@@ -580,8 +579,7 @@ def alc_percent(result: dict[str, Any], metric: str) -> Optional[float]:
     The area covers the range of labeled people of the result, so a run that ends below 100 %
     labeled people has an ALC of at most that range (a perfect curve up to 20 % gives 20).
 
-    A value of ``-1`` (the metric has no ground truth in its area range) makes the curve undefined,
-    as in the 2023 code.
+    A value of ``-1`` (the metric has no ground truth in its area range) makes the curve undefined.
     """
     curve = metric_curve(result, metric)
     if any(v < 0.0 for v in curve):

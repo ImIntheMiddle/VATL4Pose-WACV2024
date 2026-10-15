@@ -12,10 +12,10 @@ directory and every video of the id list (the dataset's, or ``summarize.ids_file
   cover. The ALC is 100 times the area under the curve over the share of labeled people (see
   ``alc_percent``), so compare ALC values of runs with the same range only. A video without
   ``result.json`` is counted as missing; a video whose curve of a metric holds ``-1`` (no ground
-  truth in the area range) is left out of that metric and counted as skipped, as in the 2023
-  code. A video whose metrics are ``null`` (some person has no ground-truth keypoints, so the
-  loop computed no AP and no OSPA) is listed as "no ground truth" and left out of every mean and
-  curve; it still counts in ``n_videos``.
+  truth in the area range) is left out of that metric and counted as skipped. A video whose
+  metrics are ``null`` (some person has no ground-truth keypoints, so the loop computed no AP and
+  no OSPA) is listed as "no ground truth" and left out of every mean and curve; it still counts
+  in ``n_videos``.
 * ``learning_curves_<metric>.png``: the mean over the videos on the 0 to 100 % label grid, one line
   per strategy.
 * ``stopping`` in ``summary.json`` and the stopping table of ``summary.md`` (Table 5 of the paper)
@@ -271,8 +271,8 @@ def _stopping_markdown(summary: dict[str, dict[str, Any]]) -> list[str]:
         "it; a video that never meets it stops at 100 % and counts in the means. SC_Min: the "
         "mean OKS of the people selected in the round reaches θ. SC_All: every person labeled "
         "so far reaches θ. Actual: every person of the video reaches θ, and the rounds after it "
-        "are ignored, as the 2023 code stopped there. AP@θ is the AP at OKS θ (`performances_ann`) "
-        "in the round nearest to the stop, in percent; the means run over the videos.",
+        "are ignored. AP@θ is the AP at OKS θ (`performances_ann`) in the round nearest to the "
+        "stop, in percent; the means run over the videos.",
         "",
         "| strategy | θ | videos | criterion | AP@θ (%) | stopped (%) | stopped at 100 % |",
         "|---|---|---|---|---|---|---|",
