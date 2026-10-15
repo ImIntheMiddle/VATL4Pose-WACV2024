@@ -288,7 +288,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--max-frames", type=int)
-    parser.add_argument("--learning-device", choices=["cpu", "cuda"], default="cpu")
+    parser.add_argument("--learning-device", choices=["cpu", "cuda"], default="cuda")
     parser.add_argument(
         "--target-oks",
         type=float,
