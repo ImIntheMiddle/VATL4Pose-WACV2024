@@ -322,9 +322,9 @@ def unwrap_keypoints(
     Returns:
         A new ``(K, 3)`` array.
     """
-    centre = 0.5 * (bbox_xyxy[0] + bbox_xyxy[2])
+    center = 0.5 * (bbox_xyxy[0] + bbox_xyxy[2])
     has_position = (keypoints[:, 0] != 0.0) | (keypoints[:, 1] != 0.0)
-    turns = np.floor((centre - keypoints[:, 0]) / width + 0.5)
+    turns = np.floor((center - keypoints[:, 0]) / width + 0.5)
     moved = keypoints.copy()
     moved[:, 0] = np.where(
         has_position, keypoints[:, 0] + turns * width, keypoints[:, 0]

@@ -16,7 +16,7 @@ joints without an annotation at the image corner:
 
 * The network works on *standardised* features. The mean and the standard deviation of every
   dimension, taken over the valid training entries, are the buffers ``feature_mean`` and
-  ``feature_std`` of the model and part of its state dict (:meth:`WholeBodyAE.standardise`).
+  ``feature_std`` of the model and part of its state dict (:meth:`WholeBodyAE.standardize`).
 * The decoder output is linear.
 * A joint that is not visible, and an angle that has an invisible joint among its three, is
   *invalid*. Its entry is 0 in the standardised input and takes no part in any loss or score
@@ -41,7 +41,7 @@ _SLOPE_EPS = 1e-6
 # The first layer of the encoder fixes the length of the input vector.
 _FIRST_WEIGHT_KEY = "encoder.0.weight"
 # The normalisation buffers; a checkpoint of the 2023 format has neither.
-_NORMALISATION_KEYS = ("feature_mean", "feature_std")
+_NORMALIZATION_KEYS = ("feature_mean", "feature_std")
 
 
 class WholeBodyAE(nn.Module):
@@ -54,7 +54,7 @@ class WholeBodyAE(nn.Module):
 
     The module reads and writes standardised features. The buffers ``feature_mean`` and
     ``feature_std`` (shape ``(input_dim,)``, initially 0 and 1) hold the statistics of the training
-    features, and :meth:`standardise` applies them. They are not trained and travel with the state
+    features, and :meth:`standardize` applies them. They are not trained and travel with the state
     dict.
 
     Args:
@@ -94,7 +94,7 @@ class WholeBodyAE(nn.Module):
             nn.Linear(24, input_dim),
         )
 
-    def set_normalisation(self, mean: torch.Tensor, std: torch.Tensor) -> None:
+    def set_normalization(self, mean: torch.Tensor, std: torch.Tensor) -> None:
         """Store the feature statistics; ``std`` must be positive and both must be finite.
 
         Raises:
@@ -119,7 +119,7 @@ class WholeBodyAE(nn.Module):
             self.feature_mean.copy_(mean)
             self.feature_std.copy_(std)
 
-    def standardise(self, features: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
+    def standardize(self, features: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
         """Standardise raw hybrid features with the stored statistics; invalid entries become 0.
 
         Args:
@@ -129,7 +129,7 @@ class WholeBodyAE(nn.Module):
         Returns:
             ``(features - feature_mean) / feature_std`` where ``valid``, 0 elsewhere.
         """
-        return standardise_features(
+        return standardize_features(
             features, valid, self.feature_mean, self.feature_std
         )
 
@@ -138,7 +138,7 @@ class WholeBodyAE(nn.Module):
 
         Args:
             x: Floating-point tensor of shape ``(..., input_dim)``, the output of
-                :meth:`standardise`.
+                :meth:`standardize`.
 
         Returns:
             Tensor of the same shape; the values at invalid entries carry no meaning.
@@ -150,7 +150,7 @@ class WholeBodyAE(nn.Module):
         return out
 
 
-def standardise_features(
+def standardize_features(
     features: torch.Tensor,
     valid: torch.Tensor,
     mean: torch.Tensor,
@@ -176,11 +176,11 @@ def standardise_features(
         features.shape,
     )
     assert mean.shape == std.shape == features.shape[1:], (mean.shape, std.shape)
-    standardised = torch.where(
+    standardized = torch.where(
         valid, (features - mean) / std, torch.zeros_like(features)
     )
-    assert standardised.shape == features.shape
-    return standardised
+    assert standardized.shape == features.shape
+    return standardized
 
 
 def masked_mse(
@@ -227,7 +227,7 @@ def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
             f"{ckpt} is not a whole-body autoencoder state dict: "
             f"no 2-D entry {_FIRST_WEIGHT_KEY!r}"
         )
-    missing = [key for key in _NORMALISATION_KEYS if key not in state]
+    missing = [key for key in _NORMALIZATION_KEYS if key not in state]
     if missing:
         raise ValueError(
             f"{ckpt} is a whole-body autoencoder of the 2023 format (no {', '.join(missing)}: "
@@ -236,7 +236,7 @@ def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
             "or train=ae_jrdb"
         )
     input_dim = int(state[_FIRST_WEIGHT_KEY].shape[1])
-    for key in _NORMALISATION_KEYS:
+    for key in _NORMALIZATION_KEYS:
         if tuple(state[key].shape) != (input_dim,):
             raise ValueError(
                 f"{ckpt}: {key} has shape {tuple(state[key].shape)}, expected ({input_dim},) "
@@ -386,10 +386,10 @@ def compute_hybrid(
             f"row {row}: keypoint weights must have a positive sum, got {weight_sum[row]}"
         )
 
-    centre_x = (x * weight).sum(axis=1) / weight_sum
-    centre_y = (y * weight).sum(axis=1) / weight_sum
-    x_offset = (x - centre_x[:, None]) / height[:, None]
-    y_offset = (y - centre_y[:, None]) / height[:, None]
+    center_x = (x * weight).sum(axis=1) / weight_sum
+    center_y = (y * weight).sum(axis=1) / weight_sum
+    x_offset = (x - center_x[:, None]) / height[:, None]
+    y_offset = (y - center_y[:, None]) / height[:, None]
 
     triplets = np.asarray(spec.angle_triplets, dtype=np.int64).reshape(-1, 3)
     a, b, c = triplets[:, 0], triplets[:, 1], triplets[:, 2]
@@ -466,7 +466,7 @@ def wpu_scores(
         )
 
     device = next(ae.parameters()).device
-    x = ae.standardise(
+    x = ae.standardize(
         torch.tensor(np.asarray(hybrid, dtype=np.float32), device=device),
         torch.tensor(valid, device=device),
     )

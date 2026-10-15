@@ -118,9 +118,9 @@
   }
 
   // ---------------------------------------------------------------- drawing helpers
-  function sideColour(side) { return P.side[side]; }
+  function sideColor(side) { return P.side[side]; }
 
-  function drawSkeleton(ctx, xy, scale, colour, width, wrapW, shown) {
+  function drawSkeleton(ctx, xy, scale, color, width, wrapW, shown) {
     // xy: flat [x0, y0, x1, y1, ...]; wrapW: width of a panorama (limbs across its seam are skipped);
     // shown: 0 or 1 per joint, the joints confident enough to draw (all of them when left out)
     var hidden = {};
@@ -132,14 +132,14 @@
       var x1 = xy[2 * l[0]], y1 = xy[2 * l[0] + 1], x2 = xy[2 * l[1]], y2 = xy[2 * l[1] + 1];
       if (!drawn(l[0]) || !drawn(l[1])) return;
       if (wrapW && Math.abs(x1 - x2) > wrapW / 2) return;
-      ctx.strokeStyle = colour || sideColour(l[2]);
+      ctx.strokeStyle = color || sideColor(l[2]);
       ctx.lineWidth = t;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.stroke();
     });
-    if (colour) return;
+    if (color) return;
     for (var j = 0; j < K; j++) {
       if (hidden[j] || !drawn(j)) continue;
       ctx.fillStyle = "#141414";
@@ -232,10 +232,10 @@
     if (img) then(img);
   }
 
-  function heatLayer(b64, colour) {
+  function heatLayer(b64, color) {
     var raw = atob(b64), c = document.createElement("canvas");
     c.width = 48; c.height = 64;
-    var cx = c.getContext("2d"), data = cx.createImageData(48, 64), rgb = colour.match(/\d+/g).map(Number);
+    var cx = c.getContext("2d"), data = cx.createImageData(48, 64), rgb = color.match(/\d+/g).map(Number);
     for (var i = 0; i < 48 * 64; i++) {
       var level = raw.charCodeAt(i) / 255;
       data.data[4 * i] = rgb[0]; data.data[4 * i + 1] = rgb[1]; data.data[4 * i + 2] = rgb[2];
@@ -393,8 +393,8 @@
     if (!D.video.panorama || p < 0) return;
     var canvas = $("canvas"), stage = $("stage"), W = D.frames[state.frame].width, b = D.people.box[p];
     var k = canvas.getBoundingClientRect().width / canvas.width;
-    var centre = (((b[0] % W) + W) % W + (b[2] - b[0]) / 2) * k;
-    stage.scrollLeft = centre - stage.clientWidth / 2;
+    var center = (((b[0] % W) + W) % W + (b[2] - b[0]) / 2) * k;
+    stage.scrollLeft = center - stage.clientWidth / 2;
   }
 
   function select(person) {

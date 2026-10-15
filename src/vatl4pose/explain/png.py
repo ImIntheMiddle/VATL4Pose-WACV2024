@@ -23,7 +23,7 @@ from .draw import (
     GAP,
     PICK,
     RECON,
-    SIDE_COLOURS,
+    SIDE_COLORS,
     THC_JOINTS,
     draw_pose,
     limb_sides,
@@ -43,8 +43,8 @@ _WINDOW = 1600
 """Width in pixels of the part of a panorama that the picture shows around the person."""
 
 
-def _rgb(colour: tuple[int, int, int]) -> tuple[float, float, float]:
-    return colour[0] / 255, colour[1] / 255, colour[2] / 255
+def _rgb(color: tuple[int, int, int]) -> tuple[float, float, float]:
+    return color[0] / 255, color[1] / 255, color[2] / 255
 
 
 def _name(scene: Scene, joint: int) -> str:
@@ -139,8 +139,8 @@ def _frame_panel(
     boxes = person_boxes(scene.bbox_crop)
     x0 = 0
     if panorama:
-        centre = (boxes[pick.person, 0] + boxes[pick.person, 2]) / 2
-        x0 = int(round(centre - _WINDOW / 2))
+        center = (boxes[pick.person, 0] + boxes[pick.person, 2]) / 2
+        x0 = int(round(center - _WINDOW / 2))
         view = np.ascontiguousarray(window(image, x0, x0 + min(_WINDOW, width), True))
     else:
         view = image.copy()
@@ -213,12 +213,12 @@ def _crop_axes(ax: Axes, crop: np.ndarray | None) -> None:
     ax.imshow(crop, extent=(0, width, height, 0))
 
 
-def _heat_overlay(heat: np.ndarray, colour: tuple[int, int, int]) -> np.ndarray:
+def _heat_overlay(heat: np.ndarray, color: tuple[int, int, int]) -> np.ndarray:
     """RGBA picture of a ``(64, 48)`` uint8 heatmap in one colour."""
     assert heat.shape == HEATMAP_SIZE and heat.dtype == np.uint8
     level = heat.astype(np.float32) / 255.0
     rgba = np.zeros((*heat.shape, 4), dtype=np.float32)
-    rgba[..., :3] = _rgb(colour)
+    rgba[..., :3] = _rgb(color)
     rgba[..., 3] = level**0.7 * 0.85
     return rgba
 
@@ -271,7 +271,7 @@ def _wpu_panel(ax: Axes, scene: Scene, wpu: WpuFigure, crop: np.ndarray) -> None
     height, width = INPUT_SIZE
     _crop_axes(ax, crop)
     ax.imshow(np.ones((height, width, 3)), extent=(0, width, height, 0), alpha=0.6)
-    for xy, colour, line_width in (
+    for xy, color, line_width in (
         (wpu.reconstructed, RECON, 3.5),
         (wpu.predicted, None, 1.8),
     ):
@@ -279,7 +279,7 @@ def _wpu_panel(ax: Axes, scene: Scene, wpu: WpuFigure, crop: np.ndarray) -> None
             ax.plot(
                 xy[[a, b], 0],
                 xy[[a, b], 1],
-                color=_rgb(colour or SIDE_COLOURS[side]),
+                color=_rgb(color or SIDE_COLORS[side]),
                 linewidth=line_width,
                 solid_capstyle="round",
             )

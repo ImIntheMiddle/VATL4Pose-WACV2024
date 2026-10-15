@@ -178,7 +178,7 @@ def wpu_details(ctx: RoundContext, ae: WholeBodyAE) -> dict[str, np.ndarray]:
     assert hybrid.shape[1] == ae.input_dim, (hybrid.shape, ae.input_dim)
     device = next(ae.parameters()).device
     with torch.no_grad():
-        x = ae.standardise(
+        x = ae.standardize(
             torch.tensor(hybrid.astype(np.float32), device=device),
             torch.tensor(valid, device=device),
         )
@@ -186,13 +186,13 @@ def wpu_details(ctx: RoundContext, ae: WholeBodyAE) -> dict[str, np.ndarray]:
         raw = recon * ae.feature_std + ae.feature_mean
     raw_np = raw.cpu().numpy().astype(np.float64)
     weight = keypoints[..., 2]
-    centre_x = (keypoints[..., 0] * weight).sum(axis=1) / weight.sum(axis=1)
-    centre_y = (keypoints[..., 1] * weight).sum(axis=1) / weight.sum(axis=1)
+    center_x = (keypoints[..., 0] * weight).sum(axis=1) / weight.sum(axis=1)
+    center_y = (keypoints[..., 1] * weight).sum(axis=1) / weight.sum(axis=1)
     height = box[:, 3]
     recon_coords = np.stack(
         [
-            centre_x[:, None] + raw_np[:, :k] * height[:, None],
-            centre_y[:, None] + raw_np[:, k : 2 * k] * height[:, None],
+            center_x[:, None] + raw_np[:, :k] * height[:, None],
+            center_y[:, None] + raw_np[:, k : 2 * k] * height[:, None],
         ],
         axis=-1,
     )
@@ -251,10 +251,10 @@ def stored_heatmaps(ctx: RoundContext, order: np.ndarray) -> dict[str, np.ndarra
     low = heatmaps.min(axis=(2, 3))
     high = heatmaps.max(axis=(2, 3))
     span = np.where(high > low, high - low, 1.0)[..., None, None]
-    quantised = np.rint((heatmaps - low[..., None, None]) / span * 255.0).astype(np.uint8)
+    quantized = np.rint((heatmaps - low[..., None, None]) / span * 255.0).astype(np.uint8)
     return {
         "heatmap_index": index,
-        "heatmaps": quantised,
+        "heatmaps": quantized,
         "heatmap_low": low.astype(np.float32),
         "heatmap_high": high.astype(np.float32),
     }

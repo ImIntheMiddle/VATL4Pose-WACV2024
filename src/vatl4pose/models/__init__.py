@@ -23,7 +23,7 @@ from .wholebody_ae import (
     load_wholebody_ae,
     masked_mse,
     read_input_dim,
-    standardise_features,
+    standardize_features,
     wpu_scores,
 )
 
@@ -45,7 +45,7 @@ __all__ = [
     "masked_mse",
     "predict_link_gaussians",
     "read_input_dim",
-    "standardise_features",
+    "standardize_features",
     "train_auxnet",
     "wpu_scores",
 ]

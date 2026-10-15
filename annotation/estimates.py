@@ -25,8 +25,8 @@ from vatl4pose.explain.draw import shown_joints
 from vatl4pose.keypoints import KeypointSpec, get_spec
 
 
-def _bgr(hex_colour: str) -> tuple[int, int, int]:
-    r, g, b = (int(hex_colour[i : i + 2], 16) for i in (1, 3, 5))
+def _bgr(hex_color: str) -> tuple[int, int, int]:
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (1, 3, 5))
     return b, g, r
 
 
@@ -50,8 +50,8 @@ def draw_people(
                 continue
             names = spec.joint_names[a] + spec.joint_names[b]
             side = "left" if "left" in names else "right" if "right" in names else ""
-            colour = _bgr(joint_color(side))
-            cv2.line(out, points[a], points[b], colour, t, cv2.LINE_AA)
+            color = _bgr(joint_color(side))
+            cv2.line(out, points[a], points[b], color, t, cv2.LINE_AA)
         for j, point in enumerate(points):
             if j in skip:
                 continue

@@ -93,14 +93,14 @@ def _oks(
     xg, yg, vg = gt_kpt[..., 0], gt_kpt[..., 1], gt_kpt[..., 2]
     x, y, w, h = (gt_bbox_xywh[..., i, np.newaxis] for i in range(4))
 
-    labelled = vg > 0
-    has_label = labelled.any(axis=-1, keepdims=True)
+    labeled = vg > 0
+    has_label = labeled.any(axis=-1, keepdims=True)
     # Without labels the distance goes to the box enlarged to three times its size.
     dx_box = np.maximum(0.0, (x - w) - xd) + np.maximum(0.0, xd - (x + 2.0 * w))
     dy_box = np.maximum(0.0, (y - h) - yd) + np.maximum(0.0, yd - (y + 2.0 * h))
     dx = np.where(has_label, xd - xg, dx_box)
     dy = np.where(has_label, yd - yg, dy_box)
-    used = np.where(has_label, labelled, True)
+    used = np.where(has_label, labeled, True)
 
     variances = (2.0 * sigmas) ** 2
     e = (dx**2 + dy**2) / variances / (w * h + _AREA_EPS) * 0.5

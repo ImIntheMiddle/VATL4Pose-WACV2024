@@ -9,8 +9,8 @@ from ..data.geometry import INPUT_SIZE, get_affine_transform, warp_crop
 from ..keypoints import KeypointSpec
 
 # RGB colours of the limbs: left side, right side and the middle of the body
-LEFT, RIGHT, CENTRE = (255, 138, 61), (61, 165, 255), (155, 225, 93)
-SIDE_COLOURS = (LEFT, RIGHT, CENTRE)
+LEFT, RIGHT, CENTER = (255, 138, 61), (61, 165, 255), (155, 225, 93)
+SIDE_COLORS = (LEFT, RIGHT, CENTER)
 PICK = (255, 176, 0)  # the boxes and numbers of the selected people
 RECON = (232, 62, 140)  # the skeleton that the autoencoder reconstructs (WPU)
 GAP = (230, 40, 40)  # the joints whose reconstruction differs most (WPU)
@@ -52,7 +52,7 @@ def draw_pose(
     spec: KeypointSpec,
     xy: np.ndarray,
     scale: float,
-    colour: tuple[int, int, int] | None = None,
+    color: tuple[int, int, int] | None = None,
     width_x: int | None = None,
     shown: np.ndarray | None = None,
 ) -> None:
@@ -63,7 +63,7 @@ def draw_pose(
         spec: The keypoint layout.
         xy: ``(K, 2)`` joint positions in pixels.
         scale: Line width factor; 1 is the width for an image 480 pixels high.
-        colour: One RGB colour for the whole skeleton; ``None`` colours the limbs by side.
+        color: One RGB colour for the whole skeleton; ``None`` colours the limbs by side.
         width_x: The width of a panorama; a limb that crosses its seam is not drawn.
         shown: ``(K,)`` bool, the joints to draw (:func:`shown_joints`); a limb is drawn when both
             of its joints are. ``None`` draws every joint.
@@ -85,17 +85,17 @@ def draw_pose(
             image,
             tuple(np.round(p).astype(int).tolist()),
             tuple(np.round(q).astype(int).tolist()),
-            colour or SIDE_COLOURS[side],
+            color or SIDE_COLORS[side],
             thickness,
             cv2.LINE_AA,
         )
     for j in range(spec.num_joints):
         if j in skip or not shown[j]:
             continue
-        centre = tuple(np.round(xy[j]).astype(int).tolist())
-        cv2.circle(image, centre, thickness + 1, (20, 20, 20), -1, cv2.LINE_AA)
+        center = tuple(np.round(xy[j]).astype(int).tolist())
+        cv2.circle(image, center, thickness + 1, (20, 20, 20), -1, cv2.LINE_AA)
         cv2.circle(
-            image, centre, max(1, thickness - 1), (255, 255, 255), -1, cv2.LINE_AA
+            image, center, max(1, thickness - 1), (255, 255, 255), -1, cv2.LINE_AA
         )
 
 
@@ -109,10 +109,10 @@ def person_crop(
     """
     assert bbox_crop.shape == (4,), bbox_crop.shape
     box = bbox_crop.astype(np.float64)
-    centre = np.array([(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], dtype=np.float32)
+    center = np.array([(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], dtype=np.float32)
     scale = np.array([box[2] - box[0], box[3] - box[1]], dtype=np.float32)
     height, width = INPUT_SIZE
-    trans = get_affine_transform(centre, scale, 0.0, (width, height))
+    trans = get_affine_transform(center, scale, 0.0, (width, height))
     return warp_crop(image_rgb, trans, panorama)
 
 

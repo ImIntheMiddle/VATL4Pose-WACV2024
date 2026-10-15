@@ -218,9 +218,9 @@ def build_scene(info: RunInfo, details: dict[str, np.ndarray]) -> Scene:
 def person_boxes(bbox_crop: np.ndarray) -> np.ndarray:
     """``(N, 4)`` boxes of the people themselves, the crop boxes without their margin."""
     box = bbox_crop.astype(np.float64)
-    centre = (box[:, :2] + box[:, 2:]) / 2
+    center = (box[:, :2] + box[:, 2:]) / 2
     half = (box[:, 2:] - box[:, :2]) / 2 * _PERSON_BOX
-    return np.concatenate([centre - half, centre + half], axis=1).astype(np.float32)
+    return np.concatenate([center - half, center + half], axis=1).astype(np.float32)
 
 
 def build_picks(

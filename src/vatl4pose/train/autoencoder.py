@@ -275,11 +275,11 @@ def train_wholebody_ae(
     with torch.random.fork_rng(devices=[]):
         torch.default_generator.manual_seed(derived_seed("ae", "model", seed))
         model = WholeBodyAE(spec.ae_input_dim, cfg.z_dim)
-    model.set_normalisation(mean, std)
+    model.set_normalization(mean, std)
     model = model.to(device)
     # standardised once; the statistics are buffers, so training does not change them
-    z_train = model.standardise(x_train.to(device), mask_train.to(device))
-    z_valid = model.standardise(x_valid.to(device), mask_val.to(device))
+    z_train = model.standardize(x_train.to(device), mask_train.to(device))
+    z_valid = model.standardize(x_valid.to(device), mask_val.to(device))
     mask_train, mask_val = mask_train.to(device), mask_val.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     rate_at = dict(cfg.lr_steps)

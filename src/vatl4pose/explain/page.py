@@ -16,7 +16,7 @@ from importlib import resources
 
 import numpy as np
 
-from .draw import CENTRE, GAP, LEFT, PICK, RECON, RIGHT, THC_JOINTS, limb_sides
+from .draw import CENTER, GAP, LEFT, PICK, RECON, RIGHT, THC_JOINTS, limb_sides
 from .figures import (
     DuwFigure,
     Pick,
@@ -44,8 +44,8 @@ def crop_name(sample: int) -> str:
     return f"{CROPS_DIR}/person_{sample:06d}.jpg"
 
 
-def _css(colour: tuple[int, int, int]) -> str:
-    return f"rgb({colour[0]},{colour[1]},{colour[2]})"
+def _css(color: tuple[int, int, int]) -> str:
+    return f"rgb({color[0]},{color[1]},{color[2]})"
 
 
 def _number(value: float, digits: int = 4) -> float | None:
@@ -158,7 +158,7 @@ def build_data(
             "panorama": info.panorama,
         },
         "palette": {
-            "side": [_css(LEFT), _css(RIGHT), _css(CENTRE)],
+            "side": [_css(LEFT), _css(RIGHT), _css(CENTER)],
             "pick": _css(PICK),
             "labeled": "rgb(0,169,157)",
             "recon": _css(RECON),

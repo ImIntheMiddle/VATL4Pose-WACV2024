@@ -92,7 +92,7 @@ def _write_atomic(path: pathlib.Path, data: bytes) -> None:
         os.close(dir_fd)
 
 
-def _serialise(payload: dict[str, Any]) -> bytes:
+def _serialize(payload: dict[str, Any]) -> bytes:
     """The queries file as compact strict JSON (no NaN or infinity) in UTF-8, ending in a newline."""
     text = json.dumps(payload, separators=(",", ":"), allow_nan=False)
     return (text + "\n").encode("utf-8")
@@ -233,7 +233,7 @@ class CocoFileOracle:
         queries = self._dir / f"round_{round_index:02d}_queries.json"
         answers = self._dir / f"round_{round_index:02d}_answers.json"
         payload = self._payload(np.sort(indices), predictions, round_index)
-        content = _serialise(payload)
+        content = _serialize(payload)
         if queries.exists():
             difference = _first_difference(_read_queries(queries), payload, queries)
             if difference is not None:
@@ -348,9 +348,9 @@ class CocoFileOracle:
         }
 
     def _image_entry(self, image_id: int, path: pathlib.Path) -> dict[str, Any]:
-        normalised = pathlib.Path(os.path.normpath(path))
+        normalized = pathlib.Path(os.path.normpath(path))
         try:
-            relative = normalised.relative_to(self._dataset_root)
+            relative = normalized.relative_to(self._dataset_root)
         except ValueError:
             raise ValueError(
                 f"image {path} lies outside dataset_root {self._dataset_root}; the exported "

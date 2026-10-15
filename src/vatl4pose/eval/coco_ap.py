@@ -162,10 +162,10 @@ def coco_keypoint_ap(
             f"{foreign[:10].tolist()}"
         )
     n_visible = (g_kpt[:, :, 2] > 0).sum(axis=1)
-    unlabelled = np.flatnonzero(n_visible == 0)
-    if unlabelled.size:
+    unlabeled = np.flatnonzero(n_visible == 0)
+    if unlabeled.size:
         raise ValueError(
-            f"ground-truth sample {int(unlabelled[0])} has no visible keypoint; the evaluation "
+            f"ground-truth sample {int(unlabeled[0])} has no visible keypoint; the evaluation "
             "of 2023 never ignored a person for that, so such samples must be dropped before"
         )
 

@@ -90,7 +90,7 @@ def finetune_wholebody_ae(
         )
     device = next(ae.parameters()).device
     mask = torch.from_numpy(valid).to(device)
-    x = ae.standardise(
+    x = ae.standardize(
         torch.from_numpy(np.asarray(features, dtype=np.float32)).to(device), mask
     )
     n = x.shape[0]
