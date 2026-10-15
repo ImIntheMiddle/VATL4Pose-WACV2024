@@ -32,7 +32,7 @@ def pose_score(peaks: np.ndarray) -> np.ndarray:
 def xyxy_to_xywh(boxes: np.ndarray) -> np.ndarray:
     """Boxes ``x1, y1, x2, y2`` to ``x, y, w, h`` with the width and height counting both end pixels.
 
-    This is the box of the 2023 evaluation: the label area is ``w * h`` of it.
+    The label area of the AP protocol of the paper is ``w * h`` of this box.
 
     Args:
         boxes: ``(N, 4)`` float boxes.

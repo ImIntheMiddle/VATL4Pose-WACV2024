@@ -21,8 +21,8 @@ from ..registry import register_scorer
 def crop_boxes_xywh(bbox_xyxy: np.ndarray) -> np.ndarray:
     """Convert ``(N, 4)`` boxes ``x1, y1, x2, y2`` to ``x, y, w, h`` with ``w = x2 - x1 + 1``.
 
-    The ``+ 1`` is the pixel-inclusive size of the 2023 code; the hybrid feature divides by the
-    height. The arithmetic runs in float64 whatever the dtype of the input.
+    The ``+ 1`` counts both end pixels; the hybrid feature divides by the height. The arithmetic
+    runs in float64 whatever the dtype of the input.
     """
     box = np.asarray(bbox_xyxy, dtype=np.float64)
     assert box.ndim == 2 and box.shape[1] == 4, (

@@ -8,7 +8,8 @@ The parameter names equal the keys of the released checkpoints, so those load wi
 through :func:`build_estimator` without key renaming.
 
 The head layers start from PyTorch's default initialization; ``build_estimator(init_head=True)``
-draws them as the 2023 code did (see its docstring).
+draws their weights from a normal distribution with a standard deviation of 0.001 instead (see
+``initialize_head``).
 """
 
 from __future__ import annotations
@@ -143,7 +144,7 @@ class _ResNetEstimator(PoseEstimator):
         raise NotImplementedError
 
     def initialize_head(self) -> None:
-        """Draw the head layers as the 2023 ``_initialize`` did; the backbone stays as it is."""
+        """Draw the head layers with small normal weights; the backbone stays as it is."""
         raise NotImplementedError
 
     def backbone_features(self, x: torch.Tensor) -> torch.Tensor:
@@ -187,8 +188,7 @@ class SimpleBaselineEstimator(_ResNetEstimator):
     def initialize_head(self) -> None:
         """Normal(0, 0.001) weights for the transposed convolutions and the output convolution.
 
-        The batch norms of the upsampling get weight 1 and bias 0, and the output bias is set to 0,
-        as in ``SimplePose._initialize`` of 2023.
+        The batch norms of the upsampling get weight 1 and bias 0, and the output bias is set to 0.
         """
         for module in self.deconv_layers.modules():
             if isinstance(module, nn.ConvTranspose2d):
@@ -232,7 +232,7 @@ class FastPoseEstimator(_ResNetEstimator):
     def initialize_head(self) -> None:
         """Normal(0, 0.001) weights and zero bias for the output convolution.
 
-        This is ``FastPose._initialize`` of 2023. The DUC blocks keep their default initialization.
+        The DUC blocks keep their default initialization.
         """
         nn.init.normal_(self.conv_out.weight, std=0.001)
         nn.init.constant_(self.conv_out.bias, 0)
@@ -302,10 +302,10 @@ def build_estimator(
     ``cfg.weights`` is loaded with ``torch.load(weights_only=True)`` and ``strict=True``. Without
     weights and without ``imagenet_init`` the estimator keeps its random initial values.
 
-    With ``init_head`` the head layers are drawn as the 2023 code did for an estimator
-    without a checkpoint (``initialize_head``). The draw happens on the CPU before the estimator
-    moves to ``device``, so the global CPU generator decides it. The default keeps PyTorch's
-    initialization.
+    With ``init_head`` the head layers of an estimator without a checkpoint are drawn by
+    ``initialize_head`` (small normal weights, zero biases). The draw happens on the CPU before the
+    estimator moves to ``device``, so the global CPU generator decides it. The default keeps
+    PyTorch's initialization.
 
     Raises:
         ValueError: If the arch is unknown, ``num_joints`` is not positive, or ``imagenet_init`` or

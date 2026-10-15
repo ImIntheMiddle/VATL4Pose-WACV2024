@@ -13,9 +13,8 @@ from .topk import rank_unlabeled
 class RandomSelector:
     """Draw one uniform score per unlabeled person and take the ``k`` highest.
 
-    One call ``ctx.rng.random(U)`` serves ``U`` unlabeled people, in index order, so a context
-    whose ``rng`` wraps the NumPy ``RandomState`` stream reproduces the ``np.random.rand(U)``
-    draw of the 2023 code. The total score is ignored.
+    One call ``ctx.rng.random(U)`` draws the scores of the ``U`` unlabeled people, in index order.
+    The total score is ignored.
     """
 
     needs_embeddings = False

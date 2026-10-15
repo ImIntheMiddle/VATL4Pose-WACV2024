@@ -11,8 +11,7 @@ where ``(c_x, c_y)`` is the center of the joints weighted by their confidence or
 triplet from :attr:`KeypointSpec.angle_triplets`. The vector has
 :attr:`KeypointSpec.ae_input_dim` entries.
 
-Three design points differ from the 2023 autoencoder, whose decoder ended in a sigmoid and saw
-joints without an annotation at the image corner:
+Three design points:
 
 * The autoencoder works on *standardized* features. The mean and the standard deviation of every
   dimension, taken over the valid training entries, are the buffers ``feature_mean`` and
@@ -22,7 +21,7 @@ joints without an annotation at the image corner:
   *invalid*. Its entry is 0 in the standardized input and takes no part in any loss or score
   (:func:`hybrid_valid_mask`, :func:`masked_mse`, :func:`wpu_scores`).
 
-A checkpoint of the 2023 format has no ``feature_mean`` and ``feature_std``; the loaders refuse it.
+A checkpoint without ``feature_mean`` and ``feature_std`` is refused by the loaders.
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ _SLOPE_EPS = 1e-6
 
 # The first layer of the encoder fixes the length of the input vector.
 _FIRST_WEIGHT_KEY = "encoder.0.weight"
-# The normalization buffers; a checkpoint of the 2023 format has neither.
+# The normalization buffers; a checkpoint must hold both.
 _NORMALIZATION_KEYS = ("feature_mean", "feature_std")
 
 
@@ -49,8 +48,8 @@ class WholeBodyAE(nn.Module):
 
     The encoder is ``input_dim -> 24 -> 12 -> 7 -> z_dim`` with a ReLU after every layer except
     the last. The decoder mirrors it, ``z_dim -> 7 -> 12 -> 24 -> input_dim``, and has no output
-    activation. The submodules are called ``encoder`` and ``decoder`` (``nn.Sequential``) as in the
-    2023 checkpoints.
+    activation. The submodules are called ``encoder`` and ``decoder`` (``nn.Sequential``), and the
+    keys of the state dict start with these names.
 
     The module reads and writes standardized features. The buffers ``feature_mean`` and
     ``feature_std`` (shape ``(input_dim,)``, initially 0 and 1) hold the statistics of the training
@@ -214,8 +213,8 @@ def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
     """Load the state dict of ``ckpt`` on the CPU, accepting tensors only.
 
     Raises:
-        ValueError: If ``ckpt`` is no whole-body autoencoder state dict, or one of the 2023
-            format (without the normalization buffers), or the buffers do not fit the encoder.
+        ValueError: If ``ckpt`` is no whole-body autoencoder state dict, or has no normalization
+            buffers, or the buffers do not fit the encoder.
     """
     state = torch.load(ckpt, map_location="cpu", weights_only=True)
     if (
@@ -230,9 +229,8 @@ def _read_state(ckpt: pathlib.Path) -> dict[str, torch.Tensor]:
     missing = [key for key in _NORMALIZATION_KEYS if key not in state]
     if missing:
         raise ValueError(
-            f"{ckpt} is a whole-body autoencoder of the 2023 format (no {', '.join(missing)}: "
-            "sigmoid decoder on unscaled features). Use the retrained weights "
-            "WholeBodyAE_zdim4_v1.pth or train one with vatl4pose-train train=ae_posetrack21 "
+            f"{ckpt} has no {', '.join(missing)} (the feature statistics of the training data); "
+            "use WholeBodyAE_zdim4_v1.pth or train one with vatl4pose-train train=ae_posetrack21 "
             "or train=ae_jrdb"
         )
     input_dim = int(state[_FIRST_WEIGHT_KEY].shape[1])
@@ -249,7 +247,8 @@ def read_input_dim(ckpt: pathlib.Path) -> int:
     """Return the input dimension of a checkpoint, the width of ``encoder.0.weight``.
 
     Raises:
-        ValueError: If ``ckpt`` is not a whole-body autoencoder state dict of the current format.
+        ValueError: If ``ckpt`` is not a whole-body autoencoder state dict with normalization
+            buffers.
     """
     return int(_read_state(ckpt)[_FIRST_WEIGHT_KEY].shape[1])
 
@@ -271,8 +270,8 @@ def load_wholebody_ae(
         from the checkpoint.
 
     Raises:
-        ValueError: If ``ckpt`` is of the 2023 format or no autoencoder state dict, or its input
-            dimension differs from ``spec.ae_input_dim``. The message names the file.
+        ValueError: If ``ckpt`` is no autoencoder state dict or has no normalization buffers, or
+            its input dimension differs from ``spec.ae_input_dim``. The message names the file.
         RuntimeError: If the checkpoint has missing, unexpected or mis-shaped entries
             (for example a different ``z_dim``).
     """

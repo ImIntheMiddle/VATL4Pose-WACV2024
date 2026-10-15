@@ -61,7 +61,7 @@ JRDB_ORDER_SIGMAS: tuple[float, ...] = (
 )
 """OKS per-joint sigmas, already divided by 10, in the joint order of JRDB-Pose."""
 
-LEGACY_COCO_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
+COCO_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
     (8, 6, 12),
     (6, 8, 10),
     (5, 7, 9),
@@ -71,11 +71,12 @@ LEGACY_COCO_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
     (12, 14, 16),
     (11, 13, 15),
 )
-"""The angle triplets ``(a, b, c)`` of the 2023 code: the angle at joint ``b`` between ``a-b`` and ``b-c``.
+"""The angle triplets ``(a, b, c)`` in COCO joint order.
 
-They index joints in COCO order. The ``posetrack21`` and ``coco17`` presets use them. The 2023 code
-applied the same indices to the JRDB-Pose joint order, where they name other body parts; the
-``jrdb_pose`` preset uses triplets at the JRDB-Pose joints of the same body parts instead.
+Each triplet gives the angle at joint ``b`` between ``a-b`` and ``b-c``. The ``posetrack21`` and
+``coco17`` presets use them. The JRDB-Pose joint order differs from the COCO order, so the same
+indices would name other body parts there; the ``jrdb_pose`` preset uses triplets at the JRDB-Pose
+joints of the same body parts instead.
 """
 
 _JRDB_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
@@ -88,7 +89,7 @@ _JRDB_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
     (10, 13, 15),
     (11, 14, 16),
 )
-"""The triplets of :data:`LEGACY_COCO_ANGLE_TRIPLETS` at the JRDB-Pose joints of the same body parts.
+"""The triplets of :data:`COCO_ANGLE_TRIPLETS` at the JRDB-Pose joints of the same body parts.
 
 Each COCO joint maps to the JRDB-Pose joint of the same name (JRDB-Pose has feet, no ankles), and
 the triplets keep their order, so the feature has the same 42 values in the same order.
@@ -315,7 +316,7 @@ _POSETRACK21 = KeypointSpec(
     skeleton=tuple((a - 1, b - 1) for a, b in _POSETRACK21_JSON_SKELETON),
     oks_sigmas=COCO17_SIGMAS,
     redundant_joints=(3, 4),  # the ears are not annotated in PoseTrack21
-    angle_triplets=LEGACY_COCO_ANGLE_TRIPLETS,
+    angle_triplets=COCO_ANGLE_TRIPLETS,
 )
 
 # The flip pairs join the left and right joints.
@@ -408,7 +409,7 @@ _COCO17 = KeypointSpec(
     ),
     oks_sigmas=COCO17_SIGMAS,
     redundant_joints=(),
-    angle_triplets=LEGACY_COCO_ANGLE_TRIPLETS,
+    angle_triplets=COCO_ANGLE_TRIPLETS,
 )
 
 _PRESETS: dict[str, KeypointSpec] = {

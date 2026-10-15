@@ -28,7 +28,7 @@ from .coco_ap import METRIC_KEYS
 
 CRITERIA = ("oracle", "min_error", "sc_all")
 """The criteria of Table 5: the actual stop (key ``oracle``), SC_Min and SC_All."""
-_WITH_AP = ("min_error", "sc_all")  # the 2023 summary reads the AP of these two only
+_WITH_AP = ("min_error", "sc_all")  # the criteria whose AP at the stop is read
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ def stop_points(result: dict[str, Any]) -> StopPoints | None:
             "the result has no AP (a video without ground truth has no Table 5 row)"
         )
     if oracle_round is not None:
-        # the 2023 run ended in the round of the actual stop; its later records repeat that round
+        # the annotation ends in the round of the actual stop, so later rounds repeat that round
         performances = performances[: oracle_round + 1] + [
             performances[oracle_round]
         ] * (len(performances) - oracle_round - 1)

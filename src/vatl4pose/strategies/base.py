@@ -50,8 +50,8 @@ class RoundContext:
         embeddings: ``(N, D)`` backbone embeddings, ``None`` for estimators that have none.
         moks_previous: Mean OKS of the people queried in the previous round, 0.0 in round 0.
         rng: Source of randomness of the round. The strategies call ``rng.random(size)`` and
-            ``rng.choice(array)`` only, so a ``numpy.random.Generator`` or a ``RandomState``
-            wrapper both work.
+            ``rng.choice(array)`` only, so any object with these two methods works, for example a
+            ``numpy.random.Generator``.
         extras: Objects the loop provides for strategies that need them, for example the
             whole-body autoencoder under ``"ae"``.
     """

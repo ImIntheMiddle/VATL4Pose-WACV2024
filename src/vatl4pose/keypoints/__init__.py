@@ -2,8 +2,8 @@
 
 from .spec import (
     COCO17_SIGMAS,
+    COCO_ANGLE_TRIPLETS,
     JRDB_ORDER_SIGMAS,
-    LEGACY_COCO_ANGLE_TRIPLETS,
     KeypointSpec,
     get_spec,
     spec_from_mapping,
@@ -11,8 +11,8 @@ from .spec import (
 
 __all__ = [
     "COCO17_SIGMAS",
+    "COCO_ANGLE_TRIPLETS",
     "JRDB_ORDER_SIGMAS",
-    "LEGACY_COCO_ANGLE_TRIPLETS",
     "KeypointSpec",
     "get_spec",
     "spec_from_mapping",

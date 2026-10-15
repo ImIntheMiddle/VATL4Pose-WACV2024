@@ -1,23 +1,22 @@
 """Keypoint average precision on the COCO protocol, computed in memory.
 
-The 2023 experiments evaluated with a modified copy of ``pycocotools``. This module reproduces
-that evaluation with the stock ``pycocotools`` from PyPI, set up through ``Params``. The 2023 copy
-differed from the stock evaluation in three places.
+This module implements the AP protocol of the paper with the stock ``pycocotools`` from PyPI, set
+up through ``Params``. The protocol differs from the stock keypoint evaluation in three places.
 
-* ``maxDets``. The 2023 copy used 100 detections per image; stock keypoint evaluation uses 20.
+* ``maxDets``. Up to 100 detections per image count; stock keypoint evaluation uses 20.
   ``params.maxDets`` is set to ``[100]``.
-* Detection area. The 2023 copy set the area of a detection that carries a box from the box
-  as if it were ``[x1, y1, x2, y2]``, that is ``(w - x) * (h - y)`` for a box ``[x, y, w, h]``.
-  The area is negative or wrong for most boxes, and an unmatched detection whose area lies outside
-  the area range is ignored instead of counted as a false positive. The experiments of the paper
-  carry this behavior, and :func:`keypoint_ap` keeps it so that the numbers stay comparable.
+* Detection area. A detection that carries a box gets its area from the box as if it were
+  ``[x1, y1, x2, y2]``, that is ``(w - x) * (h - y)`` for a box ``[x, y, w, h]``. The area is
+  negative or wrong for most boxes, and an unmatched detection whose area lies outside the area
+  range is ignored and does not count as a false positive. The experiments of the paper use this
+  area, and :func:`keypoint_ap` applies it so that the numbers are comparable with the paper.
   Stock ``loadRes`` uses ``w * h``; the detections are therefore built by hand with the area set
   explicitly.
-* Summary. The 2023 copy summarized a keypoint evaluation as the ten values of
-  :data:`METRIC_KEYS`. Stock ``summarize`` returns ``AP, AP50, AP75, APm, APl, AR, AR50, AR75,
-  ARm, ARl`` for 20 detections, so its entries shift against the 2023 key names (the entry at
-  the position of ``AP .6`` is AP75). The values are computed here from ``eval["precision"]`` and
-  ``eval["recall"]`` and ``summarize`` is never called.
+* Summary. A keypoint evaluation is summarized as the ten values of :data:`METRIC_KEYS`. Stock
+  ``summarize`` returns ``AP, AP50, AP75, APm, APl, AR, AR50, AR75, ARm, ARl`` for 20 detections,
+  so its entries do not line up with these key names (the entry at the position of ``AP .6`` is
+  AP75). The values are computed here from ``eval["precision"]`` and ``eval["recall"]`` and
+  ``summarize`` is never called.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ from .oks import as_float_array, as_image_id, as_pose_xy, as_sigmas
 
 AP_PROTOCOL = "wacv2024-detection-area"
 """Name of the AP protocol of this package, written next to every AP in ``result.json`` and in the
-``vatl4pose-eval`` file. It is the 2023 protocol of the paper, which differs from the standard COCO
+``vatl4pose-eval`` file. It is the AP protocol of the paper, which differs from the standard COCO
 keypoint AP in the area of a detection (see the module docstring), so the values are comparable with
 the paper and not with another COCO evaluation."""
 
@@ -50,7 +49,7 @@ METRIC_KEYS: tuple[str, ...] = (
     "AP (L)",
     "AR",
 )
-"""Names of the ten values of one keypoint evaluation, in the order the 2023 code reported them."""
+"""Names of the ten values of one keypoint evaluation, in reporting order."""
 
 _MAX_DETS = 100
 _AREA_RANGES: list[list[float]] = [
@@ -108,7 +107,7 @@ def coco_keypoint_ap(
 
     Every labeled person is one ground-truth entry with ``area = w * h`` of its box. Every
     detection carries a box and gets the area ``(w - x) * (h - y)`` of that box read as
-    ``[x, y, w, h]`` (the 2023 behavior, see the module docstring). Detections and labels
+    ``[x, y, w, h]`` (the AP protocol of the paper, see the module docstring). Detections and labels
     keep their input order; ties in the score are resolved by that order.
 
     Args:
@@ -165,9 +164,9 @@ def coco_keypoint_ap(
     unlabeled = np.flatnonzero(n_visible == 0)
     if unlabeled.size:
         raise ValueError(
-            f"ground-truth sample {int(unlabeled[0])} has no visible joint; the 2023 evaluation "
-            "never ignored a person for that, so people without a visible joint must be "
-            "dropped before"
+            f"ground-truth sample {int(unlabeled[0])} has no visible joint; the AP protocol of "
+            "the paper does not ignore a person for that, so people without a visible joint must "
+            "be dropped before"
         )
 
     images = [{"id": int(i)} for i in image_ids]

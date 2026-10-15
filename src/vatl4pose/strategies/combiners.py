@@ -25,8 +25,7 @@ def minmax_over_unlabeled(
 
     A score without spread over the unlabeled people (all values equal, or fewer than two
     unlabeled people) normalizes to zeros, and one ``logging.WARNING`` names the scorer and the
-    round. (The 2023 code produced NaN here and queried the lowest indices; the stable top-k over
-    zeros gives the same order.)
+    round.
 
     Args:
         score: ``(N,)`` scores of all people.

@@ -28,8 +28,7 @@ class DUWSelector:
     The distance is the unscaled Euclidean distance of the embeddings. With ``lam = 0`` and
     ``m < 1`` the distance alone decides after the first pick; with ``lam = 0`` and ``m = 1``
     every value is 0, so every pick is the lowest candidate index, except the first pick when
-    nothing is labeled. The 2023 code switched to k-center with a random first pick at
-    ``lam == 0``; that is the ``coreset`` selector here.
+    nothing is labeled.
 
     Args:
         lam: Weight of the uncertainty term (``lam >= 0``); the experiment config sets it.
@@ -78,10 +77,9 @@ class FixedDUWSelector(DUWSelector):
     """DUW without the dynamic weight: greedy k-center with a constant uncertainty weight.
 
     Every pick is the unlabeled person that maximizes ``d + lam * u``, with ``d`` and ``u`` as in
-    :class:`DUWSelector`; the previous round's mean OKS ``m`` does not enter. This is the
-    ``--fixed_lambda`` option of the 2023 code (the "fixed" row of Table 3 of the paper), the
-    ablation of the dynamic weight ``(1 - m) * d + lam * m * u``. The first pick with nothing
-    labeled is that of :class:`DUWSelector`.
+    :class:`DUWSelector`; the previous round's mean OKS ``m`` does not enter. This is the "fixed"
+    row of Table 3 of the paper, the ablation of the dynamic weight ``(1 - m) * d + lam * m * u``.
+    The first pick with nothing labeled is that of :class:`DUWSelector`.
 
     Args:
         lam: Weight of the uncertainty term (``lam >= 0``).

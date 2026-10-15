@@ -87,8 +87,7 @@ def vl4pose_links(spec: KeypointSpec) -> tuple[tuple[int, int], ...]:
 def heatmap_peaks(heatmaps: torch.Tensor) -> torch.Tensor:
     """Arg-max cell of every heatmap (the first one on ties).
 
-    The 2023 code took ``peak_local_max(min_distance=8)``, which skipped the cells near the border;
-    this is the plain arg-max of the rest of the package.
+    Every cell, the border cells included, is a candidate.
 
     Args:
         heatmaps: ``(N, K, H, W)`` float32.
