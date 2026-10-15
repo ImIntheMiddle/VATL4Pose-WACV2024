@@ -54,7 +54,7 @@ The run directory of a video, `outputs/<run.name>/<estimator>/<strategy>/<video>
 | `oracle/` | the queries and answers of `oracle=coco_file` |
 | `details/` | the records of `loop.save_round_details` |
 
-For JRDB-Pose the x of a joint stays next to the box of its person, as in the evaluation, so a joint across the seam can lie below 0 or beyond the image width.
+For JRDB-Pose the x of a joint stays next to the box of its person, so a joint across the seam can lie below 0 or beyond the image width.
 
 ## Tables 3 and 5 of the paper
 
@@ -67,7 +67,7 @@ done
 vatl4pose-summarize experiment=wacv2024_posetrack21
 ```
 
-Table 5 compares stopping criteria with a target OKS θ. With `loop.stopping=true` every round records three judgments under the estimator before it retrains on the round: SC_Min, whether the mean OKS of the people selected in the round reaches θ; SC_All, whether every person labeled so far reaches θ; and the actual stop, whether every person of the video reaches θ against the ground truth. The loop does not stop by itself. `vatl4pose-summarize` reports the mean share of labeled people at the stop of each criterion, and for SC_Min and SC_All the AP@θ there. The preset `wacv2024_posetrack21_table5` raises the share in steps of 10 % as the runs of the paper did, and `retrain.finish_acc` sets θ.
+Table 5 compares stopping criteria with a target OKS θ. With `loop.stopping=true` every round records three judgments under the estimator before it retrains on the round: SC_Min, whether the mean OKS of the people selected in the round reaches θ; SC_All, whether every person labeled so far reaches θ; and the actual stop, whether every person of the video reaches θ against the ground truth. The loop does not stop by itself. `vatl4pose-summarize` reports the mean share of labeled people at the stop of each criterion, and for SC_Min and SC_All the AP@θ there. The preset `wacv2024_posetrack21_table5` raises the share in steps of 10 %, the setting of Table 5, and `retrain.finish_acc` sets θ.
 
 ```bash
 for theta in 0.5 0.6 0.7 0.8; do
@@ -86,7 +86,7 @@ vatl4pose-explain outputs/mine/simplebaseline/THC+WPU_Coresetfilter/clip1
 ```
 
 - `index.html` opens from the file system. It switches between rounds and numbers the selected people; a click on a person shows the THC, WPU and DUW figures of its selection.
-- `round_XX.mp4` and `compare_00_XX.mp4` show the predictions of a round, alone and beside round 0. They, the page and the pictures in `picks/` leave out the joints whose heatmap peak is below 0.3, mostly joints that the labels mark as not visible, whose predictions jump between frames.
+- `round_XX.mp4` and `compare_00_XX.mp4` show the predictions of a round, alone and beside round 0. They, the page and the pictures in `picks/` leave out the joints whose heatmap peak is below 0.3.
 - `picks/round_XX_rank_YY.png` explains one selected person in one picture.
 
 `--rounds 0,2` selects rounds, `--image-root DIR` replaces the location of the frames, `--max-picks N` limits the pictures per round (40 by default), and `--no-video` skips the videos.

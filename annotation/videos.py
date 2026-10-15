@@ -62,7 +62,7 @@ def write_video(
             "-c:v",
             "libx264",
             "-preset",
-            "veryfast",  # a third of the encoding time of the default, at the same file size
+            "veryfast",
             "-threads",
             "2",
             "-pix_fmt",

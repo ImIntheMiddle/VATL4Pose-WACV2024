@@ -1,4 +1,4 @@
-# Python 3.12 / Linux x86_64 / CUDA 12.4; validated tracking environment.
+# Python 3.12 / Linux x86_64 / CUDA 12.4 environment of the annotation tool.
 antlr4-python3-runtime==4.9.3
 cloudpickle==3.1.2
 contourpy==1.4.0

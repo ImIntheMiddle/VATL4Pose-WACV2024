@@ -4,7 +4,7 @@ These tools annotate your own video and adapt the pretrained pose estimator of V
 
 A session detects the people with a torchvision Faster R-CNN and tracks them with [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE) ([CVsports 2026](https://arxiv.org/abs/2604.22162)), a tracking-by-segmentation method for crowded scenes that runs on the video predictor of [SAM 2](https://github.com/facebookresearch/sam2). The loop of VATL4Pose then selects the people to annotate. You correct their keypoints in a Label Studio editor and press Train, and the retrained estimator predicts everyone again.
 
-The tools support the keypoint spec of PoseTrack21, which the pretrained SimpleBaseline estimator and the whole-body autoencoder use. The detector keeps the person class of COCO with a score of 0.7 or higher. It differs from the YOLOX of the SAMIDARE paper, so a session does not reproduce the numbers of that paper.
+The tools support the keypoint spec of PoseTrack21, which the pretrained SimpleBaseline estimator and the whole-body autoencoder use. The detector keeps the person class of COCO with a score of 0.7 or higher. The SAMIDARE paper uses the detector YOLOX, so the tracking results of a session differ from the results of that paper.
 
 ## Setup
 
@@ -80,7 +80,7 @@ After a hard kill, the next start recovers the session only when it can show tha
 
 ## GPU
 
-Tracking needs one CUDA GPU. The tool takes a lease on it, which is a lock file below `~/.cache/vatl4pose/gpu-leases` (`VATL4POSE_GPU_LEASE_ROOT` selects another directory), and checks once that no other process uses the GPU. It does not wait three minutes for a second check, which `vatl4pose run` and `vatl4pose gpu-run` still do. Without `--gpu` the tool takes the first GPU that has no compute process and no lease. When none is free, the page shows "Waiting for a free GPU" and the tool checks again every 10 seconds. If the GPU that `--gpu` names is in use, the page shows the error, and you run the same command again. With `--learning-device cuda`, the tool takes the lease again in every round and checks once. With `cpu`, it releases the GPU after tracking.
+Tracking needs one CUDA GPU. The tool takes a lease on it, which is a lock file below `~/.cache/vatl4pose/gpu-leases` (`VATL4POSE_GPU_LEASE_ROOT` selects another directory), and checks once that no other process uses the GPU. It does not wait three minutes for a second check, as `vatl4pose run` and `vatl4pose gpu-run` do. Without `--gpu` the tool takes the first GPU that has no compute process and no lease. When none is free, the page shows "Waiting for a free GPU" and the tool checks again every 10 seconds. If the GPU that `--gpu` names is in use, the page shows the error, and you run the same command again. With `--learning-device cuda`, the tool takes the lease again in every round and checks once. With `cpu`, it releases the GPU after tracking.
 
 ## Remote access
 

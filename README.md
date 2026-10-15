@@ -2,7 +2,7 @@
 
 Official implementation of [Active Transfer Learning for Efficient Video-Specific Human Pose Estimation](https://arxiv.org/abs/2311.05041) (WACV 2024). [Project page](https://iminthemiddle.github.io/VATL4Pose-Page/)
 
-VATL4Pose adapts a pretrained pose estimator to one video. Each round selects the people to annotate with THC, WPU and DUW, and retrains the estimator on the new labels. The 2023 code of the paper is at the tag `wacv2024`.
+VATL4Pose adapts a pretrained pose estimator to one video. Each round selects the people to annotate with THC, WPU and DUW, and retrains the estimator on the new labels. The code of the paper is at the tag `wacv2024`.
 
 ## Installation
 
