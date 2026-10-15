@@ -3,15 +3,8 @@
 Several processes, possibly on several hosts, share one filesystem and split the videos of a
 dataset between them. Each process is one shard. :func:`select_shard` gives every shard a fixed,
 disjoint set of videos, and every video has its own output directory that only the process of its
-shard writes to. The other pieces keep those directories consistent when a process is killed or
-started twice by mistake:
-
-* :func:`read_id_list` reads the list of video ids to run (one id per line).
-* :func:`video_seed` derives the random seed of a video from its id only, so a video gets the same
-  seed whatever the number of shards is.
-* :func:`mark_done` and :func:`is_done` record that a video finished, in a file that a reader
-  never sees half-written.
-* :class:`VideoLock` is a per-video lock file that refuses a second process.
+shard writes to. The other functions keep those directories consistent when a process is killed
+or started twice by mistake: id lists, per-video seeds, completion markers and a per-video lock.
 
 The output directories usually live in a home directory on NFS that all hosts mount. The
 primitives used here are the ones that work across hosts on NFS: ``open(O_CREAT | O_EXCL)`` is
@@ -144,26 +137,14 @@ def mark_done(video_dir: pathlib.Path, payload: dict) -> None:
 class VideoLock:
     """Per-video mutual exclusion through the lock file ``<video_dir>/.lock``.
 
-    The lock is used for everything that must have one writer per video: the build of the video's
-    HDF5 cache (two builders of the same cache path would share one ``.partial`` file) and the
-    active-learning run on the video.
-
-    ``__enter__`` creates the file with ``os.open(O_CREAT | O_EXCL | O_WRONLY)``, which is atomic
-    on NFSv3 and later with the Linux client, so exactly one of several processes on several hosts
-    gets it. The process writes its payload ``{"host", "pid", "started"}`` through the descriptor
-    it created and ``fsync``-s it, so a second process that is refused can read who holds the lock.
-    If the file exists, ``__enter__`` raises ``RuntimeError`` that names the file and its content,
-    and leaves the file alone.
-
-    A lock left behind by a crashed process is never removed automatically, because the program
-    cannot tell a crashed holder from a slow one on another host. The error message tells the user
-    to check the host and the pid and to delete the file by hand.
-
-    ``__exit__`` removes the lock only if the file still holds exactly the payload this process
-    wrote. If the file is missing or holds another payload, it raises ``RuntimeError`` and does not
-    delete anything, so it never removes the lock of another process. The check and the removal are
-    two steps, so the check detects a lock that was replaced by hand, not a race with a deletion
-    that happens in between.
+    The lock is for everything that needs one writer per video: the build of the HDF5 cache and
+    the active-learning run. ``__enter__`` creates the file exclusively and writes
+    ``{"host", "pid", "started"}`` into it; if the file exists, it raises ``RuntimeError`` that
+    names the file and its content and leaves the file alone. A lock left by a crashed process is
+    never removed automatically, because a crashed holder cannot be told from a slow one on another
+    host; the message tells the user to check the host and the pid and to delete the file by hand.
+    ``__exit__`` removes the lock only if the file still holds this process's payload; otherwise it
+    raises ``RuntimeError`` and deletes nothing.
     """
 
     def __init__(self, video_dir: pathlib.Path) -> None:

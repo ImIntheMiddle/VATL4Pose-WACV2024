@@ -73,8 +73,8 @@ class RoundRecord:
             labels; ``None`` as ``performance``.
         ospa: OSPA of the predictions; ``None`` as ``performance``.
         ospa_ann: OSPA after the replacement; ``None`` as ``performance``.
-        combine_weight: Mean local peak of the heatmaps of the unlabeled samples; ``None`` when
-            nobody is unlabeled.
+        combine_weight: Mean local peak of the heatmaps of the unlabeled samples in the round (a
+            field of the 2023 result files); ``None`` when nobody is unlabeled.
         score_means: Mean raw score of every scorer over the unlabeled samples; ``None`` when the
             round scored nothing (no query, an empty query, or a forced query that takes everybody).
         queried: Sorted sample indices queried in the round; ``[]`` for a query of size 0; ``None``

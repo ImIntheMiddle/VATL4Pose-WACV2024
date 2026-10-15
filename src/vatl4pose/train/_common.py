@@ -23,9 +23,8 @@ from torch.utils.data import Sampler
 def derived_seed(*parts: int | str) -> int:
     """A 63-bit seed from ``parts`` through SHA-256; equal on every run and every machine.
 
-    The text that is hashed starts with ``vatl4pose.finetune``, the name of the module that first
-    held this function. The prefix stays so that every seed and every order derived so far stays
-    the same.
+    The hashed text starts with the fixed prefix ``vatl4pose.finetune``; changing it changes every
+    derived seed and epoch order.
     """
     text = "/".join(["vatl4pose.finetune", *map(str, parts)])
     digest = hashlib.sha256(text.encode("utf-8")).digest()

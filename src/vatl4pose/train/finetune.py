@@ -12,15 +12,17 @@ Here ``moks_queried`` is the mean OKS that the model reached on the people queri
 before they were labeled: when the model already solved them, little training is needed.
 
 The training set of a round is the people labeled earlier whose OKS is at most
-``finish_acc + 0.05`` plus the people queried now (:meth:`Finetuner.retrain_indices`). With the
-default ``finish_acc = 1`` every labeled person is kept.
+``finish_acc + FINISH_MARGIN`` (0.05) plus the people queried now
+(:meth:`Finetuner.retrain_indices`). With the default ``finish_acc = 1`` every labeled person is
+kept.
 
-The loss is ``0.5 * MSE(output * weight, target * weight)`` (:func:`heatmap_loss`). The optimizer is
-AdamW with the learning-rate groups of the estimator (head x10, backbone x1, upsampling x5), the
-base learning rate decays by ``lr_gamma`` after every epoch. Reproducibility: the augmentation of
-an item is drawn by the dataset from ``(seed, round, epoch, item)``, and the order of the items
-in an epoch from :func:`shuffle_order`; neither depends on the global random state or on the number
-of loader workers.
+The loss is ``0.5 * MSE(output * weight, target * weight)`` (:func:`heatmap_loss`). By default the
+optimizer is AdamW with the learning-rate groups of the estimator (SimpleBaseline and FastPose:
+head x10, backbone x1, upsampling x5; HRNet-W32: one group at x1); the base learning rate decays
+by ``lr_gamma`` after every epoch. Reproducibility: the augmentation of an item is drawn by the
+dataset from ``(seed, round, epoch, item)``, and the order of the items in an epoch from
+:func:`shuffle_order`; neither depends on the global random state or on the number of loader
+workers.
 """
 
 from __future__ import annotations
@@ -68,8 +70,8 @@ class RetrainConfig:
         continual: Keep the model, optimizer and schedule across rounds when true; start every
             round from the initial weights when false.
         finish_acc: OKS from which a labeled person counts as solved, in ``[0, 1]``. People
-            labeled earlier are retrained only while their OKS is at most
-            ``finish_acc + 0.05``.
+            labeled earlier are retrained only while their OKS is at most ``finish_acc`` plus
+            the margin of :meth:`Finetuner.retrain_indices`.
         num_workers: Worker processes of the data loader; 0 loads in the main process.
         augment: Augmentation of the training crops.
     """
@@ -231,8 +233,7 @@ class Finetuner:
             moks_queried: Mean OKS of this round's queried people before their labels were used.
 
         Returns:
-            ``int(alpha * (1 - moks_queried))`` when continual, otherwise
-            ``int(base * n_labeled / n_total + alpha * (1 - moks_queried))``; both truncate.
+            The number of epochs of the scheme in the module docstring, truncated to an int.
         """
         if n_total <= 0:
             raise ValueError(f"n_total must be positive, got {n_total}")
@@ -262,7 +263,7 @@ class Finetuner:
 
         Returns:
             Sorted unique ``(M,)`` int64 sample indices: the people of ``labeled_before`` with
-            ``oks <= finish_acc + 0.05`` and all of ``queried``.
+            ``oks <= finish_acc + FINISH_MARGIN`` and all of ``queried``.
         """
         if labeled_before.ndim != 1 or not np.issubdtype(
             labeled_before.dtype, np.integer

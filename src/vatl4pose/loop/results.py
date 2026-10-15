@@ -21,21 +21,10 @@ model) and has ``null`` where the round computed nothing:
     round. ``null`` in the final round, for an empty query, and for a forced query that takes all
     unlabeled samples (the strategy then scores nothing). Strategies without scorers give ``{}``.
 ``combine_weight``
-    The mean local peak of the heatmaps of the unlabeled samples (the weight of the legacy code
-    for the uncertainty term); ``null`` when nobody is unlabeled.
-``moks_queried``
-    The mean OKS of the people queried in the round, measured on the model before it learned
-    from them, over the people whose label has a visible joint; ``null`` without a query, for
-    an empty one, and when no queried person has a visible joint.
-``stopping``
-    The judgment of the stopping criterion of the paper (SC_All) in the round with
-    ``loop.stopping``, as :attr:`~vatl4pose.loop.state.RoundRecord.stopping`, with the judgment of
-    all people against the ground truth under ``oracle``; ``null`` without it, in the final
-    round, and when nobody labeled has a visible joint.
-``timings``
-    Seconds per step: ``infer``, ``eval``, ``select`` (the extras and the strategy), ``oracle``,
-    ``retrain``, ``ae`` (the fine-tuning of the autoencoder) and ``total`` (the round without the
-    write of its state). A step that did not run is 0.
+    The mean local peak of the heatmaps of the unlabeled people in the round (a field of the 2023
+    result files); ``null`` when nobody is unlabeled.
+``moks_queried``, ``stopping``, ``timings``
+    As in :class:`~vatl4pose.loop.state.RoundRecord`, one entry per round.
 ``ap_protocol``
     The name of the AP protocol (:data:`vatl4pose.eval.AP_PROTOCOL`): the 2023 protocol of the
     paper, whose detection area differs from the standard COCO keypoint AP. The AP values of
@@ -72,8 +61,8 @@ string, as the cache holds it; the PoseTrack21 ids carry the video id as a prefi
 ``category_id`` (always 1), ``keypoints`` and ``score``. ``keypoints`` is the flat list ``x, y, c``
 of every joint in the order of the keypoint spec, ``3 * K`` numbers. ``c`` is the peak value of the
 heatmap for an estimator joint and the visibility (0 or 1) for a label joint. ``score`` is the pose
-score of the evaluation, the mean plus 1.25 times the maximum of the ``K`` peak values; the label of
-an annotated person does not change it. ``x`` and ``y`` are the pixel coordinates that
+score of the ``K`` peak values (:func:`vatl4pose.eval.pose_score`); the label of an annotated
+person does not change it. ``x`` and ``y`` are the pixel coordinates that
 ``performances`` evaluates.
 
 For a ``panorama`` dataset (JRDB-Pose) the coordinates keep the convention of the evaluation: the
@@ -130,14 +119,10 @@ def _warn_once(root: pathlib.Path, reason: str) -> None:
 def git_commit(package_dir: pathlib.Path | None = None) -> str | None:
     """The ``HEAD`` commit of the checkout that this package runs from, or ``None``.
 
-    The package runs from its own checkout when ``package_dir`` is ``<root>/src/vatl4pose`` and
-    ``<root>`` has a ``.git`` entry. Any other place gives ``None`` without a message: an installed
-    package (``site-packages`` has no ``src`` parent), also one inside the ``.venv`` of another
-    project, whose repository is never asked. When the checkout exists but git cannot answer for
-    it (the program is missing, git refuses the directory, ``<root>/.git`` is no repository so
-    that git would find another one above it), the result is ``None`` and one warning per process
-    and checkout says why. The commit is information about the run, and a failure to read it must
-    not end an hours-long run.
+    A package that is not at ``<root>/src/vatl4pose`` with a ``.git`` entry in ``<root>`` (an
+    installed package, for example) gives ``None`` without a message. If the checkout exists but
+    git cannot name its commit, the result is ``None`` and one warning per process and checkout
+    says why; a failure to read the commit must not end a long run.
 
     Args:
         package_dir: The directory of the ``vatl4pose`` package; the running one if omitted.

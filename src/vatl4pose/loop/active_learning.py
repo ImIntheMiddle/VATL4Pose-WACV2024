@@ -22,8 +22,7 @@ A round of :class:`ActiveLearningLoop` is the procedure of the paper. One method
 Round ``r`` evaluates and then queries ``query_sizes[r] - n_labeled`` people with
 ``query_sizes = [int(N * ratio) for ratio in query_ratio]``. The last round, numbered
 ``len(query_ratio)``, only evaluates the final model: no query and no retraining. A last ratio
-below 1.0 ends the run at that fraction (labeling under a budget); the legacy code queried all the
-remaining people in an extra round.
+below 1.0 ends the run at that fraction (labeling under a budget).
 
 Decisions of this implementation:
 
@@ -36,31 +35,14 @@ Decisions of this implementation:
   ``moks_previous`` stays at the last value that exists (0.0 before any).
 * A query that takes every unlabeled person is forced by ``Strategy.query``, which scores nothing;
   step 3 is skipped too, so no auxiliary network is trained and no autoencoder is passed on.
-* The query is stored (see :mod:`.state`) before the oracle is asked the first time, so that a run
-  killed after the request never selects the round again.
 * Every list of queried indices is sorted before the oracle sees it, so the order of the answers,
   of the fine-tuning set and of the files does not depend on the selector's order.
-* The auxiliary network of VL4Pose is new in every round, trained on the labeled people with this
-  round's features; nothing of it is saved. Without labeled people (round 0) it keeps its random
-  initial weights.
-* The autoencoder of round ``r + 1`` is a function of the pretrained checkpoint, the labels of the
-  labeled people and the seed. A resume rebuilds it with the same function instead of storing it.
-* The retraining set, the mean query OKS, the OKS of the labeled people, the autoencoder tuning
-  (the hybrid features of the labels) and the training of the auxiliary network use the labels the
-  oracle gave. With the simulated oracle they are the ground truth.
-* An answer that marks no joint of a person visible (a hidden person, or a wrong box) labels the
-  person, so it is not asked again, but the person is left out of the steps that read labels:
-  the retraining set, the mean query OKS, the autoencoder and the auxiliary network. A round in
-  which no queried person shows a joint does not retrain, and its mean query OKS is ``None``.
+* A label with no visible joint counts as labeled but is left out of retraining, OKS, the
+  autoencoder and the auxiliary network (see :meth:`_labeled_with_joints`).
 * ``run_dir/progress.json`` names the step the loop works on (the steps of the ``timings`` of a
   round) and, while the estimator trains, the epoch; an interface reads it to show progress. A
   stopped run leaves its last step in the file.
-* A ``run`` that finds the stored query of its round (the oracle had no answers yet, or the run
-  was killed after the request) asks the oracle for the same people with the same predictions,
-  without inference or selection, whatever the model is then. The round then ends as if it had run
-  without a pause.
-
-The processes that run videos in parallel share nothing; the per-video lock is the job of the caller.
+* A stored query is asked again as it was, without inference or selection (see :mod:`.state`).
 """
 
 from __future__ import annotations
@@ -110,9 +92,9 @@ AE_KEY = "ae"
 """Key of ``RoundContext.extras`` that holds the whole-body autoencoder."""
 
 STEPS = ("infer", "eval", "select", "oracle", "retrain", "ae")
+"""The timed steps of a round; ``total`` is added to them in the record."""
 PROGRESS_SCHEMA = "vatl4pose.progress/1"
 _REPORT_INTERVAL = 0.5  # seconds between two epoch updates of progress.json
-"""The timed steps of a round; ``total`` is added to them in the record."""
 
 _PEAK_CHUNK = 256
 # Settings that do not change what a round computes; a resume may differ in them.
@@ -127,18 +109,15 @@ class LoopConfig:
         query_ratio: Share of the video that is labeled after each query, strictly increasing in
             ``(0, 1]``. ``len(query_ratio)`` queries and one more evaluation make the rounds.
             The run ends once the last ratio is labeled: a last ratio below 1.0 stops at that
-            fraction, which labels under a budget on data of your own. The legacy code queried
+            fraction, which labels under a budget on data of your own. The 2023 code queried
             all remaining people in an extra round after the last ratio.
         infer_batch_size: People per forward pass of the inference.
         save_final_model: Write the state dict of the final model to ``final_estimator.pth``.
         save_estimator: Write the state dict of the estimator to ``estimator.pth`` after every
             round, so that a run stopped early leaves the model of its last finished round.
-        stopping: Judge the stopping criterion of the paper (SC_All) in every round with a query:
-            whether the OKS of every labeled person with a visible joint, the people queried in
-            the round included, is at least ``retrain.finish_acc`` under the model before it
-            learns from the round (``>=``, as the 2023 code). The round records the judgment
-            (:attr:`RoundRecord.stopping`); the loop does not stop by itself, so that the
-            annotator decides.
+        stopping: Judge the stopping criterion of the paper (SC_All) in every round with a query
+            (``>=``, as the 2023 code) and record it in :attr:`RoundRecord.stopping`; the loop
+            does not stop by itself, so that the annotator decides.
         save_round_details: Write ``details/round_XX.npz`` in every round
             (:mod:`vatl4pose.explain.record`); the selection and the results do not change.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.
@@ -247,7 +226,7 @@ class _Pool:
 
     @property
     def pose_score(self) -> np.ndarray:
-        """``(N,)`` float64 score of every pose: mean plus 1.25 times the maximum of its peaks."""
+        """``(N,)`` float64 pose score of the peak values, see :func:`vatl4pose.eval.pose_score`."""
         return pose_score(self.maxvals)
 
 
@@ -807,7 +786,7 @@ class ActiveLearningLoop:
             embeddings=np.concatenate(embeddings) if embeddings else None,
         )
 
-    # ------------------------------------------------------------------ step 2: evaluation
+    # ------------------------------------------------------------------ helpers
 
     def _report(
         self, round_index: int, step: str, done: int | None = None, total: int | None = None
@@ -855,6 +834,8 @@ class ActiveLearningLoop:
         return oks_per_sample(
             coords[index], labels, self._boxes_xywh[index], self._sigmas
         )
+
+    # ------------------------------------------------------------------ step 2: evaluation, predictions
 
     def _evaluate(self, pool: _Pool) -> _Evaluation:
         """AP and OSPA against the ground truth, with and without the labels of the labeled people.
@@ -1039,12 +1020,12 @@ class ActiveLearningLoop:
         """Label the people, train the estimator on them, return their mean query OKS.
 
         The training set is the queried people plus the labeled people whose OKS (under the model
-        before this training) is at most ``finish_acc + 0.05``; the number of epochs follows from
-        the mean OKS of the queried people. People without a visible joint in their label are
-        labeled but left out of both (see :meth:`_labeled_with_joints`). If no queried person has
-        a visible joint, the estimator is not trained and the mean OKS is ``None``. With
-        ``loop.stopping`` the second value is the judgment of :meth:`_stopping` on the OKS of the
-        labeled and the queried people, all under the model before this training.
+        before this training) is low enough (see :meth:`Finetuner.retrain_indices`); the number of
+        epochs follows from the mean OKS of the queried people. People without a visible joint in
+        their label are labeled but left out of both (see :meth:`_labeled_with_joints`). If no
+        queried person has a visible joint, the estimator is not trained and the mean OKS is
+        ``None``. With ``loop.stopping`` the second value is the judgment of :meth:`_stopping` on
+        the OKS of the labeled and the queried people, all under the model before this training.
         """
         picked, coords = query.queried, query.coords
         before = self._labeled_with_joints()

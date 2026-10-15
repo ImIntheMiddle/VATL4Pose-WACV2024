@@ -22,17 +22,13 @@ retrains them. The recipe is that of the 2023 SimpleBaseline, FastPose and HRNet
 
 The validation uses the evaluation of the active-learning loop: the person crops of
 :func:`~vatl4pose.data.geometry.crop_person` from the ground-truth boxes, the decoding of
-:func:`~vatl4pose.data.geometry.heatmaps_to_coords`, the pose score ``mean + 1.25 * max`` of the
-peak values, and :func:`~vatl4pose.eval.evaluate_predictions` with the OKS sigmas of the keypoint
-spec. The in-training validation of the 2023 JRDB-Pose script reported an AP of 0.0 in all 84
-logged epochs, so it could not select the model. The PoseTrack21 script compares a dict with an
-int (``gt_AP > best_score``) and cannot have run as it stands.
+:func:`~vatl4pose.data.geometry.heatmaps_to_coords`, the pose score of the peak values
+(:func:`~vatl4pose.eval.pose_score`), and :func:`~vatl4pose.eval.evaluate_predictions` with the OKS
+sigmas of the keypoint spec.
 
-Two parts of the 2023 scripts are not ported. After epoch 140 they restart the learning rate and
-switch on a "DPG" augmentation. The restart ran; the augmentation read the image size before it was
-assigned and raised an error, so the epoch after it failed. The scripts also multiplied the batch
-size by the number of GPUs and trained with ``DataParallel``; this module trains on one device with
-the batch size given.
+Not ported from the 2023 scripts: the learning-rate restart and the "DPG" augmentation after epoch
+140, and the multiplication of the batch size by the number of GPUs with ``DataParallel``; this
+module trains on one device with the batch size given.
 
 Reproducibility: the augmentation of an item is drawn by the dataset from ``(seed, epoch, item)``,
 the order of the items in an epoch comes from
@@ -102,8 +98,7 @@ class InitialTrainConfig:
             ``epochs`` are never reached and do no harm: the JRDB-Pose recipe of 2023 trained 100
             epochs with the milestones 90 and 120.
         epochs: Number of training epochs.
-        batch_size: Items per training and per validation batch. The 2023 configs used 70 to 240
-            per GPU, whatever the memory of the GPU allowed, and multiplied it by the GPU count.
+        batch_size: Items per training and per validation batch.
         val_every: Validate after every ``val_every``-th epoch; the last epoch is always validated.
         select_metric: Key of :data:`vatl4pose.eval.METRIC_KEYS` whose largest value picks
             ``best.pth``; the first epoch with the largest value wins.
@@ -205,8 +200,8 @@ def evaluate_estimator(
     """AP and OSPA of ``model`` on all people of ``videos``, the evaluation of the loop.
 
     Every person is cropped from its ground-truth box, the heatmaps are decoded into image
-    coordinates, and the pose score is ``mean + 1.25 * max`` of the peak values. The prediction
-    carries the ground-truth box. The mode of ``model`` (training or evaluation) is restored.
+    coordinates, and the pose score is that of :func:`~vatl4pose.eval.pose_score` on the peak
+    values. The prediction carries the ground-truth box. The mode of ``model`` (training or evaluation) is restored.
 
     Args:
         model: The estimator, on ``device``.

@@ -18,15 +18,13 @@ it on the labeled people of one video. The optimiser is that of the 2023 script:
 * After every epoch the loss on the validation features is computed, in batches of 8000 rows, as the
   mean over all valid validation entries, so it does not depend on the batch size. The training loss
   of the log is the mean of the batch means.
-* ``best.pth`` is the state dict of the epoch with the lowest validation loss. The run stops when
-  the validation loss has not improved for ``patience`` epochs.
+* The run stops when the validation loss has not improved for ``patience`` epochs.
 
 The features are the hybrid features of the ground truth, one row per person: the raw ``bbox``
 of the annotation (height only), the keypoints with the visibility as the weight of every joint.
 The fine-tuning in the loop builds its features and masks the same way, from the labels of the
-oracle. The 2023 script built the features with one dictionary that it reused for every person, so
-all rows of its training set were copies of the last person (an aliasing bug). Here every row is
-its own person.
+oracle. Every row of the training set is its own person; the 2023 script reused one feature
+dictionary, so its rows were copies of the last person.
 
 Reproducibility: the order of the rows in an epoch comes from
 :func:`~vatl4pose.train._common.shuffle_order`, and the initial weights are drawn with a generator
@@ -71,8 +69,7 @@ class AETrainConfig:
         z_dim: Size of the latent code. The released checkpoints of the paper use 4.
         lr: Learning rate of AdamW at the start.
         lr_steps: ``(epoch, lr)`` pairs with strictly increasing epochs. At the start of the epoch
-            with this index, counted from 0, the learning rate becomes ``lr``. The 2023 script
-            set 2e-4 for the epoch with index 12 and 5e-5 for the one with index 40.
+            with this index, counted from 0, the learning rate becomes ``lr``.
         epochs: Maximal number of epochs.
         batch_size: Rows per training batch.
         patience: Number of epochs without a new lowest validation loss after which the run stops.

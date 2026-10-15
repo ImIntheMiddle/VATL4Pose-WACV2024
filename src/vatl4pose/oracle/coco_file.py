@@ -73,11 +73,7 @@ def _show(ids: list[int]) -> str:
 
 
 def _write_atomic(path: pathlib.Path, data: bytes) -> None:
-    """Write ``data`` to ``path`` so that a reader sees no file or the complete file.
-
-    The bytes go to ``<path>.tmp``, are ``fsync``-ed and moved with ``os.replace``; the directory is
-    ``fsync``-ed last. A failure removes the temporary file.
-    """
+    """As :func:`vatl4pose.train._common.write_atomic`, for bytes, after creating the parent directory."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     try:
@@ -212,10 +208,9 @@ class CocoFileOracle:
     ) -> OracleResult:
         """Write the queries of the round if needed, then read the answers if they exist.
 
-        The first call of a round writes the queries file and returns ``ready=False``. Later calls
-        return ``ready=False`` again until the answers file exists, then the answers in the order
-        of ``indices``. An existing queries file with the same queries as this request (see the
-        module docstring) is kept as it is, whatever predictions it was prefilled with.
+        The first call of a round writes the queries file and returns ``ready=False``; later calls
+        do the same until the answers file exists, then return the answers in the order of
+        ``indices``.
 
         Args:
             indices: ``(k,)`` distinct sample indices to annotate.
