@@ -2,9 +2,9 @@
 
 After the training of round ``r`` the loop estimates the joints of every person for round
 ``r + 1`` and keeps them in ``state/pending_{r+1}/predictions.npy``, in the order of the samples of
-the video cache. The video draws them on every frame of the video in the colours of the editor
-(left joints blue, right red, the others green), with the limbs of the keypoint spec. The joints
-that the spec never annotates and those below the confidence threshold of the drawings
+the video cache. The video draws them on every frame of the video. The limbs are blue on the
+left, red on the right and green elsewhere, as in the editor; the joints are white dots. The
+joints that the spec never annotates and those below the confidence threshold of the drawings
 (:data:`vatl4pose.explain.draw.MIN_CONFIDENCE`) are left out, with their limbs. The video of a
 round is written once, under ``estimates/`` of the session.
 """

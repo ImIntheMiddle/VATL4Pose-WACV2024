@@ -86,19 +86,14 @@ vatl4pose-explain outputs/mine/simplebaseline/THC+WPU_Coresetfilter/clip1
 ```
 
 - `index.html` opens from the file system. It switches between rounds and numbers the selected people; a click on a person shows the THC, WPU and DUW figures of that pick.
-- `round_XX.mp4` and `compare_00_XX.mp4` show the predictions of a round, alone and beside round 0. They and the page leave out the joints whose heatmap peak is below 0.3, mostly joints that the labels mark as not visible, whose predictions jump between frames.
+- `round_XX.mp4` and `compare_00_XX.mp4` show the predictions of a round, alone and beside round 0. They, the page and the pictures in `picks/` leave out the joints whose heatmap peak is below 0.3, mostly joints that the labels mark as not visible, whose predictions jump between frames.
 - `picks/round_XX_rank_YY.png` explains one selected person in one picture.
 
 `--rounds 0,2` selects rounds, `--image-root DIR` replaces the location of the frames, `--max-picks N` limits the pictures per round (40 by default), and `--no-video` skips the videos.
 
 ## Your own videos
 
-```
-data/mine/images/clip1/000001.jpg
-data/mine/annotations/clip1.json
-```
-
-`annotations/<video>.json` is a COCO keypoints file.
+The layout is the one in the [README](../README.md#your-own-videos): `images/<video>/` for the frames and `annotations/<video>.json` for a COCO keypoints file, both below `dataset.root`. The JSON file holds two lists.
 
 - `images`: `id`, `file_name` (relative to `dataset.root`, for example `images/clip1/000001.jpg`), `width`, `height`. The frames are ordered by `file_name`, so pad the numbers with zeros.
 - `annotations`: `id` (unique integer), `image_id`, `track_id`, `bbox` as `[x, y, w, h]`, and optionally `keypoints` as `x, y, visibility` for every joint. Leave `keypoints` out for a person without ground truth.

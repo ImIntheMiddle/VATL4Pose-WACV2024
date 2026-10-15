@@ -1,4 +1,4 @@
-"""One local video annotation session using the existing tracking and ATL recipe."""
+"""One local video annotation session: tracking, selection of people, editor and retraining."""
 
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ def validate_export(
 
 
 class AnnotationSession:
-    """Persist the same session for sample and user-supplied videos.
+    """One session on disk: the phase, the opened rounds and the end of the session.
 
     After the training of every round the session stops at ``round_done`` and shows the results;
     the annotator then opens the next round (``continue``) or ends the session (``finish``). The
@@ -310,7 +310,6 @@ def main(argv: list[str] | None = None) -> None:
         "max_frames": args.max_frames,
         "device": args.learning_device,
         "target_oks": args.target_oks,
-        "recipe": "existing tracking ATL defaults",
         "inputs": session_inputs(),
     }
     event = threading.Event()

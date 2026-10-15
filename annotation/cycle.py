@@ -1,4 +1,4 @@
-"""Run the existing annotation cycle with explicit interpreters and GPU ownership."""
+"""Run one step (atl, annotate, answers or stop) of the manual annotation cycle on a run folder."""
 
 from __future__ import annotations
 import argparse
@@ -22,7 +22,10 @@ CACHE_FILE = "atl/cache/coco_custom/clip.h5"  # written by vatl4pose-prepare und
 def atl_commands(
     run_dir: Path, device: str, bin_dir: Path, target_oks: float | None = None
 ) -> list[list[str]]:
-    """Keep the established pose layout, weights and active-learning recipe.
+    """The ``vatl4pose-prepare`` and ``vatl4pose-atl`` commands for a run directory.
+
+    They use the PoseTrack21 layout, the pretrained SimpleBaseline estimator and the whole-body
+    autoencoder.
 
     With ``target_oks`` (the accuracy θ of the paper) the loop judges its stopping criterion in
     every round, and the retraining keeps the labeled people below ``θ + 0.05`` (Eq. 3). The

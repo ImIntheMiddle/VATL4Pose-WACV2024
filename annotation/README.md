@@ -2,7 +2,7 @@
 
 These tools annotate your own video and adapt the pretrained estimator of VATL4Pose to it in one local browser session. They live in the `annotation/` folder of the repository, next to the `vatl4pose` package, which holds the active learning loop and the `vatl4pose annotate` command.
 
-A session detects the people with a torchvision Faster R-CNN and tracks them with [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE) ([CVsports 2026](https://arxiv.org/abs/2604.22162)), a tracking-by-segmentation method for crowded scenes that runs on the video predictor of [SAM 2](https://github.com/facebookresearch/sam2). The loop of VATL4Pose then selects the people to annotate, and a browser page shows the Label Studio editor with their predicted keypoints. You correct the points and press Train. The loop retrains the estimator on your corrections, and the page shows the keypoints that the retrained estimator predicts for everyone. You then start the next round or finish.
+A session detects the people with a torchvision Faster R-CNN and tracks them with [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE) ([CVsports 2026](https://arxiv.org/abs/2604.22162)), a tracking-by-segmentation method for crowded scenes that runs on the video predictor of [SAM 2](https://github.com/facebookresearch/sam2). The loop of VATL4Pose then selects the people to annotate. You correct their keypoints in a Label Studio editor and press Train, and the retrained estimator predicts everyone again.
 
 The tools support the joint layout of PoseTrack21, which the pretrained SimpleBaseline estimator and the whole-body autoencoder use. The detector keeps the person class of COCO with a score of 0.7 or higher. It differs from the YOLOX of the SAMIDARE paper, so a session does not reproduce the numbers of that paper.
 
@@ -39,7 +39,7 @@ The command prints the URL of the page, `http://localhost:8765` by default. `ann
 - `--learning-device cuda|cpu` sets the device of the retraining and the selection of people, `cuda` by default. With `cpu` the GPU is used for tracking only, and a round in which you moved joints takes minutes instead of seconds (see Measured effort). Choose the device at the first start, because a resume keeps it.
 - `--target-oks θ` turns on the stopping criterion of the paper with an accuracy θ, an OKS in (0, 1).
 - `--tools PATH` (`vatl4pose annotate` only) names the `annotation/` folder. The command finds `annotation/` of the repository by itself, and `VATL4POSE_ANNOTATION_ROOT` sets it as well.
-- `--sample` (`vatl4pose annotate` only) uses the local file `annotation/samples/people.mp4` instead of a video path. The repository does not contain this clip and git ignores `annotation/samples/`, so copy a short video of your own to that path before you use `--sample`.
+- `--sample` (`vatl4pose annotate` only) uses `annotation/samples/people.mp4`, which you provide.
 
 The page lists the preparation steps and marks the current one: the GPU check, tracking with SAMIDARE with its frame count, preparing the data, training, selecting the next people and opening the editor. Keep the page open. The input video is not modified.
 
@@ -76,7 +76,7 @@ The `vatl4pose-*` commands load the estimator with `estimator=simplebaseline est
 
 Press Ctrl-C in the terminal to stop a session. The same command resumes it at the same point. It reuses the tracking and the saved tasks, returns to the results page of a trained round and shows the results of a finished session. A resume needs the same video and the same `--max-frames`, `--learning-device` and `--target-oks`, and the same tool and weight files, as `session.json` records them. Otherwise the session stops and asks for a new `--output`. `--gpu` and `--port` may differ.
 
-After a hard kill, the next start recovers the session only when it can show that the old owner on the same host is dead. A GPU lease or a video lock that the kill left behind stays until you remove it. The section "Managing command execution" of the public README describes how to check its owner.
+After a hard kill, the next start recovers the session only when it can show that the old owner on the same host is dead. A GPU lease or a video lock that the kill left behind stays until you remove it. The lease is a file below `~/.cache/vatl4pose/gpu-leases`, the video lock is a file `.lock` in the directory that its error message names, and the session lock is `.annotation.lock` in the session directory. Check that the process named in the `owner` field of the file (`host` and `pid` in `.lock`) is gone, then delete the file.
 
 ## GPU
 

@@ -64,7 +64,6 @@ print('Tracking dependencies installed:', torch.__version__, torchvision.__versi
 print('CUDA visible:', torch.cuda.is_available())
 PY
 uv pip check --python "$ANNOTATION_ROOT/.venv/bin/python"
-uv pip freeze --python "$ANNOTATION_ROOT/.venv/bin/python" > "$ANNOTATION_ROOT/.deps/requirements.installed.txt"
 "$ANNOTATION_ROOT/.venv/bin/python" - "$ANNOTATION_ROOT" <<'PY'
 import hashlib, pathlib, sys
 root = pathlib.Path(sys.argv[1])

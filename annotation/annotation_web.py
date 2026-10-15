@@ -137,8 +137,6 @@ class Portal:
                 start, end = 0, size - 1
                 part = self.headers.get("Range")
                 if part:
-                    import re
-
                     match = re.fullmatch(r"bytes=(\d+)-(\d*)", part)
                     if match is None:
                         self.respond(416, b"Unsupported byte range", "text/plain")

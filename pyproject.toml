@@ -1,7 +1,7 @@
 [project]
 name = "vatl4pose"
 version = "1.0.0"
-description = "Video-specific Active Transfer Learning for human pose estimation (WACV 2024), refactored."
+description = "Video-specific Active Transfer Learning for human pose estimation (WACV 2024)."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12,<3.13"

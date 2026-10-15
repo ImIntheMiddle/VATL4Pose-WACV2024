@@ -10,14 +10,9 @@ DATA_ROOT="${DATA_ROOT:?set DATA_ROOT to the dataset folder of the run}"
 OUTPUT_ROOT="${OUTPUT_ROOT:?set OUTPUT_ROOT to the output folder of the loop}"
 RUN_NAME="${RUN_NAME:-tracked}"
 VIDEO_ID="${VIDEO_ID:-clip}"
-STRATEGY="${STRATEGY:-thc_wpu_duw}"
 # the folder that holds round_XX_queries.json and round_XX_answers.json of the video; the loop names
-# the strategy directory after the "name" inside the strategy config, not after the config file
-case "$STRATEGY" in
-  thc_wpu_duw) STRATEGY_DIR="THC+WPU_Coresetfilter" ;;
-  hp) STRATEGY_DIR="HP" ;;
-  *) echo "STRATEGY=$STRATEGY: add its directory name to common.sh" >&2; return 1 ;;
-esac
+# the strategy directory after the "name" inside the strategy config thc_wpu_duw, not after the file
+STRATEGY_DIR="THC+WPU_Coresetfilter"
 ORACLE_DIR="$OUTPUT_ROOT/$RUN_NAME/simplebaseline/$STRATEGY_DIR/$VIDEO_ID/oracle"
 
 # the environment of Label Studio (its own, isolated; the loop uses annotation/.venv)

@@ -1,4 +1,4 @@
-"""Invoke unmodified tracking/ATL recipes and manage one local Label Studio."""
+"""Run tracking and the active learning loop for a session and manage its Label Studio editor."""
 
 from __future__ import annotations
 
@@ -230,8 +230,7 @@ class Backend:
         )
 
     def render_estimate(self) -> None:
-        """Write the estimate video of the round just trained, instead of at the first request
-        of the results page."""
+        """Write the estimate video of the round just trained."""
         self.portal.estimate()
 
     def initial(self, session: Any) -> None:

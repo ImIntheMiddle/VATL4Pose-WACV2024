@@ -5,10 +5,6 @@ prediction of the model as keypoint regions, named by the joints of the keypoint
 keeps the annotation id of the queries file in ``ann_id`` (and ``vatl_sample_index``), because Label
 Studio numbers its own tasks and annotations and the answers must keep the ids of the queries.
 
-``label_studio_sdk.converter`` (``label-studio-converter import coco``) is not used: it makes one
-task per image, labels every keypoint with the category name ("person") instead of the joint name,
-and drops the annotation id.
-
 The joints in ``--skip-joints`` are not pre-filled (the PoseTrack21 layout never annotates the ears).
 """
 
