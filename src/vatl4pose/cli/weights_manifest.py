@@ -30,7 +30,7 @@ RELEASE_FILES: tuple[str, ...] = (
     "wholebodyAE/JRDB2022/Hybrid/WholeBodyAE_zdim4_v1.pth",
     "wholebodyAE/Posetrack21/Hybrid/WholeBodyAE_zdim4_v1.pth",
 )
-"""The files of the v1 release, relative to the weights root: the files v1 uses (the autoencoders are the retrained ``_v1`` files)."""
+"""The files of the weights release, relative to the weights root."""
 
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 

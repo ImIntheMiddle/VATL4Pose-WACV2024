@@ -59,7 +59,7 @@ def check_free(uid: str) -> None:
 
 
 def wait_recheck() -> None:
-    """Use the same POSIX sleep command as the existing research launcher."""
+    """Wait 180 seconds between the two occupancy checks."""
     subprocess.run(["sleep", "180"], check=True)
 
 

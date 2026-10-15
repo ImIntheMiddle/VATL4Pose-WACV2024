@@ -1,22 +1,15 @@
 """The settings fingerprint of an AL run directory: ``settings.json``.
 
-A run directory holds the state and the result of one video under one set of settings. Starting
-``vatl4pose-atl`` again with other settings in the same directory would continue the old state with
-the new settings, or skip a video that was finished under the old ones. The first start of a run
-therefore writes ``settings.json``, and every later start (a resume, or a check before skipping a
-finished video) compares the settings it was given with that file. A difference raises an error that
-names the keys and tells the user to pick a new ``run.name``. The file counts only once the run has
-produced a state, oracle files, a result or a done marker; a start that failed before that has its
-settings replaced by the next start.
+A run directory holds the state and result of one video under one set of settings. The first start
+writes ``settings.json``; every later start (a resume, or a check before skipping a finished video)
+compares its settings with that file and raises an error that names the differing keys and asks for
+a new ``run.name`` (see :func:`check_settings`).
 
-The fingerprint holds the package version, the dataset, split and video id, the keypoint spec (name and
-SHA-256 of all its fields), whether the frames are panoramas (``dataset.panorama``), the seed, the
-estimator architecture, its weights file (path and SHA-256),
-the autoencoder checkpoint (path and SHA-256), the oracle, the strategy (name, parts and parameters,
-``lam`` included), the loop settings and the retraining settings. Settings that do not change what a
-round computes are left out, the same ones the loop leaves out when it resumes: the inference batch
-size, ``save_final_model``, ``save_estimator``, ``stopping``, ``save_round_details`` and the number of data-loader
-workers. The device is left out as well, so that a run may continue on another device.
+The fingerprint covers the package version, dataset, split, video id, keypoint spec, panorama flag,
+seed, estimator, autoencoder checkpoint, oracle, strategy, loop and retraining settings; weights
+files enter by path and SHA-256. Settings that do not change what a round computes are left out
+(``_LOOP_NEUTRAL``, ``_RETRAIN_NEUTRAL`` and the device), the same ones the loop leaves out when it
+resumes.
 """
 
 from __future__ import annotations

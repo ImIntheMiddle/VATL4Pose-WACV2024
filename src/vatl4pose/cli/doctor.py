@@ -8,9 +8,7 @@ Options are ``key=value`` overrides of :class:`DoctorConfig`. The command prints
 check and exits with status 1 if any check failed. CUDA is informational: a machine without
 a GPU passes.
 
-``datasets=[posetrack21]`` restricts the dataset, estimator and autoencoder checks to the
-listed datasets (default: ``posetrack21`` and ``jrdb_pose``), so a user who has only one
-dataset can pass.
+``datasets=[posetrack21]`` restricts the checks to the listed datasets (default: both).
 
 Layout of ``paths.data_root``: ``PoseTrack21/`` and ``jrdb-pose/``, each with the
 sub-directories the readers in :mod:`vatl4pose.data.annotations` open. Without

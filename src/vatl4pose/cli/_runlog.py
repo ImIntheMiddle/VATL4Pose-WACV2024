@@ -122,7 +122,6 @@ def _wandb_run(
     if logger == "wandb":
         wandb = _import_wandb()
         output_root.mkdir(parents=True, exist_ok=True)
-        # W&B puts its files in <dir>/wandb, that is <output_root>/wandb
         run = wandb.init(
             project=wandb_cfg.project,
             entity=wandb_cfg.entity,
@@ -164,13 +163,11 @@ def open_round_log(
         group: Group of the W&B run (the experiment name).
         config: Settings stored with the W&B run, including the git commit of the package; it is
             used for ``logger=wandb`` only.
-        output_root: ``paths.output_root``; W&B keeps its files in ``<output_root>/wandb``
-            (it makes the ``wandb`` directory below the directory it is given).
+        output_root: ``paths.output_root``; W&B keeps its files in ``<output_root>/wandb``.
         video_id: Written into every line of the log.
 
     Raises:
-        ImportError: If ``logger`` is ``wandb`` and the package is not installed.
-        ValueError: If ``logger`` is neither ``json`` nor ``wandb``.
+        As :func:`_wandb_run`.
     """
     with _wandb_run(logger, wandb_cfg, name, group, config, output_root) as run:
         path = run_dir / LOG_NAME
@@ -208,8 +205,7 @@ def open_epoch_log(
         output_root: ``paths.output_root``; W&B keeps its files in ``<output_root>/wandb``.
 
     Raises:
-        ImportError: If ``logger`` is ``wandb`` and the package is not installed.
-        ValueError: If ``logger`` is neither ``json`` nor ``wandb``.
+        As :func:`_wandb_run`.
     """
     with _wandb_run(logger, wandb_cfg, name, group, config, output_root) as run:
         if run is None:

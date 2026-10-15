@@ -9,23 +9,22 @@ directory and every video of the id list (the dataset's, or ``summarize.ids_file
 * ``summary.json`` and ``summary.md``: for each strategy the mean ALC over its videos of ``AP .6``
   and ``AP .75`` (``performances_ann``) and of the OSPA (``ospa_ann``), the number of videos, and
   ``percent_range``, the range of labeled people in percent that the curves of all its videos
-  cover. The ALC is 100 times the area under the curve over the share of labeled people, so it is
-  at most 100 for a run that labels all people. A run that stops at 20 % labeled people (a budget
-  run, ``loop.query_ratio`` ending below 1) covers only that range, and the ALC of a perfect curve
-  is 20; compare ALC values of runs with the same range only. A video without ``result.json`` is counted as missing; a video whose
-  curve of a metric holds ``-1`` (no ground truth in the area range) is left out of that metric and
-  counted as skipped, as in the 2023 summaries. A video whose metrics are ``null`` (some person has
-  no ground-truth keypoints, so the loop computed no AP and no OSPA) is listed as "no ground truth"
-  and left out of every mean and curve; it still counts in ``n_videos``.
+  cover. The ALC is 100 times the area under the curve over the share of labeled people (see
+  ``alc_percent``), so compare ALC values of runs with the same range only. A video without
+  ``result.json`` is counted as missing; a video whose curve of a metric holds ``-1`` (no ground
+  truth in the area range) is left out of that metric and counted as skipped, as in the 2023
+  summaries. A video whose metrics are ``null`` (some person has no ground-truth keypoints, so the
+  loop computed no AP and no OSPA) is listed as "no ground truth" and left out of every mean and
+  curve; it still counts in ``n_videos``.
 * ``learning_curves_<metric>.png``: the mean over the videos on the 0 to 100 % label grid, one line
   per strategy.
 * ``stopping`` in ``summary.json`` and the stopping table of ``summary.md`` (Table 5 of the paper)
   for a strategy whose videos ran with ``loop.stopping=true``: for each of the three criteria of
   :mod:`vatl4pose.eval.stopping` (SC_Min, SC_All and the oracle stop) the mean over the videos of
   the share of labeled people at the stop and, for SC_Min and SC_All, of the AP at OKS θ
-  (``retrain.finish_acc``) at the stop, as ``scripts/detailed_result.py`` of the 2023 code
-  computes them. A video that never meets a criterion stops at 100 % and counts in the means.
-  The oracle stop and the AP come from the ground truth, so a video without it is left out.
+  (``retrain.finish_acc``) at the stop. A video that never meets a criterion stops at 100 % and
+  counts in the means. The oracle stop and the AP come from the ground truth, so a video without it
+  is left out.
 
 The plots are made here, from the saved results, and nowhere else.
 """

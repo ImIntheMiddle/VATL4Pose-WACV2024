@@ -185,11 +185,9 @@ def install_from_zip(
 ) -> list[pathlib.Path]:
     """Install the weights of a release zip below ``weights_root``.
 
-    The zip manifest is compared with ``release_manifest`` before anything is written. Every
-    member is then verified against the SHA256 in the zip's ``MANIFEST.json`` before any file
-    reaches ``weights_root``. Members are staged in a
-    temporary directory ``weights_root/.partial-<pid>-<random>/`` and moved into place with
-    ``os.replace`` only after all of them passed, so a failure installs nothing.
+    Check the zip against its own manifest and ``release_manifest``, stage every member in
+    ``weights_root/.partial-<pid>-<random>/`` while verifying its SHA256, then move the files
+    into place with ``os.replace``, so a failure installs nothing.
 
     Args:
         zip_path: Release zip; members are ``pretrained_models/<relative path>`` plus

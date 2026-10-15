@@ -140,7 +140,8 @@ class Status:
 
 
 def read_status(root: Path) -> dict[str, Any]:
-    """Read sidecars, with conservative compatibility for older loop runs."""
+    """Status of one run directory, read from ``.status.json``, ``.done.json``,
+    ``.lock`` and the oracle query files."""
     root = Path(root)
     path = root / STATUS_FILE
     record: dict[str, Any] = {"schema": SCHEMA, "path": str(root), "status": "unknown"}
@@ -168,7 +169,10 @@ def read_status(root: Path) -> dict[str, Any]:
                 )
         return record
     if (root / ".lock").exists():
-        record["reason"] = "legacy lock exists; verify its owner before recovery"
+        record["reason"] = (
+            "a lock file exists but there is no status file; "
+            "verify its owner before recovery"
+        )
         return record
     queries = sorted((root / "oracle").glob("round_*_queries.json"))
     if queries:
@@ -244,10 +248,9 @@ def status_report(root: Path) -> dict[str, Any]:
             STATUS_FILE in files
             or ".done.json" in files
             or "settings.json" in files
-            or "oracle" in dirs
         ):
             paths.add(Path(current))
-        # oracle was pruned, so also recognize pre-status query-only runs.
+        # "oracle" is pruned from the walk above, so look for it here.
         if (Path(current) / "oracle").is_dir():
             paths.add(Path(current))
     records = []

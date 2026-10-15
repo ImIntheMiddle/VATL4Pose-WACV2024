@@ -11,7 +11,8 @@ Directory layout below ``paths.output_root``::
                                                         settings.json, .done.json, .lock, oracle/
     <run.name>/tune/<estimator>/<strategy>/lam_<lam>/<video>/   tune: the same files per lambda
     <run.name>/summary/<estimator>[_<ids>]/             summarize
-    train/<run.name>/                                   train: best.pth, last.pth, log.jsonl
+    train/<run.name>/                                   train: best.pth, last.pth (estimator only),
+                                                        log.jsonl, summary.json
     eval/<name>.json                                    eval
     hydra/<date>/<time>_<command>_<host>_<pid>/         Hydra's own files of one process
 
@@ -379,7 +380,6 @@ def _wandb_config(job: Job, video_id: str, split: Optional[str]) -> dict[str, An
 
 def _build_loop(
     job: Job,
-    video: VideoAnnotation,
     cache: VideoCache,
     run_dir: pathlib.Path,
     on_round: Callable[..., None],
@@ -480,7 +480,7 @@ def run_video(
                 output_root(job.paths),
                 video_id,
             ) as on_round:
-                loop = _build_loop(job, video, cache, run_dir, on_round)
+                loop = _build_loop(job, cache, run_dir, on_round)
                 outcome = loop.run()
             if isinstance(outcome, Pending):
                 execution.update("waiting_annotation", round=outcome.round_index)

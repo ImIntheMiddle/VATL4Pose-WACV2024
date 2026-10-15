@@ -11,18 +11,12 @@ estimator, the directory and the stem of the weights file, and the first 8 hex d
 SHA-256 of the sorted video ids, so that evaluations of other weights or other videos never share
 a file. An existing file is not overwritten unless ``eval.overwrite=true``.
 
-AP protocol. The AP is the AP of the paper, not the standard COCO keypoint AP. The 2023 evaluation
-gives a detection that carries a box the area ``(w - x) * (h - y)`` of its box ``[x, y, w, h]``,
-and this package keeps that rule so that its numbers stay comparable with the paper. A detection
-that no label matches and whose area lies outside the area range is then ignored instead of
-counted as a false positive. On the 2023 predictions of JRDB-Pose video 00 in round 0, the AP@0.6
-is 0.592 with this rule and 0.458 with the standard area ``w * h``. The file names the protocol in
-``ap_protocol``, and ``vatl4pose.eval.coco_ap`` explains it. The file also records ``panorama``, the
-setting of ``dataset.panorama`` that the labels and the crops of the evaluation followed. The ten values are computed in this
-package from the precision and recall arrays of ``pycocotools``. Issue #40 came from the summary
-of the stock ``pycocotools``, which lists AP75 at the position of the key ``AP .6``.
-The JSON also records the video ids, device, seed, weight digest and keypoint-spec digest to
-identify the inputs of an evaluation.
+AP protocol. The AP is the AP of the paper, not the standard COCO keypoint AP: a detection that
+carries a box gets the area ``(w - x) * (h - y)`` of its box ``[x, y, w, h]``, as in the 2023
+evaluation (see :mod:`vatl4pose.eval.coco_ap`). On the 2023 predictions of JRDB-Pose video 00 in
+round 0, the AP@0.6 is 0.592 with this rule and 0.458 with the standard area ``w * h``. The file
+records the protocol in ``ap_protocol``, the ``panorama`` setting that the labels and crops
+followed, and the video ids, device, seed, weight digest and keypoint-spec digest.
 """
 
 from __future__ import annotations

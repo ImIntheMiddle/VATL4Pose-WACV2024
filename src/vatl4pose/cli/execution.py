@@ -1,4 +1,4 @@
-"""Execution management commands; status inspection needs no model imports."""
+"""Annotate videos, run, inspect and resume workflows, and hold a GPU lease for a command."""
 
 from __future__ import annotations
 import argparse
