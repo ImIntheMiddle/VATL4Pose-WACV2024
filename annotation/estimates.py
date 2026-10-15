@@ -1,6 +1,6 @@
 """A video of the keypoints of everyone under the current estimator, for the annotation portal.
 
-After the training of round ``r`` the loop estimates the joints of every person for round
+After the training of round ``r`` the loop predicts the joints of every person for round
 ``r + 1`` and keeps them in ``state/pending_{r+1}/predictions.npy``, in the order of the samples of
 the video cache. The video draws them on every frame of the video. The limbs are blue on the
 left, red on the right and green elsewhere, as in the editor; the joints are white dots. The
@@ -98,17 +98,17 @@ def estimate_video(
     fps: float,
     ffmpeg: str,
 ) -> Path:
-    """The video of the estimates after the training of round ``round_index``.
+    """The video of the predictions after the training of round ``round_index``.
 
     Raises:
-        FileNotFoundError: If the loop keeps no estimates of round ``round_index + 1``, as after
+        FileNotFoundError: If the loop keeps no predictions of round ``round_index + 1``, as after
             its last round.
     """
     predictions = state_dir / f"pending_{round_index + 1:02d}" / "predictions.npy"
     target = run / "estimates" / f"round_{round_index:02d}.mp4"
     if not target.is_file() and not predictions.is_file():
         raise FileNotFoundError(
-            f"The estimates after round {round_index + 1} are not kept"
+            f"The predictions after round {round_index} are not kept"
         )
 
     def render() -> None:

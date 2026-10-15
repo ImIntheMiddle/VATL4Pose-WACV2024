@@ -68,4 +68,4 @@ CONFIG="$LS_DATA_DIR/label_config.xml"
 
 echo
 echo "open $LS_URL in the browser; log in with $LS_USER / $LS_PASSWORD"
-echo "stop with: bash $ANNOTATION_DIR/cycle.sh <run folder> stop"
+echo "stop with: bash $ANNOTATION_DIR/cycle.sh <run directory> stop"

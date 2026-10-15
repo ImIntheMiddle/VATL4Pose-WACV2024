@@ -1,4 +1,4 @@
-"""Run tracking and the active learning loop for a session and manage its Label Studio editor."""
+"""Run tracking and the active-learning loop for a session and manage its Label Studio editor."""
 
 from __future__ import annotations
 
@@ -230,7 +230,7 @@ class Backend:
         )
 
     def render_estimate(self) -> None:
-        """Write the estimate video of the round just trained."""
+        """Write the prediction video of the round just trained."""
         self.portal.estimate()
 
     def initial(self, session: Any) -> None:
@@ -368,7 +368,7 @@ class Backend:
         project_file = session.run / f"project_{round_index:02d}.json"
         if project_file.exists():
             project = read_json(project_file)
-            # Existing editor DB, tasks and human answers must survive restart.
+            # Existing editor DB, tasks and annotator answers must survive restart.
             call(self.base, self.token, "GET", f"/api/projects/{project['id']}")
             return project["id"]
         queries = read_json(path)
@@ -379,7 +379,7 @@ class Backend:
             "POST",
             "/api/projects",
             {
-                "title": f"{session.video.name} · round {round_index + 1}",
+                "title": f"{session.video.name} · round {round_index}",
                 "label_config": label_config(category["keypoints"]),
                 # a skipped task is not saved, and the round needs every task saved
                 "show_skip_button": False,
@@ -420,7 +420,7 @@ class Backend:
         return result
 
     def task_counts(self, project: int) -> dict[str, int]:
-        """The saved tasks (with an answer that is not cancelled) and all tasks of a project."""
+        """The saved tasks (with an answer that is not canceled) and all tasks of a project."""
         data = call(self.base, self.token, "GET", f"/api/projects/{project}")
         return {"saved": data["finished_task_number"], "total": data["task_number"]}
 

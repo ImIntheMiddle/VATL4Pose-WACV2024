@@ -7,7 +7,7 @@ from typing import Any
 
 
 def configure_memory(predictor: Any, tracker: Any) -> None:
-    """Offload SAM2 state and retain boxes instead of historical output masks."""
+    """Offload SAM 2 state and retain boxes instead of historical output masks."""
     predictor.init_state = partial(
         predictor.init_state, offload_video_to_cpu=True, offload_state_to_cpu=True
     )

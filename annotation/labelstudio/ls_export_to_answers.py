@@ -8,7 +8,7 @@ of a task is matched through ``task.data.ann_id``, which ``queries_to_labelstudi
 
 For each task the newest submitted annotation is used. A joint with a point becomes ``x, y, 2`` in
 the frame pixels; a joint without a point becomes the position of the queries file with visibility 0
-(not labelled). The script stops with a message if a task has no annotation, a joint has two points,
+(not labeled). The script stops with a message if a task has no annotation, a joint has two points,
 or the ids differ from the queries.
 """
 
@@ -39,7 +39,7 @@ def convert(export: list[dict], queries: dict) -> dict:
         ask = asked[ann_id]
         if task["data"].get("file_name") != images[ask["image_id"]]["file_name"]:
             raise ValueError(
-                f"task {task['id']}: its frame is not the frame of query {ann_id}"
+                f"task {task['id']}: its frame is not the frame of annotation {ann_id}"
             )
         done = [a for a in task.get("annotations", []) if not a.get("was_cancelled")]
         if not done:
@@ -85,7 +85,7 @@ def convert(export: list[dict], queries: dict) -> dict:
 
     missing = sorted(set(asked) - set(answers))
     if missing:
-        raise ValueError(f"no task for the queried ids {missing}")
+        raise ValueError(f"no task for the annotation ids {missing}")
     return {
         "images": queries["images"],
         "annotations": [answers[i] for i in sorted(answers)],

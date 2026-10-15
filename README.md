@@ -2,7 +2,7 @@
 
 Official implementation of [Active Transfer Learning for Efficient Video-Specific Human Pose Estimation](https://arxiv.org/abs/2311.05041) (WACV 2024). [Project page](https://iminthemiddle.github.io/VATL4Pose-Page/)
 
-VATL4Pose adapts a pretrained pose estimator to one video. Each round selects the people to annotate with THC, WPU and DUW, and retrains the estimator on the new labels. The code of the paper version is at the tag `wacv2024`.
+VATL4Pose adapts a pretrained pose estimator to one video. Each round selects the people to annotate with THC, WPU and DUW, and retrains the estimator on the new labels. The 2023 code of the paper is at the tag `wacv2024`.
 
 ## Installation
 
@@ -37,11 +37,11 @@ for e in wacv2024_posetrack21 wacv2024_jrdb; do
 done
 ```
 
-`outputs/<experiment>/summary/` holds the ALC of AP@0.6 of each strategy (Tables 2 and 4). [docs/guide.md](docs/guide.md) lists the runs of the ablation (Table 3) and of the stopping criteria (Table 5).
+`outputs/<experiment>/summary/` holds the ALC of AP@0.6 of each strategy (Tables 2 and 4 of the paper). [docs/guide.md](docs/guide.md) lists the runs of the ablation (Table 3) and of the stopping criteria (Table 5).
 
 ## Annotating a video in the browser
 
-`vatl4pose annotate` runs the loop on a video of your own in one browser page. [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE) ([CVsports 2026](https://arxiv.org/abs/2604.22162)), a tracking-by-segmentation method for crowded scenes, detects and tracks the people. The page then shows the people to annotate with their predicted keypoints. Correct the points and press Train: the estimator learns from them, and the page shows its keypoints for everyone, so you can annotate another round or finish.
+`vatl4pose annotate` runs the loop on a video of your own in one browser page. [SAMIDARE](https://github.com/ZabuZabuZabu/SAMIDARE) ([CVsports 2026](https://arxiv.org/abs/2604.22162)), a tracking-by-segmentation method for crowded scenes, detects and tracks the people. The page then shows the people to annotate with their predicted keypoints. Correct the points and press Train: the estimator retrains on the new labels, and the page shows its keypoints for everyone, so you can annotate another round or finish.
 
 ```bash
 bash annotation/setup.sh       # once: the tool's environment, SAMIDARE, SAM 2 and their checkpoints
@@ -67,9 +67,9 @@ vatl4pose-atl dataset=coco_custom dataset.root=mine 'dataset.ids=[clip1]' datase
   oracle=coco_file run.name=mine run.device=cuda 'loop.query_ratio=[0.05,0.1,0.2]' loop.save_final_model=true
 ```
 
-Each round writes `oracle/round_XX_queries.json` with the people to annotate and stops. Correct their keypoints in CVAT or Label Studio, keep the annotation ids, save the result as `round_XX_answers.json` in the same folder and run the command again. After the last round, `final_estimator.pth` holds the adapted estimator and `predictions.json` the poses of every person under it.
+Each round writes `oracle/round_XX_queries.json` with the people to annotate and stops. Correct their keypoints in CVAT or Label Studio, keep the annotation ids, save the result as `round_XX_answers.json` in the same directory and run the command again. After the last round, `final_estimator.pth` holds the adapted estimator and `predictions.json` the poses of every person under it.
 
-[docs/guide.md](docs/guide.md) lists the commands and settings and covers the annotation format, the output files, other joint layouts, training, tuning and the pictures of each round.
+[docs/guide.md](docs/guide.md) lists the commands and settings and covers the annotation format, the output files, other keypoint specs, training, tuning and the pictures of each round.
 
 ## Citation
 

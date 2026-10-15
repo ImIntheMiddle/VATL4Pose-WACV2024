@@ -1,4 +1,4 @@
-"""Run one step (atl, annotate, answers or stop) of the manual annotation cycle on a run folder."""
+"""Run one step (atl, annotate, answers or stop) of the manual annotation cycle on a run directory."""
 
 from __future__ import annotations
 import argparse
@@ -13,9 +13,9 @@ from vatl4pose.execution.process import _stop, run_child
 
 ROOT = Path(__file__).resolve().parent
 LABELSTUDIO = ROOT / "labelstudio"
-# the folder that vatl4pose-download-weights --weights-root pretrained_models fills
+# the directory that vatl4pose-download-weights --weights-root pretrained_models fills
 WEIGHTS_ROOT = ROOT.parent / "pretrained_models"
-KEYPOINTS = "posetrack21"  # the joint layout of the pretrained estimator
+KEYPOINTS = "posetrack21"  # the keypoint spec of the pretrained estimator
 CACHE_FILE = "atl/cache/coco_custom/clip.h5"  # written by vatl4pose-prepare under atl/
 
 
@@ -24,10 +24,10 @@ def atl_commands(
 ) -> list[list[str]]:
     """The ``vatl4pose-prepare`` and ``vatl4pose-atl`` commands for a run directory.
 
-    They use the PoseTrack21 layout, the pretrained SimpleBaseline estimator and the whole-body
-    autoencoder.
+    They use the PoseTrack21 keypoint spec, the pretrained SimpleBaseline estimator and the
+    whole-body autoencoder.
 
-    With ``target_oks`` (the accuracy θ of the paper) the loop judges its stopping criterion in
+    With ``target_oks`` (the target OKS θ of the paper) the loop judges its stopping criterion in
     every round, and the retraining keeps the labeled people below ``θ + 0.05`` (Eq. 3). The
     commands of a run whose cache exists leave out ``vatl4pose-prepare``.
     """

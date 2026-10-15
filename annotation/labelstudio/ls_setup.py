@@ -35,7 +35,7 @@ def main() -> None:
     parser.add_argument("--config", type=pathlib.Path, required=True)
     parser.add_argument("--tasks", type=pathlib.Path, required=True)
     parser.add_argument(
-        "--images-dir", type=pathlib.Path, required=True, help="folder with the frames"
+        "--images-dir", type=pathlib.Path, required=True, help="directory with the frames"
     )
     args = parser.parse_args()
 
@@ -59,7 +59,7 @@ def main() -> None:
         print(f"project {project['id']} exists: {args.title}")
     pid = project["id"]
 
-    # local file serving is allowed only for the folders of a local storage connection of a project
+    # local file serving is allowed only for the directories of a project's local storage
     storages = call(
         args.url, args.token, "GET", f"/api/storages/localfiles?project={pid}"
     )

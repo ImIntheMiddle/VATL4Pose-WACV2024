@@ -1,11 +1,11 @@
 """Convert a vatl4pose ``round_XX_queries.json`` (COCO keypoints) to Label Studio tasks and a labeling config.
 
-One task per queried person. The task shows the whole frame, the person box (read only) and the
-prediction of the model as keypoint regions, named by the joints of the keypoint spec. The task data
+One task per selected person. The task shows the whole frame, the person box (read only) and the
+prediction of the estimator as keypoint regions, named by the joints of the keypoint spec. The task data
 keeps the annotation id of the queries file in ``ann_id`` (and ``vatl_sample_index``), because Label
-Studio numbers its own tasks and annotations and the answers must keep the ids of the queries.
+Studio numbers its own tasks and annotations and the answers must keep the annotation ids.
 
-The joints in ``--skip-joints`` are not pre-filled (the PoseTrack21 layout never annotates the ears).
+The joints in ``--skip-joints`` are not pre-filled (the PoseTrack21 keypoint spec never annotates the ears).
 """
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ import json
 import pathlib
 from xml.sax.saxutils import quoteattr
 
-POINT_WIDTH = 0.5  # size of a keypoint in percent of the image width
+POINT_WIDTH = 0.5  # size of a joint marker in percent of the image width
 IMAGE_URL = "/data/local-files/?d="  # Label Studio local file serving, relative to its document root
 
 
 def joint_color(joint: str) -> str:
-    """The colour of a joint in the editor: left joints blue, right red, the others green."""
+    """The color of a joint in the editor: left joints blue, right red, the others green."""
     if joint.startswith("left"):
         return "#1f77b4"
     if joint.startswith("right"):
@@ -48,7 +48,7 @@ def label_config(joints: list[str]) -> str:
 
 
 def convert(queries: dict, skip_joints: set[str], round_index: int) -> list[dict]:
-    """Label Studio tasks of a queries file; the prediction of the model is imported as an annotation."""
+    """Label Studio tasks of a queries file; the prediction of the estimator is imported as an annotation."""
     joints = queries["categories"][0]["keypoints"]
     unknown = skip_joints - set(joints)
     if unknown:

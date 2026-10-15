@@ -1,4 +1,4 @@
-"""A video of the track of one queried person, for the annotation portal.
+"""A video of the track of one selected person, for the annotation portal.
 
 The video runs from the first to the last frame of the track at the frame rate of the input video.
 Only the box of the track is drawn and the frame outside it is dimmed; the frame of the query has

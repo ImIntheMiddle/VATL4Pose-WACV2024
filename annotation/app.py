@@ -251,7 +251,7 @@ class AnnotationSession:
         }
 
     def judged_rounds(self) -> list[dict[str, Any]]:
-        """One row per judged round of ``log.jsonl``, with the labeled share after the round."""
+        """One row per judged round of ``log.jsonl``, with the share of labeled people after the round."""
         run = self.oracle.parent
         if not (run / "log.jsonl").is_file():
             return []
@@ -292,7 +292,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--target-oks",
         type=float,
-        help="Accuracy θ of the stopping criterion of the paper, an OKS in (0, 1)",
+        help="Target OKS θ of the stopping criterion of the paper, an OKS in (0, 1)",
     )
     args = parser.parse_args(argv)
     if not args.video.is_file():

@@ -94,7 +94,7 @@ tr+tr td{border-top:1px solid var(--line)}
         <div class="label">How to</div>
         <ul class="howto">
           <li>Drag each point onto its joint.</li>
-          <li>Missing joint: pick its name below the image, then click.</li>
+          <li>Missing joint: pick its name below the frame, then click.</li>
           <li>Hidden joint: select it, press <kbd>Backspace</kbd>.</li>
           <li><b>Submit</b> saves the person; <b>Train</b> above runs once all are saved.</li>
         </ul>
@@ -120,7 +120,7 @@ tr+tr td{border-top:1px solid var(--line)}
   <div class="result" id="result" hidden>
     <div class="stage">
       <video id="estimate" muted loop autoplay playsinline controls></video>
-      <div class="muted">The keypoints of every person, estimated by the current estimator.</div>
+      <div class="muted">The keypoints of every person, predicted by the current estimator.</div>
     </div>
     <aside>
       <section>
@@ -176,7 +176,7 @@ setInterval(follow, 500);
 
 function historyRows(rounds) {
   return '<tr><th>Round</th><th>Labeled</th><th>Above</th><th>Lowest</th></tr>' + rounds.map(r =>
-    '<tr><td><span class="dot ' + (r.met ? 'met' : 'no') + '"></span>' + (r.round + 1) + '</td><td>' + pct(r.labeled) +
+    '<tr><td><span class="dot ' + (r.met ? 'met' : 'no') + '"></span>' + r.round + '</td><td>' + pct(r.labeled) +
     '</td><td>' + r.above + ' / ' + r.people + '</td><td>' + r.lowest.toFixed(2) + '</td></tr>').join('');
 }
 
@@ -185,7 +185,7 @@ function renderWork(s) {
   if (project !== s.project) { project = s.project; shown = null; editor.src = '/projects/' + project + '/data?labeling=1'; }
   $('round').hidden = false;
   advance.hidden = false;
-  $('round-name').textContent = 'Round ' + (s.round + 1);
+  $('round-name').textContent = 'Round ' + s.round;
   const t = s.tasks;
   $('round-bar').style.width = t && t.total ? (100 * t.saved / t.total) + '%' : '0';
   $('round-count').textContent = t ? t.saved + ' / ' + t.total + ' saved' : '';
@@ -196,8 +196,8 @@ function renderWork(s) {
   if (c) {
     $('theta').textContent = c.theta.toFixed(2);
     $('criterion-note').textContent = c.rounds.length
-      ? 'Judged after each round, on everyone annotated so far.'
-      : 'Judged after this round, on everyone annotated so far.';
+      ? 'Judged after each round, on everyone labeled so far.'
+      : 'Judged after this round, on everyone labeled so far.';
     $('history').innerHTML = c.rounds.length ? historyRows(c.rounds) : '';
   }
 }
@@ -216,10 +216,10 @@ function renderWait(s) {
   else if (s.phase === 'learning') {
     if (!loop) { now = 'Preparing'; detail = 'Checking the cache and loading the models · ' + clock(elapsed); }
     else if (loop.step === 'oracle' || loop.step === 'retrain') { now = 'Training'; if (loop.total) { frac = loop.done / loop.total; detail = 'Epoch ' + loop.done + ' of ' + loop.total; } }
-    else { now = 'Selecting the next people'; detail = {ae: 'Tuning the autoencoder that scores pose naturalness', infer: 'Estimating the joints of everyone', eval: 'Collecting the estimates', select: 'Selecting the people to annotate'}[loop.step] || loop.step; }
+    else { now = 'Selecting the next people'; detail = {ae: 'Fine-tuning the whole-body autoencoder that scores pose naturalness', infer: 'Predicting the joints of everyone', eval: 'Collecting the predictions', select: 'Selecting the people to annotate'}[loop.step] || loop.step; }
   }
   if (s.phase === 'starting') { now = null; detail = 'Starting the session'; }
-  $('wait-label').textContent = s.round === null ? 'New session' : 'Round ' + (s.round + 1);
+  $('wait-label').textContent = s.round === null ? 'New session' : 'Round ' + s.round;
   $('wait-title').textContent = s.phase === 'failed' ? 'Stopped' : now || 'Starting';
   const at = names.indexOf(now);
   $('steps').innerHTML = names.map((n, i) => '<li class="' + (i < at ? 'done' : i === at ? 'now' : '') + '">' + n + '</li>').join('');
@@ -234,22 +234,22 @@ function renderResult(s) {
   show('result');
   $('round').hidden = true;
   advance.hidden = true;
-  // a new estimate after every round; the query keeps the browser from reusing the last one
+  // a new video of the predictions after every round; the query keeps the browser from reusing the last one
   const src = '/__vatl__/estimate?round=' + s.round;
   if (estimateLoaded !== src) { $('estimate').src = src; estimateLoaded = src; }
   const c = s.stopping, last = c && c.rounds.length ? c.rounds[c.rounds.length - 1] : null;
   const done = s.phase === 'round_done', met = !!(last && last.met);
-  $('result-label').textContent = done ? 'Round ' + (s.round + 1) + ' trained' : 'Finished';
-  $('result-title').textContent = !done ? 'The session is complete' : met ? 'The stopping criterion is met' : c ? 'The stopping criterion is not met yet' : 'Check the estimates';
+  $('result-label').textContent = done ? 'Round ' + s.round + ' trained' : 'Finished';
+  $('result-title').textContent = !done ? 'The session is complete' : met ? 'The stopping criterion is met' : c ? 'The stopping criterion is not met yet' : 'Check the predictions';
   $('verdict').hidden = !last;
   $('verdict').classList.toggle('pending', !met);
-  if (last) $('verdict').textContent = (met ? 'All ' : last.above + ' of ') + last.people + ' annotated people reach OKS ' + c.theta.toFixed(2)
+  if (last) $('verdict').textContent = (met ? 'All ' : last.above + ' of ') + last.people + ' labeled people reach OKS ' + c.theta.toFixed(2)
     + ' (lowest ' + last.lowest.toFixed(2) + ').';
   $('result-history').hidden = !c;
   if (c) { $('result-theta').textContent = c.theta.toFixed(2); $('result-table').innerHTML = historyRows(c.rounds); }
   $('estimator').textContent = s.estimator || '';
   // met: finishing comes first; otherwise the next round does
-  const next = 'Start round ' + (s.round + 2);
+  const next = 'Start round ' + (s.round + 1);
   $('first').textContent = met ? 'Finish' : next;
   $('first').dataset.path = met ? '/__vatl__/finish' : '/__vatl__/continue';
   $('second').textContent = met ? 'Keep annotating' : 'Finish here';

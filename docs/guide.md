@@ -10,7 +10,7 @@
 | `vatl4pose-prepare` | builds the cache of each video in `outputs/cache/` |
 | `vatl4pose-atl` | runs active transfer learning and writes `outputs/<run.name>/<estimator>/<strategy>/<video>/result.json` |
 | `vatl4pose-summarize` | writes `summary.md` and the learning curves |
-| `vatl4pose-train` | trains an estimator (`train.target=estimator`) or the WPU autoencoder (`train.target=ae`) |
+| `vatl4pose-train` | trains a pose estimator (`train.target=estimator`) or the whole-body autoencoder (`train.target=ae`) |
 | `vatl4pose-tune` | chooses `lam` of the proposed method on annotated videos |
 | `vatl4pose-eval` | evaluates an estimator |
 | `vatl4pose-explain` | draws the people that each round selected and the reasons, from the records of `loop.save_round_details=true` |
@@ -21,18 +21,18 @@ Settings are Hydra overrides (`key=value`). The main ones are below.
 
 | setting | values |
 |---|---|
-| `strategy` | `thc_wpu_duw` (proposed, default), `random`, `hp`, `mpe`, `tpc`, `kmeans`, `coreset`, `thc`, `wpu`, `thc_wpu`, `thc_coreset`, `wpu_coreset`, `vl4pose`; the ablation of Table 3: `thc_wpu_duw_fixed`, `thc_wpu_duw_increase`, `thc_wpu_duw_decrease` |
+| `strategy` | `thc_wpu_duw` (proposed, default), `random`, `hp`, `mpe`, `tpc`, `kmeans`, `coreset`, `thc`, `wpu`, `thc_wpu`, `thc_coreset`, `wpu_coreset`, `vl4pose`; the ablation of Table 3 of the paper: `thc_wpu_duw_fixed`, `thc_wpu_duw_increase`, `thc_wpu_duw_decrease` |
 | `estimator` | `simplebaseline`, `fastpose`, `hrnet_w32` (`hrnet_w32` has no embedding and works only with `random`, `hp`, `mpe`, `tpc`, `thc`, `wpu`, `thc_wpu`) |
-| `oracle` | `simulated` (answers with the ground truth), `coco_file` (a person answers) |
+| `oracle` | `simulated` (answers with the ground truth), `coco_file` (an annotator answers) |
 | `paths.data_root`, `paths.weights_root`, `paths.output_root` | `data`, `pretrained_models`, `outputs` |
 | `loop.query_ratio` | share of labeled people after each round, default `[0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 0.8, 1.0]` |
 | `loop.save_final_model` | `true` writes `final_estimator.pth` next to `result.json` |
 | `loop.save_estimator` | `true` writes `estimator.pth` after every round |
 | `loop.stopping` | `true` judges the stopping criteria of the paper in every round (see below) |
 | `loop.save_round_details` | `true` writes `details/round_XX.npz` in every round for `vatl4pose-explain` |
-| `retrain.continual` | `true` (default) keeps the model, the optimizer and the schedule from round to round; `false` starts every round from `estimator.weights` |
+| `retrain.continual` | `true` (default) keeps the estimator, the optimizer and the schedule from round to round; `false` starts every round from `estimator.weights` |
 | `retrain.optimizer` | `adamw` (default), `adam`, `sgd` |
-| `retrain.finish_acc` | OKS θ from which a labeled person counts as solved: people labeled in earlier rounds are retrained only while their OKS is at most θ + 0.05 (default 1.0, all of them) |
+| `retrain.finish_acc` | target OKS θ from which a labeled person counts as solved: people labeled in earlier rounds are retrained only while their OKS is at most θ + 0.05 (default 1.0, all of them) |
 | `dataset.panorama` | `true` for 360-degree frames whose right edge continues at the left edge (JRDB-Pose) |
 | `logger` | `wandb` logs to W&B (`uv sync --extra wandb`) |
 
@@ -49,7 +49,7 @@ The run directory of a video, `outputs/<run.name>/<estimator>/<strategy>/<video>
 | `result.json` | the share of labeled people, AP, OSPA and the selected people of every round |
 | `log.jsonl` | one line per round, written while the run goes on |
 | `predictions.json` | after the last round: the keypoints of every person under the final estimator, as a COCO results list with the annotation `id` and `track_id` of each person |
-| `predictions_ann.json` | the same, with the labels of the annotated people in place of the estimate |
+| `predictions_ann.json` | the same, with the label of each labeled person in place of the prediction |
 | `final_estimator.pth`, `estimator.pth` | the estimator after the last round, and after every round (`loop.save_final_model`, `loop.save_estimator`) |
 | `oracle/` | the queries and answers of `oracle=coco_file` |
 | `details/` | the records of `loop.save_round_details` |
@@ -67,7 +67,7 @@ done
 vatl4pose-summarize experiment=wacv2024_posetrack21
 ```
 
-Table 5 compares stopping criteria with a target OKS θ. With `loop.stopping=true` every round records three judgments under the estimator before it learns from the round: SC_Min, whether the mean OKS of the people queried in the round reaches θ; SC_All, whether every person annotated so far reaches θ; and the actual stop, whether every person of the video reaches θ against the ground truth. The loop does not stop by itself. `vatl4pose-summarize` reports the mean share of labeled people at the stop of each criterion, and for SC_Min and SC_All the AP at OKS θ there. The preset `wacv2024_posetrack21_table5` raises the share in steps of 10 % as the runs of the paper did, and `retrain.finish_acc` sets θ.
+Table 5 compares stopping criteria with a target OKS θ. With `loop.stopping=true` every round records three judgments under the estimator before it retrains on the round: SC_Min, whether the mean OKS of the people selected in the round reaches θ; SC_All, whether every person labeled so far reaches θ; and the actual stop, whether every person of the video reaches θ against the ground truth. The loop does not stop by itself. `vatl4pose-summarize` reports the mean share of labeled people at the stop of each criterion, and for SC_Min and SC_All the AP@θ there. The preset `wacv2024_posetrack21_table5` raises the share in steps of 10 % as the runs of the paper did, and `retrain.finish_acc` sets θ.
 
 ```bash
 for theta in 0.5 0.6 0.7 0.8; do
@@ -85,7 +85,7 @@ uv sync --extra explain        # the H.264 encoder of the videos
 vatl4pose-explain outputs/mine/simplebaseline/THC+WPU_Coresetfilter/clip1
 ```
 
-- `index.html` opens from the file system. It switches between rounds and numbers the selected people; a click on a person shows the THC, WPU and DUW figures of that pick.
+- `index.html` opens from the file system. It switches between rounds and numbers the selected people; a click on a person shows the THC, WPU and DUW figures of its selection.
 - `round_XX.mp4` and `compare_00_XX.mp4` show the predictions of a round, alone and beside round 0. They, the page and the pictures in `picks/` leave out the joints whose heatmap peak is below 0.3, mostly joints that the labels mark as not visible, whose predictions jump between frames.
 - `picks/round_XX_rank_YY.png` explains one selected person in one picture.
 
@@ -105,18 +105,18 @@ The boxes and track ids come from your detector and tracker. For a 360-degree vi
 With `oracle=coco_file`, each round writes `oracle/round_XX_queries.json` in the run directory of each video and stops. The file holds the selected people with the predicted keypoints.
 
 1. Correct the keypoints in CVAT or Label Studio.
-2. Save the result as `round_XX_answers.json` in the same folder. It must contain every queried annotation `id` once, with `keypoints` as `x, y, visibility` (0, 1 or 2) for every joint. Label Studio's COCO export renumbers the ids, so export JSON and map the answers back by the query id.
+2. Save the result as `round_XX_answers.json` in the same directory. It must contain every annotation `id` of the queries file once, with `keypoints` as `x, y, visibility` (0, 1 or 2) for every joint. Label Studio's COCO export renumbers the ids, so export JSON and map the answers back by the annotation id.
 3. Run the same command again. It retrains the estimator and writes the next queries.
 
 Changed settings need a new `run.name`.
 
-## Joint layouts
+## Keypoint specs
 
-`dataset.keypoints` is a preset (`coco17`, `posetrack21`, `jrdb_pose`) or a mapping with these fields. The released weights use `posetrack21` and `jrdb_pose`.
+`dataset.keypoints` is the keypoint spec of the dataset, a preset (`coco17`, `posetrack21`, `jrdb_pose`) or a mapping with these fields. The released weights use `posetrack21` and `jrdb_pose`.
 
 | field | content |
 |---|---|
-| `name` | name of the layout |
+| `name` | name of the spec |
 | `joint_names` | one name per joint, in the order of `keypoints` |
 | `flip_pairs` | joint pairs that swap in a horizontal flip |
 | `skeleton` | joint pairs connected by a limb |
@@ -130,7 +130,7 @@ Changed settings need a new `run.name`.
 
 ## Training an estimator and the autoencoder
 
-Another layout needs its own estimator, and WPU needs its own autoencoder. List the training and validation video ids in two text files, one id per line. These videos need `keypoints`.
+Another keypoint spec needs its own estimator, and WPU needs its own autoencoder. List the training and validation video ids in two text files, one id per line. These videos need `keypoints`.
 
 ```bash
 vatl4pose-train dataset=coco_custom dataset.root=mine dataset.keypoints=coco17 \
