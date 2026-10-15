@@ -52,11 +52,6 @@
   .bar b { font-weight: normal; font-variant-numeric: tabular-nums; text-align: right; }
   #message { color: #c0392b; padding: 16px; }
 </style>
-<script>
-  // collects the errors of the page, so that a test (or the reader) can see whether it ran cleanly
-  window.__errors = [];
-  window.addEventListener("error", function (e) { window.__errors.push(String(e.message)); });
-</script>
 </head>
 <body>
 <header>
@@ -114,7 +109,6 @@
     if (!img) {
       img = new Image();
       img.onload = function () { img.ready = true; (img.waiting || []).forEach(function (f) { f(); }); img.waiting = []; };
-      img.onerror = function () { window.__errors.push("cannot load " + file); };
       img.src = file;
       images[file] = img;
     }

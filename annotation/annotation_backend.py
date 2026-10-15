@@ -22,7 +22,7 @@ from vatl4pose.execution.process import run_child, _stat, _cleanup
 from vatl4pose.execution.status import atomic_json, read_json, process_identity
 
 
-def preview_command(source: Path, target: Path, encoder: str = "ffmpeg") -> list[str]:
+def preview_command(source: Path, target: Path, encoder: str) -> list[str]:
     return [
         encoder,
         "-nostdin",
@@ -75,7 +75,7 @@ class Backend:
         root: Path,
         index: int | None,
         max_frames: int | None,
-        learning_device: str = "cpu",
+        learning_device: str,
     ) -> None:
         self.root, self.index, self.max_frames = root, index, max_frames
         self.learning_device = learning_device

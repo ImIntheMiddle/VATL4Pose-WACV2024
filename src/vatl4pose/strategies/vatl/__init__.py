@@ -12,7 +12,6 @@ Importing this package registers
 The package is a plugin of the strategy framework: ``registry.PLUGIN_MODULES`` lists it, so a
 config that names one of these components works without importing the package, and no other module
 of the framework refers to it. Deleting this package and that one list entry removes the proposal.
-The strategy presets that combine the components are in :mod:`vatl4pose.strategies.presets`.
 """
 
 from . import combiners, duw, thc, wpu

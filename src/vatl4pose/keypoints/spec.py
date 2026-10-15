@@ -61,28 +61,6 @@ JRDB_ORDER_SIGMAS: tuple[float, ...] = (
 )
 """OKS per-joint sigmas, already divided by 10, in the joint order of JRDB-Pose."""
 
-LEGACY_JRDB_FLIP_SWAPS: tuple[tuple[int, int], ...] = (
-    (1, 2),
-    (0, 4),
-    (3, 4),
-    (8, 10),
-    (5, 7),
-    (10, 13),
-    (14, 16),
-    (4, 5),
-    (7, 12),
-    (4, 8),
-    (3, 6),
-    (13, 15),
-    (11, 14),
-    (6, 9),
-    (8, 11),
-)
-"""The JRDB-Pose flip list of the 2023 code, as ordered swaps.
-
-Joints appear in several pairs, so the swaps do not form a left/right mirror.
-"""
-
 LEGACY_COCO_ANGLE_TRIPLETS: tuple[tuple[int, int, int], ...] = (
     (8, 6, 12),
     (6, 8, 10),

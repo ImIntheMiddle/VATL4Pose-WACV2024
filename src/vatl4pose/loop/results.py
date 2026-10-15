@@ -116,22 +116,15 @@ def _warn_once(root: pathlib.Path, reason: str) -> None:
     )
 
 
-def git_commit(package_dir: pathlib.Path | None = None) -> str | None:
+def git_commit() -> str | None:
     """The ``HEAD`` commit of the checkout that this package runs from, or ``None``.
 
     A package that is not at ``<root>/src/vatl4pose`` with a ``.git`` entry in ``<root>`` (an
     installed package, for example) gives ``None`` without a message. If the checkout exists but
     git cannot name its commit, the result is ``None`` and one warning per process and checkout
     says why; a failure to read the commit must not end a long run.
-
-    Args:
-        package_dir: The directory of the ``vatl4pose`` package; the running one if omitted.
     """
-    package = (
-        pathlib.Path(vatl4pose.__file__).parent
-        if package_dir is None
-        else pathlib.Path(package_dir)
-    ).resolve()
+    package = pathlib.Path(vatl4pose.__file__).parent.resolve()
     root = package.parent.parent
     if package.parent.name != "src" or not (root / ".git").exists():
         return None

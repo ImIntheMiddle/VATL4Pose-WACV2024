@@ -1,6 +1,5 @@
 """Torch datasets over a :class:`~vatl4pose.data.cache.VideoCache` and over annotated videos.
 
-* :class:`InferenceDataset` yields the normalised cached crop of every sample.
 * :class:`FinetuneDataset` yields augmented training items of the labeled samples. It reads the
   original frame of each sample, crops it from the ground-truth box with a random scale, rotation
   and flip, and builds the heatmap target from the labels given by the oracle.
@@ -79,29 +78,6 @@ def collect_people(
                 "ground-truth keypoints for every person"
             )
     return next(iter(specs)), people
-
-
-class InferenceDataset(Dataset[tuple[int, torch.Tensor]]):
-    """Every sample of a cache, as ``(index, normalised model input)``.
-
-    Args:
-        cache: The cache to read.
-    """
-
-    def __init__(self, cache: VideoCache) -> None:
-        self._cache = cache
-
-    def __len__(self) -> int:
-        return len(self._cache)
-
-    def __getitem__(self, i: int) -> tuple[int, torch.Tensor]:
-        """Return ``(i, x)`` with ``x`` of shape ``(3, 256, 192)``, float32."""
-        i = int(i)
-        if not 0 <= i < len(self):
-            raise IndexError(f"index {i} out of range [0, {len(self)})")
-        x = to_input_tensor(self._cache.crops(np.array([i], dtype=np.int64)))[0]
-        assert x.dtype == torch.float32 and tuple(x.shape) == (3, *INPUT_SIZE)
-        return i, x
 
 
 class FinetuneDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]):
@@ -309,11 +285,6 @@ class PersonTrainDataset(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor]
         self._augment = augment
         self._seed = seed
         self._epoch = torch.zeros((), dtype=torch.int64).share_memory_()
-
-    @property
-    def seed(self) -> int:
-        """The seed of the run, as given to the constructor (read-only)."""
-        return self._seed
 
     def set_epoch(self, epoch: int) -> None:
         """Set the epoch whose augmentation draws the following reads use.

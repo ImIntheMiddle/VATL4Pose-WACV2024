@@ -339,11 +339,6 @@ class VideoCache:
             self._length = int(handle["crops"].shape[0])
 
     @property
-    def path(self) -> pathlib.Path:
-        """The cache file."""
-        return self._path
-
-    @property
     def spec(self) -> KeypointSpec:
         """The keypoint spec the cache was checked against (it matches the one it was built for)."""
         return self._spec
