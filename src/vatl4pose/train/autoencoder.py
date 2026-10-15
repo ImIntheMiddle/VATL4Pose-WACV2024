@@ -1,8 +1,8 @@
-"""Pretraining of the whole-body autoencoder behind the WPU uncertainty.
+"""Pretraining of the whole-body autoencoder behind Whole-body Pose Unnaturalness (WPU).
 
-The autoencoder reconstructs the standardised hybrid feature of a person (:func:`compute_hybrid`).
-It trains on the ground-truth poses of the training split, and the active-learning loop later tunes
-it on the labeled people of one video. The optimiser is that of the 2023 script:
+The autoencoder reconstructs the standardized hybrid feature of a person (:func:`compute_hybrid`).
+It trains on the ground-truth poses of the training split, and the active-learning loop later
+fine-tunes it on the labeled people of one video. The optimizer is that of the 2023 code:
 
 * AdamW (PyTorch defaults, so a weight decay of 0.01) at ``lr``, lowered to the rates of
   ``lr_steps`` at their epochs (counted from 0); batches of ``batch_size`` rows in a new random
@@ -10,7 +10,7 @@ it on the labeled people of one video. The optimiser is that of the 2023 script:
 * The loss is the mean squared error over the *valid* entries of the batch
   (:func:`~vatl4pose.models.wholebody_ae.masked_mse`). An entry is invalid when its joint is not
   visible, or when it is an angle with an invisible joint (:func:`hybrid_valid_mask`).
-* The features are standardised. The mean and the standard deviation of every dimension come from
+* The features are standardized. The mean and the standard deviation of every dimension come from
   the valid entries of the training features (:func:`feature_statistics`) and are stored in the
   model. A dimension with no valid entry, or with a standard deviation of 0, makes the training
   raise. The only exceptions are the dimensions that the spec never makes valid (the offsets of its
@@ -23,7 +23,7 @@ it on the labeled people of one video. The optimiser is that of the 2023 script:
 The features are the hybrid features of the ground truth, one row per person: the raw ``bbox``
 of the annotation (height only), the keypoints with the visibility as the weight of every joint.
 The fine-tuning in the loop builds its features and masks the same way, from the labels of the
-oracle. Every row of the training set is its own person; the 2023 script reused one feature
+oracle. Every row of the training set is its own person; the 2023 code reused one feature
 dictionary, so its rows were copies of the last person.
 
 Reproducibility: the order of the rows in an epoch comes from
@@ -56,7 +56,7 @@ from vatl4pose.models.wholebody_ae import (
 from vatl4pose.train._common import derived_seed, shuffle_order, write_atomic
 from vatl4pose.train._files import prepare_output_dir
 
-# Rows per batch of the validation loss; the 2023 script used 8000.
+# Rows per batch of the validation loss; the 2023 code used 8000.
 VALID_BATCH_SIZE = 8000
 _OUTPUT_FILES = ("best.pth", "log.jsonl")
 
@@ -201,7 +201,7 @@ def feature_statistics(
         raise ValueError(
             f"dimension {d} ({feature_dim_name(d, spec)}): the standard deviation over its "
             f"{int(count[d])} valid training entries is {float(std[d])} and the mean "
-            f"{float(mean[d])}; standardising would divide by it"
+            f"{float(mean[d])}; standardizing would divide by it"
         )
     return mean.float(), std.float()
 
@@ -242,7 +242,7 @@ def train_wholebody_ae(
     Args:
         train_videos: Videos of the training split, with keypoint spec ``spec``.
         val_videos: Videos of the validation split, with keypoint spec ``spec``.
-        spec: Keypoint spec; its ``ae_input_dim`` is the input size of the network.
+        spec: Keypoint spec; its ``ae_input_dim`` is the input size of the autoencoder.
         cfg: Training settings.
         out_dir: Directory of the two files; created if missing, and it must not hold any of
             them already.
@@ -277,7 +277,7 @@ def train_wholebody_ae(
         model = WholeBodyAE(spec.ae_input_dim, cfg.z_dim)
     model.set_normalization(mean, std)
     model = model.to(device)
-    # standardised once; the statistics are buffers, so training does not change them
+    # standardized once; the statistics are buffers, so training does not change them
     z_train = model.standardize(x_train.to(device), mask_train.to(device))
     z_valid = model.standardize(x_valid.to(device), mask_val.to(device))
     mask_train, mask_val = mask_train.to(device), mask_val.to(device)

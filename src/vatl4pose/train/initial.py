@@ -1,23 +1,23 @@
 """Training of the initial pose estimator, the starting weights of the active-learning loop.
 
 The released weights of 2023 came from two scripts that are not part of this package. This module
-retrains them. The recipe is that of the 2023 SimpleBaseline, FastPose and HRNet-W32 runs:
+trains them again. The recipe is that of the 2023 SimpleBaseline, FastPose and HRNet-W32 runs:
 
 * Adam on all parameters at one learning rate (default 1e-3, no weight decay), and a
   :class:`~torch.optim.lr_scheduler.MultiStepLR` that multiplies the rate by 0.1 at the epochs in
   ``milestones`` (default 90 and 120). The scheduler steps once per epoch, after its batches.
-* A network that starts from the ImageNet backbone (``EstimatorConfig(imagenet_init=True)``) gets
-  the head initialisation of the 2023 scripts: normal(0, 0.001) weights for the upsampling and the
-  output layers, see :meth:`~vatl4pose.models.estimator.SimpleBaselineEstimator.initialize_head`
-  and :meth:`~vatl4pose.models.estimator.FastPoseEstimator.initialize_head`. A network that loads a
-  checkpoint (``weights`` or ``InitialTrainConfig.init_weights``) and one without ImageNet weights
-  (HRNet-W32, or ``imagenet_init=False``) keeps the initialisation it is built with.
+* An estimator that starts from the ImageNet backbone (``EstimatorConfig(imagenet_init=True)``)
+  gets the head initialization of the 2023 code: normal(0, 0.001) weights for the upsampling and
+  the output layers, see :meth:`~vatl4pose.models.estimator.SimpleBaselineEstimator.initialize_head`
+  and :meth:`~vatl4pose.models.estimator.FastPoseEstimator.initialize_head`. An estimator that
+  loads a checkpoint (``weights`` or ``InitialTrainConfig.init_weights``) and one without ImageNet
+  weights (HRNet-W32, or ``imagenet_init=False``) keeps the initialization it is built with.
 * The loss is ``0.5 * MSE(output * weight, target * weight)`` (:func:`heatmap_loss`), the loss of
-  the per-round fine-tuning.
+  the per-round retraining.
 * A training item is the crop of the ground-truth box of one person with a random scale, rotation
   and flip (:class:`~vatl4pose.data.datasets.PersonTrainDataset`), the augmentation of the
-  fine-tuning. The frames are read from disk, with no cache.
-* After an epoch the model is evaluated on the validation people. The best epoch by
+  retraining. The frames are read from disk, with no cache.
+* After an epoch the estimator is evaluated on the validation people. The best epoch by
   :attr:`InitialTrainConfig.select_metric` becomes ``best.pth``.
 
 The validation uses the evaluation of the active-learning loop: the person crops of
@@ -26,13 +26,13 @@ The validation uses the evaluation of the active-learning loop: the person crops
 (:func:`~vatl4pose.eval.pose_score`), and :func:`~vatl4pose.eval.evaluate_predictions` with the OKS
 sigmas of the keypoint spec.
 
-Not ported from the 2023 scripts: the learning-rate restart and the "DPG" augmentation after epoch
+Not ported from the 2023 code: the learning-rate restart and the "DPG" augmentation after epoch
 140, and the multiplication of the batch size by the number of GPUs with ``DataParallel``; this
 module trains on one device with the batch size given.
 
 Reproducibility: the augmentation of an item is drawn by the dataset from ``(seed, epoch, item)``,
 the order of the items in an epoch comes from
-:func:`~vatl4pose.train._common.shuffle_order`, and the initial weights of a network without a
+:func:`~vatl4pose.train._common.shuffle_order`, and the initial weights of an estimator without a
 checkpoint are drawn with a generator seeded from ``seed``. None of them reads or changes the
 global random state, and none depends on the number of loader workers.
 """
@@ -220,7 +220,7 @@ def evaluate_estimator(
     spec, _ = collect_people(videos)
     if model.num_joints != spec.num_joints:
         raise ValueError(
-            f"the model has {model.num_joints} joints, spec {spec.name!r} has {spec.num_joints}"
+            f"the estimator has {model.num_joints} joints, spec {spec.name!r} has {spec.num_joints}"
         )
     dataset = PersonCropDataset(videos)
     keypoints_gt, boxes_xywh, image_id = ground_truth_arrays(videos)
@@ -245,7 +245,7 @@ def evaluate_estimator(
             for index, x, bbox_crop in loader:
                 output = model(x.to(device, non_blocking=True))
                 assert output.dtype == torch.float32, (
-                    f"the model returned {output.dtype} heatmaps"
+                    f"the estimator returned {output.dtype} heatmaps"
                 )
                 decoded, scores = heatmaps_to_coords(output.cpu(), bbox_crop)
                 coords[index.numpy()] = decoded.numpy()
@@ -339,7 +339,7 @@ def train_estimator(
     Args:
         train_videos: Videos of the training split, same keypoint spec as ``val_videos``.
         val_videos: Videos of the validation split.
-        est_cfg: The network to train. Its ``num_joints`` must equal that of the keypoint spec.
+        est_cfg: The estimator to train. Its ``num_joints`` must equal that of the keypoint spec.
         cfg: Training settings.
         out_dir: Directory of the three files; created if missing, and it must not hold any of
             them already.
@@ -382,7 +382,7 @@ def train_estimator(
         est_cfg = dataclasses.replace(est_cfg, weights=cfg.init_weights)
     best_path, last_path, log_path = prepare_output_dir(out_dir, _OUTPUT_FILES)
 
-    # the initial weights of a network without a checkpoint come from a generator of the seed;
+    # the initial weights of an estimator without a checkpoint come from a generator of the seed;
     # the global CPU state is restored afterwards, and the CUDA state is not touched
     with torch.random.fork_rng(devices=[]):
         torch.default_generator.manual_seed(derived_seed("initial", "model", seed))

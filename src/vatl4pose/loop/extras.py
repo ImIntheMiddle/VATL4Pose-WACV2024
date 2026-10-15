@@ -1,8 +1,8 @@
 """The inputs that some query strategies need besides the heatmaps, and how the loop builds them.
 
 * The WPU scorer reads a whole-body autoencoder. Every round the loop starts from the pretrained
-  checkpoint and tunes it on the hybrid features of the labels of the labeled people, with the
-  invisible joints masked out (:func:`load_pretrained_ae`, :func:`finetune_wholebody_ae`).
+  checkpoint and fine-tunes it on the hybrid features of the labels of the labeled people, with
+  the invisible joints masked out (:func:`load_pretrained_ae`, :func:`finetune_wholebody_ae`).
 * The VL4Pose scorer reads the Gaussian over every link length that an auxiliary network predicts
   for every person. Every round the loop trains a new network on the labeled people and predicts
   all people (:func:`fit_link_gaussians`).
@@ -43,10 +43,10 @@ def finetune_wholebody_ae(
     batch_size: int,
     seed: int,
 ) -> list[float]:
-    """Tune ``ae`` in place on hybrid features: Adam, masked mean squared reconstruction error.
+    """Fine-tune ``ae`` in place on hybrid features: Adam, masked mean squared reconstruction error.
 
-    The features are standardised with the statistics stored in ``ae``, which stay as they are
-    (the pretrained normalisation is fixed; the buffers are not parameters). An entry that is not
+    The features are standardized with the statistics stored in ``ae``, which stay as they are
+    (the pretrained normalization is fixed; the buffers are not parameters). An entry that is not
     valid is 0 in the input and does not enter the loss. Every epoch visits all rows once in a
     random order that depends on ``seed`` only (the last batch may be smaller). The autoencoder is
     left in evaluation mode.
@@ -117,7 +117,7 @@ def finetune_wholebody_ae(
 
 
 def image_to_heatmap_coords(bbox_xyxy: np.ndarray, keypoints: np.ndarray) -> np.ndarray:
-    """Map joints from image pixels to the cells of the heatmaps the model predicts for the same crop.
+    """Map joints from image pixels to the heatmap cells the estimator predicts for the same crop.
 
     The crop of a person comes from its box with an affine map; this applies the map whose output
     is the ``64 x 48`` heatmap instead of the ``256 x 192`` crop (the heatmap has a quarter of the
@@ -182,7 +182,7 @@ def fit_link_gaussians(
         spec: Keypoint spec of the dataset.
         epochs: Training epochs.
         lr: Learning rate of Adam.
-        batch_size: Samples per training step and per prediction batch.
+        batch_size: People per training step and per prediction batch.
         init_seed: Seed of the initial weights.
         train_seed: Seed of the order of the training batches.
 

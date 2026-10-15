@@ -1,4 +1,4 @@
-"""The simulated oracle: the human is replaced by the ground truth stored in the cache."""
+"""The simulated oracle: the annotator is replaced by the ground truth stored in the cache."""
 
 from __future__ import annotations
 

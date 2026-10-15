@@ -1,30 +1,30 @@
-"""The COCO-file oracle: a human annotates the queries of a round in CVAT or Label Studio.
+"""The COCO-file oracle: an annotator annotates the queries of a round in CVAT or Label Studio.
 
 Every round has two files in ``<run_dir>/oracle/``, named with the round number in two digits::
 
     round_03_queries.json    written by this oracle
-    round_03_answers.json    written by the annotation tool, put in place by the human
+    round_03_answers.json    written by the annotation tool, put in place by the annotator
 
-``request`` writes the queries file and returns ``ready=False``; the loop stops, the human
+``request`` writes the queries file and returns ``ready=False``; the loop stops, the annotator
 annotates, and the next ``request`` of the same round reads the answers file.
 
 An existing queries file is kept as it is if it lists the same queries as the request: the same
 ``images`` and, for every annotation id, the same ``image_id``, ``file_name`` and ``bbox``. The
-prefilled keypoints are not compared, because a rerun of the model can change them by float noise
+prefilled keypoints are not compared, because a rerun of the estimator can change them by float noise
 while the people to annotate stay the same. If the queries differ, ``request`` raises, because an
 answers file made for the old queries could otherwise be imported for the new ones.
 
 Queries file (COCO keypoints, the format CVAT and Label Studio import)
 ----------------------------------------------------------------------
-* ``images``: the distinct frames of the queried people, ``file_name`` relative to ``dataset_root``,
+* ``images``: the distinct frames of the selected people, ``file_name`` relative to ``dataset_root``,
   with ``width`` and ``height``.
-* ``annotations``: one per queried person, in ascending order of the sample index, so the file
+* ``annotations``: one per selected person, in ascending order of the sample index, so the file
   lists a set of people and does not depend on the order of the request. ``id`` is the annotation
   id of the source data, ``bbox`` is the raw ``[x, y, w, h]`` box of the source annotation (the
   box an annotator sees in the original data), and ``attributes.vatl_sample_index`` is the sample
-  index in the video cache. ``keypoints`` is the prediction of the model as the starting point
+  index in the video cache. ``keypoints`` is the prediction of the estimator as the starting point
   for the annotator: each joint is ``x, y, 2`` where the predicted confidence is above 0 and
-  ``x, y, 0`` (not labelled, position kept) otherwise.
+  ``x, y, 0`` (not labeled, position kept) otherwise.
 * ``categories``: one ``person`` category with ``keypoints`` (the joint names of the keypoint
   spec) and ``skeleton`` (the limbs of the spec, 1-based as COCO requires).
 
@@ -34,7 +34,7 @@ The same format, as the annotation tool exports it. Only ``annotations[*].id`` a
 ``annotations[*].keypoints`` are read; ``bbox``, ``images`` and the rest are ignored. Every
 requested annotation id must appear exactly once and no other id may appear. ``keypoints`` holds
 ``3 K`` finite numbers; the visibility of each joint is 0, 1 or 2 and is mapped to 0 (not
-labelled) or 1 (labelled; COCO's 1 "occluded" and 2 "visible" both become 1, as in the cache).
+labeled) or 1 (labeled; COCO's 1 "occluded" and 2 "visible" both become 1, as in the cache).
 The answer keeps the positions the annotator left, also for joints with visibility 0.
 
 Panorama
@@ -173,7 +173,7 @@ def _first_difference(
 
 
 class CocoFileOracle:
-    """Exports the queries of a round as a COCO keypoints file and imports the human answers.
+    """Exports the queries of a round as a COCO keypoints file and imports the annotator's answers.
 
     See the module docstring for the two file formats.
 
@@ -239,7 +239,7 @@ class CocoFileOracle:
             if difference is not None:
                 raise ValueError(
                     f"round {round_index:02d}: the queries file {queries} differs from the "
-                    f"queries of this request: {difference}. The queried people have changed "
+                    f"queries of this request: {difference}. The selected people have changed "
                     "since the file was written, so an answers file made for the old queries "
                     "could be imported for the new ones. Check that the run is the same "
                     f"(config, seed, checkpoints). To start the round over, move {queries} "
@@ -274,7 +274,7 @@ class CocoFileOracle:
         prefill = predictions[samples]
         if not np.isfinite(prefill).all():
             raise ValueError(
-                f"round {round_index:02d}: predictions of the requested samples must be "
+                f"round {round_index:02d}: predictions of the requested people must be "
                 "finite, they are written to the queries file"
             )
         ann_ids = a.ann_id[samples]
@@ -282,7 +282,7 @@ class CocoFileOracle:
         if (counts > 1).any():
             raise ValueError(
                 f"the cache holds annotation ids {ids[counts > 1].tolist()} more than once "
-                "among the requested samples, so answers could not be told apart"
+                "among the requested people, so answers could not be told apart"
             )
 
         frames: dict[int, pathlib.Path] = {}

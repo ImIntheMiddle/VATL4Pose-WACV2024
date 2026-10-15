@@ -1,25 +1,25 @@
 """The result file of a run: ``result.json``, schema ``vatl4pose.result/1``.
 
-One file per video holds what the summaries need: for every evaluation (the 0 % model and the model
-after each query) the labeled share, the AP and AR values with and without the replacement of the
-labeled samples by their labels, the OSPA, and for every query the people chosen. Every per-round
-list has one entry per evaluation round (``len(query_ratio) + 1`` entries, the last for the final
-model) and has ``null`` where the round computed nothing:
+One file per video holds what the summaries need: for every evaluation (the 0 % estimator and the
+estimator after each query) the share of labeled people, the AP and AR values with and without the
+replacement of the labeled people by their labels, the OSPA, and for every query the selected
+people. Every per-round list has one entry per evaluation round (``len(query_ratio) + 1`` entries,
+the last for the final estimator) and has ``null`` where the round computed nothing:
 
 ``percentages``
-    Share of labeled samples in percent when the round evaluated.
+    Share of labeled people in percent when the round evaluated.
 ``performances``, ``performances_ann``
-    The ten values of :data:`vatl4pose.eval.METRIC_KEYS` of the predictions of all samples, and of
-    the same predictions after the labeled samples were replaced by their labels.
+    The ten values of :data:`vatl4pose.eval.METRIC_KEYS` of the predictions of all people, and of
+    the same predictions after the labeled people were replaced by their labels.
 ``ospa``, ``ospa_ann``
     The OSPA of both.
 ``query_list``
-    ``{"Round0": [...], ...}``: the sorted sample indices queried in each round that has a query
+    ``{"Round0": [...], ...}``: the sorted sample indices selected in each round that has a query
     (every round but the last); ``[]`` for a query of size 0.
 ``score_means``
-    ``{scorer: [...]}``: the mean raw score of the scorer over the unlabeled samples in the
+    ``{scorer: [...]}``: the mean raw score of the scorer over the unlabeled people in the
     round. ``null`` in the final round, for an empty query, and for a forced query that takes all
-    unlabeled samples (the strategy then scores nothing). Strategies without scorers give ``{}``.
+    unlabeled people (the strategy then scores nothing). Strategies without scorers give ``{}``.
 ``combine_weight``
     The mean local peak of the heatmaps of the unlabeled people in the round (a field of the 2023
     result files); ``null`` when nobody is unlabeled.
@@ -42,27 +42,27 @@ lists it as "no ground truth". All other lists are computed as usual.
 
 The poses of everybody after the last round
 -------------------------------------------
-The last round evaluates the model after its last retraining on every person of the video, with or
-without ground truth. The loop writes that inference next to ``result.json`` as two COCO keypoint
-results lists (the format of ``COCO.loadRes``), so that a run on your own video
+The last round evaluates the estimator after its last retraining on every person of the video,
+with or without ground truth. The loop writes that inference next to ``result.json`` as two COCO
+keypoint results lists (the format of ``COCO.loadRes``), so that a run on your own video
 (``oracle=coco_file``) ends with a pose for every person:
 
 ``predictions.json``
-    The estimator output for every person.
+    The prediction for every person.
 ``predictions_ann.json``
-    The same list with the labels in place of the estimator output for the annotated people (the
+    The same list with the labels in place of the predictions for the labeled people (the
     ``predicted_kpt_ann.json`` of the 2023 code). These are the poses that ``performances_ann``
-    evaluates: an annotated person whose label shows no joint keeps the estimator output.
+    evaluates: a labeled person whose label shows no joint keeps the prediction.
 
-Each list has one entry per sample in the sample order of the video, so entry ``i`` is the sample
-``i`` of ``query_list``. An entry holds ``image_id`` and ``id`` (the image id and the annotation id
-of the annotation file, to join the entry with it), ``track_id`` (the track of the sample as a
-string, as the cache holds it; the PoseTrack21 ids carry the video id as a prefix),
-``category_id`` (always 1), ``keypoints`` and ``score``. ``keypoints`` is the flat list ``x, y, c``
-of every joint in the order of the keypoint spec, ``3 * K`` numbers. ``c`` is the peak value of the
-heatmap for an estimator joint and the visibility (0 or 1) for a label joint. ``score`` is the pose
-score of the ``K`` peak values (:func:`vatl4pose.eval.pose_score`); the label of an annotated
-person does not change it. ``x`` and ``y`` are the pixel coordinates that
+Each list has one entry per person in the sample order of the video, so entry ``i`` belongs to
+the sample index ``i`` of ``query_list``. An entry holds ``image_id`` and ``id`` (the image id and
+the annotation id of the annotation file, to join the entry with it), ``track_id`` (the track of
+the person as a string, as the cache holds it; the PoseTrack21 ids carry the video id as a
+prefix), ``category_id`` (always 1), ``keypoints`` and ``score``. ``keypoints`` is the flat list
+``x, y, c`` of every joint in the order of the keypoint spec, ``3 * K`` numbers. ``c`` is the peak
+value of the heatmap for an estimator joint and the visibility (0 or 1) for a label joint.
+``score`` is the pose score of the ``K`` peak values (:func:`vatl4pose.eval.pose_score`); the
+label of a person does not change it. ``x`` and ``y`` are the pixel coordinates that
 ``performances`` evaluates.
 
 For a ``panorama`` dataset (JRDB-Pose) the coordinates keep the convention of the evaluation: the
@@ -215,14 +215,14 @@ def build_predictions(
     image_id: np.ndarray,
     track_id: Sequence[str],
 ) -> list[dict[str, Any]]:
-    """The COCO keypoint results list of the samples of a video, one entry per sample in order.
+    """The COCO keypoint results list of the people of a video, one entry per person in order.
 
     Args:
         keypoints: ``(N, K, 3)`` float x, y and the third value of every joint (the peak value of
             an estimator joint, the visibility of a label joint), in image pixels.
-        score: ``(N,)`` float pose score of every sample.
-        ann_id: ``(N,)`` integer annotation id of every sample.
-        image_id: ``(N,)`` integer image id of every sample.
+        score: ``(N,)`` float pose score of every person.
+        ann_id: ``(N,)`` integer annotation id of every person.
+        image_id: ``(N,)`` integer image id of every person.
         track_id: ``N`` track ids as strings.
 
     Returns:
@@ -265,7 +265,7 @@ def write_predictions(
 ) -> tuple[pathlib.Path, pathlib.Path]:
     """Write ``predictions.json`` and ``predictions_ann.json`` into ``run_dir``.
 
-    Both lists are serialised before either file is written, and every file goes through a
+    Both lists are serialized before either file is written, and every file goes through a
     temporary file and a rename, so a reader never sees a half-written file.
 
     Raises:

@@ -1,18 +1,18 @@
-"""Per-round fine-tuning of the pose estimator on the labeled people of one video.
+"""Per-round retraining of the pose estimator on the labeled people of one video.
 
-After every query the estimator is trained again on the people the oracle has labeled. Two
+After every query the estimator is retrained on the people the oracle has labeled. Two
 schemes exist:
 
-* continual (default): the model, the optimizer and the learning-rate schedule carry over from
+* continual (default): the estimator, the optimizer and the learning-rate schedule carry over from
   round to round, and a round trains ``int(alpha * (1 - moks_queried))`` epochs;
 * non-continual: every round starts from the initial weights with a fresh optimizer and schedule,
   and trains ``int(base * n_labeled / n_total + alpha * (1 - moks_queried))`` epochs.
 
-Here ``moks_queried`` is the mean OKS that the model reached on the people queried in this round
-before they were labeled: when the model already solved them, little training is needed.
+Here ``moks_queried`` is the mean OKS that the estimator reached on the people selected in this
+round before they were labeled: when the estimator already solved them, little training is needed.
 
 The training set of a round is the people labeled earlier whose OKS is at most
-``finish_acc + FINISH_MARGIN`` (0.05) plus the people queried now
+``finish_acc + FINISH_MARGIN`` (0.05) plus the people selected now
 (:meth:`Finetuner.retrain_indices`). With the default ``finish_acc = 1`` every labeled person is
 kept.
 
@@ -54,7 +54,7 @@ _STATE_KEYS = ("model", "optimizer", "scheduler", "seed", "epochs_trained")
 
 @dataclass(frozen=True)
 class RetrainConfig:
-    """Settings of the fine-tuning of every round.
+    """Settings of the retraining of every round.
 
     Attributes:
         optimizer: ``adamw`` uses the learning-rate groups of the estimator and ``weight_decay``.
@@ -64,10 +64,10 @@ class RetrainConfig:
         lr: Base learning rate.
         weight_decay: Weight decay of AdamW.
         lr_gamma: Factor of the exponential decay of the learning rate after every epoch.
-        base: Epochs per labeled share of the video in the non-continual scheme.
-        alpha: Epochs for the part of the queried people that the model has not solved yet.
+        base: Epochs per share of labeled people in the non-continual scheme.
+        alpha: Epochs for the part of the selected people that the estimator has not solved yet.
         batch_size: Training batch size.
-        continual: Keep the model, optimizer and schedule across rounds when true; start every
+        continual: Keep the estimator, optimizer and schedule across rounds when true; start every
             round from the initial weights when false.
         finish_acc: OKS from which a labeled person counts as solved, in ``[0, 1]``. People
             labeled earlier are retrained only while their OKS is at most ``finish_acc`` plus
@@ -166,10 +166,10 @@ class Finetuner:
     ) -> None:
         """
         Args:
-            estimator: The network to fine-tune, already holding ``initial_state``.
+            estimator: The estimator to retrain, already holding ``initial_state``.
             initial_state: State dict the non-continual scheme returns to at every round. It is
                 copied, so later training of ``estimator`` does not change it.
-            cfg: Settings of the fine-tuning.
+            cfg: Settings of the retraining.
             device: Device of the training; the estimator is moved to it.
             seed: Seed of the run, non-negative.
 
@@ -228,9 +228,9 @@ class Finetuner:
         """Number of epochs to train in this round.
 
         Args:
-            n_labeled: People labeled after this round's query (queried ones included).
+            n_labeled: People labeled after this round's query (selected ones included).
             n_total: People of the video.
-            moks_queried: Mean OKS of this round's queried people before their labels were used.
+            moks_queried: Mean OKS of this round's selected people before their labels were used.
 
         Returns:
             The number of epochs of the scheme in the module docstring, truncated to an int.
@@ -253,12 +253,12 @@ class Finetuner:
         queried: np.ndarray,
         finish_acc: float,
     ) -> np.ndarray:
-        """Training set of a round: unsolved labeled people plus the people queried now.
+        """Training set of a round: unsolved labeled people plus the people selected now.
 
         Args:
             labeled_before: ``(L,)`` integer sample indices labeled before this round.
             oks_before: ``(L,)`` float64 finite OKS of those people, row for row.
-            queried: ``(Q,)`` integer sample indices queried in this round.
+            queried: ``(Q,)`` integer sample indices selected in this round.
             finish_acc: OKS from which a person counts as solved, in ``[0, 1]``.
 
         Returns:
@@ -303,10 +303,10 @@ class Finetuner:
 
         The round is the ``round_index`` of the dataset, so that the augmentation of the items
         and the order of the epochs belong to the same round. The non-continual scheme resets
-        the model, optimizer and schedule first, also when ``epochs`` is 0. Every epoch sets the
+        the estimator, optimizer and schedule first, also when ``epochs`` is 0. Every epoch sets the
         dataset to the epoch counter of the round (from 0), visits the items in
         :func:`shuffle_order`, and steps the schedule once, after the batches of the epoch.
-        The training flag of the model is restored at the end.
+        The training flag of the estimator is restored at the end.
 
         Args:
             dataset: Training items of the round; its ``seed`` must equal the seed of this
@@ -397,7 +397,7 @@ class Finetuner:
         return mean
 
     def state_dict(self) -> dict[str, Any]:
-        """A snapshot of everything that continues training: model, optimizer, schedule, counters.
+        """A snapshot of all that continues training: estimator, optimizer, schedule, counters.
 
         The snapshot is a copy. It holds tensors, numbers, strings and plain containers only, so
         ``torch.save`` and ``torch.load(weights_only=True)`` handle it.

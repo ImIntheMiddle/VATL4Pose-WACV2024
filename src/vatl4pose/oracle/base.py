@@ -1,9 +1,9 @@
 """The oracle interface of the active-learning loop and the checks every oracle applies.
 
-Each round the loop picks the people whose annotation it wants and sends them to an oracle. The
+Each round the loop selects the people whose annotation it wants and sends them to an oracle. The
 simulated oracle answers at once with the cached ground truth; the COCO-file oracle hands the
-queries to a human through files and has no answer until the human has put the answers file in
-place. :class:`OracleResult` carries both cases: ``ready=False`` means "ask again later".
+queries to an annotator through files and has no answer until the annotator has put the answers
+file in place. :class:`OracleResult` carries both cases: ``ready=False`` means "ask again later".
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ class OracleResult:
         keypoints: ``(k, K, 3)`` float64 array of x, y and visibility with visibility in
             ``{0, 1}``, row ``i`` being the person ``indices[i]`` of the request; ``None`` while
             ``ready`` is ``False``.
-        message: Human-readable status, for example where the human has to put the answers.
+        message: Human-readable status, for example where the annotator has to put the answers.
     """
 
     ready: bool
@@ -59,7 +59,7 @@ class OracleResult:
 
 
 class Oracle(Protocol):
-    """Source of annotations for the people a round queries."""
+    """Source of annotations for the people a round selects."""
 
     def request(
         self, indices: np.ndarray, round_index: int, predictions: np.ndarray
@@ -70,7 +70,7 @@ class Oracle(Protocol):
             indices: ``(k,)`` integer array of distinct sample indices of the video cache.
             round_index: Active-learning round, counted from 0.
             predictions: ``(N, K, 3)`` float array of the current predictions (x, y, confidence)
-                of all ``N`` samples, which an oracle may use to pre-annotate the queries.
+                of all ``N`` people, which an oracle may use to pre-annotate the queries.
 
         Returns:
             The annotations of the people in the order of ``indices``, or a result with
@@ -85,7 +85,7 @@ def check_request(
 ) -> None:
     """Raise ``ValueError`` unless ``(indices, round_index, predictions)`` is a valid request.
 
-    The indices must be a non-empty 1-D integer array of distinct samples of the cache, the round
+    The indices must be a non-empty 1-D integer array of distinct people of the cache, the round
     a non-negative integer and the predictions a floating-point array of shape ``(N, K, 3)``.
     """
     n, num_joints = arrays.keypoints_gt.shape[:2]
@@ -100,7 +100,7 @@ def check_request(
             f"and shape {getattr(indices, 'shape', None)}"
         )
     if indices.size == 0:
-        raise ValueError("indices: at least one sample must be requested")
+        raise ValueError("indices: at least one person must be requested")
     if indices.min() < 0 or indices.max() >= n:
         raise ValueError(
             f"indices: values from {indices.min()} to {indices.max()} are out of range [0, {n})"
@@ -108,7 +108,7 @@ def check_request(
     values, counts = np.unique(indices, return_counts=True)
     if (counts > 1).any():
         raise ValueError(
-            f"indices: samples {values[counts > 1].tolist()} appear more than once"
+            f"indices: sample indices {values[counts > 1].tolist()} appear more than once"
         )
     if isinstance(round_index, (bool, np.bool_)) or not isinstance(
         round_index, (int, np.integer)

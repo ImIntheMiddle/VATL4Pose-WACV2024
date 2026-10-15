@@ -1,6 +1,6 @@
 """Training of the pose estimator and the whole-body autoencoder.
 
-* :mod:`~vatl4pose.train.finetune` trains the estimator inside the active-learning loop.
+* :mod:`~vatl4pose.train.finetune` retrains the estimator inside the active-learning loop.
 * :mod:`~vatl4pose.train.initial` trains the initial estimator, and
   :mod:`~vatl4pose.train.autoencoder` pretrains the whole-body autoencoder; both produce the
   starting weights of the loop.

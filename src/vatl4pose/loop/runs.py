@@ -2,11 +2,11 @@
 
 Several processes, possibly on several hosts, share one filesystem and split the videos of a
 dataset between them. Each process is one shard. :func:`select_shard` gives every shard a fixed,
-disjoint set of videos, and every video has its own output directory that only the process of its
+disjoint set of videos, and every video has its own run directory that only the process of its
 shard writes to. The other functions keep those directories consistent when a process is killed
 or started twice by mistake: id lists, per-video seeds, completion markers and a per-video lock.
 
-The output directories usually live in a home directory on NFS that all hosts mount. The
+The run directories usually live in a home directory on NFS that all hosts mount. The
 primitives used here are the ones that work across hosts on NFS: ``open(O_CREAT | O_EXCL)`` is
 atomic on NFSv3 and later with the Linux client, ``os.replace`` is an atomic rename, and every file
 (and the directory after a rename) is ``fsync``-ed before another process can rely on it.
@@ -114,7 +114,7 @@ def is_done(video_dir: pathlib.Path) -> bool:
 def mark_done(video_dir: pathlib.Path, payload: dict) -> None:
     """Record that the video of ``video_dir`` is finished, with ``payload`` as JSON in the marker.
 
-    The payload is serialised first, so a payload that is not JSON-serialisable raises before any
+    The payload is serialized first, so a payload that is not JSON-serializable raises before any
     file exists. The marker is then written as ``.done.json.tmp``, ``fsync``-ed, and moved to
     ``.done.json`` with ``os.replace``, which is an atomic rename. The directory is ``fsync``-ed
     last so the rename survives a crash of the host. A reader therefore sees either no marker or

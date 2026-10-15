@@ -2,31 +2,32 @@
 
 A round of :class:`ActiveLearningLoop` is the procedure of the paper. One method does each step:
 
-1. :meth:`~ActiveLearningLoop._infer`: the model predicts the heatmaps (and the embeddings, if the
-   selector clusters them) of all people of the video.
+1. :meth:`~ActiveLearningLoop._infer`: the pose estimator predicts the heatmaps (and the
+   embeddings, if the selector clusters them) of all people of the video.
 2. :meth:`~ActiveLearningLoop._evaluate`: AP and OSPA of the predictions against the ground truth,
    and the same after the labeled people's predictions are replaced by their labels. A video in
    which some person has no ground truth (boxes without keypoints) has no AP and no OSPA: the
    metrics are ``None`` in every round and ``run`` logs one warning. The other steps do not
    read the ground truth, so the selection, the oracle and the retraining are the same.
-3. :meth:`~ActiveLearningLoop._extras`: the inputs that WPU (the autoencoder) and VL4Pose (the link
-   Gaussians) need.
-4. :meth:`~ActiveLearningLoop._select`: the strategy chooses the people to annotate.
+3. :meth:`~ActiveLearningLoop._extras`: the inputs that WPU (the whole-body autoencoder) and VL4Pose
+   (the link Gaussians) need.
+4. :meth:`~ActiveLearningLoop._select`: the strategy selects the people to annotate.
 5. :meth:`~ActiveLearningLoop._ask_oracle`: the oracle answers, or the loop stores the query and
-   stops with :class:`Pending` until the human has annotated.
+   stops with :class:`Pending` until the annotator has annotated.
 6. :meth:`~ActiveLearningLoop._retrain`: the estimator learns from the new answers and the people it
    has not solved yet.
-7. :meth:`~ActiveLearningLoop._finetune_ae`: the autoencoder is tuned on the labeled people.
+7. :meth:`~ActiveLearningLoop._finetune_ae`: the autoencoder is fine-tuned on the labeled people.
 8. :meth:`~ActiveLearningLoop._save`: the state of the finished round is written.
 
 Round ``r`` evaluates and then queries ``query_sizes[r] - n_labeled`` people with
 ``query_sizes = [int(N * ratio) for ratio in query_ratio]``. The last round, numbered
-``len(query_ratio)``, only evaluates the final model: no query and no retraining. A last ratio
-below 1.0 ends the run at that fraction (labeling under a budget).
+``len(query_ratio)``, only evaluates the final estimator: no query and no retraining. A last value
+of ``query_ratio`` below 1.0 ends the run at that share of labeled people (labeling under a
+budget).
 
 Decisions of this implementation:
 
-* The last round writes the poses of everybody under the final model: ``predictions.json`` and
+* The last round writes the poses of everybody under the final estimator: ``predictions.json`` and
   ``predictions_ann.json`` (see :mod:`.results`). They come from the inference of its step 1, the
   one that step 2 evaluates, so the files hold the coordinates behind the last values of
   ``performances`` and ``performances_ann``. They need no ground truth.
@@ -35,12 +36,12 @@ Decisions of this implementation:
   ``moks_previous`` stays at the last value that exists (0.0 before any).
 * A query that takes every unlabeled person is forced by ``Strategy.query``, which scores nothing;
   step 3 is skipped too, so no auxiliary network is trained and no autoencoder is passed on.
-* Every list of queried indices is sorted before the oracle sees it, so the order of the answers,
-  of the fine-tuning set and of the files does not depend on the selector's order.
+* Every list of selected indices is sorted before the oracle sees it, so the order of the answers,
+  of the retraining set and of the files does not depend on the selector's order.
 * A label with no visible joint counts as labeled but is left out of retraining, OKS, the
   autoencoder and the auxiliary network (see :meth:`_labeled_with_joints`).
 * ``run_dir/progress.json`` names the step the loop works on (the steps of the ``timings`` of a
-  round) and, while the estimator trains, the epoch; an interface reads it to show progress. A
+  round) and, while the estimator retrains, the epoch; an interface reads it to show progress. A
   stopped run leaves its last step in the file.
 * A stored query is asked again as it was, without inference or selection (see :mod:`.state`).
 """
@@ -89,7 +90,7 @@ from .state import (
 logger = logging.getLogger(__name__)
 
 AE_KEY = "ae"
-"""Key of ``RoundContext.extras`` that holds the whole-body autoencoder."""
+"""Key of ``RoundContext.extras`` that holds the autoencoder."""
 
 STEPS = ("infer", "eval", "select", "oracle", "retrain", "ae")
 """The timed steps of a round; ``total`` is added to them in the record."""
@@ -106,24 +107,24 @@ class LoopConfig:
     """Settings of the loop; the defaults are the ones of the paper.
 
     Attributes:
-        query_ratio: Share of the video that is labeled after each query, strictly increasing in
-            ``(0, 1]``. ``len(query_ratio)`` queries and one more evaluation make the rounds.
-            The run ends once the last ratio is labeled: a last ratio below 1.0 stops at that
-            fraction, which labels under a budget on data of your own. The 2023 code queried
-            all remaining people in an extra round after the last ratio.
+        query_ratio: Share of labeled people after each query, strictly increasing in ``(0, 1]``.
+            ``len(query_ratio)`` queries and one more evaluation make the rounds. The run ends
+            once the last share of people is labeled: a last share below 1.0 stops there, which
+            labels under a budget on data of your own. The 2023 code queried all remaining people
+            in an extra round after the last share.
         infer_batch_size: People per forward pass of the inference.
-        save_final_model: Write the state dict of the final model to ``final_estimator.pth``.
+        save_final_model: Write the state dict of the final estimator to ``final_estimator.pth``.
         save_estimator: Write the state dict of the estimator to ``estimator.pth`` after every
-            round, so that a run stopped early leaves the model of its last finished round.
+            round, so that a run stopped early leaves the estimator of its last finished round.
         stopping: Judge the stopping criterion of the paper (SC_All) in every round with a query
             (``>=``, as the 2023 code) and record it in :attr:`RoundRecord.stopping`; the loop
             does not stop by itself, so that the annotator decides.
         save_round_details: Write ``details/round_XX.npz`` in every round
             (:mod:`vatl4pose.explain.record`); the selection and the results do not change.
         seed: Base seed; the seed of a video is ``video_seed(seed, video_id)``.
-        ae_finetune_epochs: Epochs of the autoencoder tuning after every retraining.
-        ae_finetune_lr: Learning rate (Adam) of that tuning.
-        ae_finetune_batch: Batch size of that tuning.
+        ae_finetune_epochs: Epochs of the autoencoder fine-tuning after every retraining.
+        ae_finetune_lr: Learning rate (Adam) of that fine-tuning.
+        ae_finetune_batch: Batch size of that fine-tuning.
         ae_z_dim: Latent size of the autoencoder checkpoint (4 for the released ones), at least 1.
         vl4pose_epochs: Training epochs of the auxiliary network of VL4Pose in every round.
         vl4pose_lr: Learning rate (Adam) of the auxiliary network.
@@ -175,11 +176,11 @@ class LoopConfig:
 
 @dataclass
 class Pending:
-    """The oracle waits for human annotations; run again once they are in place.
+    """The oracle waits for the annotator; run again once the annotations are in place.
 
     Attributes:
         round_index: The round that needs its answers.
-        message: What the oracle asks the human to do and where.
+        message: What the oracle asks the annotator to do and where.
     """
 
     round_index: int
@@ -248,9 +249,9 @@ class _Query:
 
     Attributes:
         queried: Sorted int64 sample indices to annotate, at least one.
-        predictions: ``(N, K, 3)`` float64 predictions (x, y, peak value) of the model as it was
-            when the round inferred; the oracle may prefill from them and the OKS of the queried
-            and the labeled people is measured on them.
+        predictions: ``(N, K, 3)`` float64 predictions (x, y, peak value) of the estimator as it
+            was when the round inferred; the oracle may prefill from them and the OKS of the
+            selected and the labeled people is measured on them.
         score_means: Mean raw score of every scorer that scored.
     """
 
@@ -338,14 +339,14 @@ class ActiveLearningLoop:
 
     Args:
         cache: Cache of the video.
-        estimator: The pose model; it must be the model of ``finetuner``.
+        estimator: The estimator; it must be the one that ``finetuner`` trains.
         strategy: The query strategy. The scorers ``wpu`` and ``vl4pose`` make the loop provide the
             autoencoder and the link Gaussians; a selector with ``needs_embeddings`` makes it
             compute the embeddings.
         oracle: The source of the labels.
-        finetuner: Trains ``estimator`` after every query. Its seed must be
+        finetuner: Retrains ``estimator`` after every query. Its seed must be
             ``video_seed(cfg.seed, cache.video_id)``, so that one seed drives every part of a run.
-        ae_ckpt: Pretrained whole-body autoencoder; required by strategies with the ``wpu`` scorer.
+        ae_ckpt: Pretrained autoencoder; required by strategies with the ``wpu`` scorer.
         cfg: Settings of the loop.
         run_dir: Directory of the run; ``state/``, ``result.json``, ``predictions.json``,
             ``predictions_ann.json``, ``final_estimator.pth`` and ``estimator.pth`` go here. The CLI
@@ -391,8 +392,8 @@ class ActiveLearningLoop:
         self.seed = video_seed(cfg.seed, cache.video_id)
         if finetuner.model is not estimator:
             raise ValueError(
-                "the estimator is not the model of the finetuner: the loop would predict with "
-                "one network and train another"
+                "the estimator is not the one the finetuner trains: the loop would predict with "
+                "one estimator and train another"
             )
         if finetuner.seed != self.seed:
             raise ValueError(
@@ -639,7 +640,7 @@ class ActiveLearningLoop:
         ):
             raise ValueError(
                 f"the pending query of round {stored.round_index} does not fit this video: "
-                f"{queried.size} queried people, predictions of shape {stored.predictions.shape} "
+                f"{queried.size} selected people, predictions of shape {stored.predictions.shape} "
                 f"instead of {expected}; remove {self.state_dir} to start the run again"
             )
         self._check_scores(stored.score_means, queried.size)
@@ -770,7 +771,7 @@ class ActiveLearningLoop:
             else:
                 output = self.estimator(x)
             assert output.dtype == torch.float32, (
-                f"the model returned {output.dtype} heatmaps"
+                f"the estimator returned {output.dtype} heatmaps"
             )
             output = output.cpu()
             heatmaps[start : start + len(index)] = output
@@ -791,7 +792,7 @@ class ActiveLearningLoop:
     def _report(
         self, round_index: int, step: str, done: int | None = None, total: int | None = None
     ) -> None:
-        """Write the step of the loop, and the epoch while it trains, to ``progress.json``.
+        """Write the step of the loop, and the epoch while it retrains, to ``progress.json``.
 
         A new step is always written; the epochs of a step at most every half second and at the
         last epoch, so that a short epoch does not wait for the file system.
@@ -990,7 +991,7 @@ class ActiveLearningLoop:
     # ------------------------------------------------------------------ step 5: oracle
 
     def _ask_oracle(self, round_index: int, query: _Query) -> np.ndarray | Pending:
-        """The labels of the queried people as ``(k, K, 3)``, or :class:`Pending` if not there yet."""
+        """The labels of the selected people as ``(k, K, 3)``, or :class:`Pending` if not there yet."""
         outcome = self.oracle.request(query.queried, round_index, query.predictions)
         if not outcome.ready:
             return Pending(round_index=round_index, message=outcome.message)
@@ -1005,8 +1006,8 @@ class ActiveLearningLoop:
         blind = query.queried[~(answers[:, :, 2] > 0).any(axis=1)]
         if blind.size:
             logger.info(
-                "round %d: the oracle marked no joint visible for the samples %s; they count "
-                "as labeled but give no training target, autoencoder feature or OKS",
+                "round %d: the oracle marked no joint visible for the people with sample indices "
+                "%s; they count as labeled but give no training target, autoencoder feature or OKS",
                 round_index,
                 blind.tolist(),
             )
@@ -1017,15 +1018,16 @@ class ActiveLearningLoop:
     def _retrain(
         self, round_index: int, query: _Query, answers: np.ndarray
     ) -> tuple[float | None, dict[str, Any] | None]:
-        """Label the people, train the estimator on them, return their mean query OKS.
+        """Label the people, retrain the estimator on them, return their mean query OKS.
 
-        The training set is the queried people plus the labeled people whose OKS (under the model
-        before this training) is low enough (see :meth:`Finetuner.retrain_indices`); the number of
-        epochs follows from the mean OKS of the queried people. People without a visible joint in
-        their label are labeled but left out of both (see :meth:`_labeled_with_joints`). If no
-        queried person has a visible joint, the estimator is not trained and the mean OKS is
+        The training set is the selected people plus the labeled people whose OKS (under the
+        estimator before this training) is low enough (see :meth:`Finetuner.retrain_indices`); the
+        number of epochs follows from the mean OKS of the selected people. People without a visible
+        joint in their label are labeled but left out of both (see :meth:`_labeled_with_joints`). If
+        no selected person has a visible joint, the estimator is not retrained and the mean OKS is
         ``None``. With ``loop.stopping`` the second value is the judgment of :meth:`_stopping` on
-        the OKS of the labeled and the queried people, all under the model before this training.
+        the OKS of the labeled and the selected people, all under the estimator before this
+        training.
         """
         picked, coords = query.queried, query.coords
         before = self._labeled_with_joints()
@@ -1043,7 +1045,7 @@ class ActiveLearningLoop:
         )
         if not seen.any():
             logger.warning(
-                "round %d: no queried person has a visible joint, so the estimator is not trained",
+                "round %d: no selected person has a visible joint, so the estimator is not retrained",
                 round_index,
             )
             return None, stopping
@@ -1069,7 +1071,7 @@ class ActiveLearningLoop:
         return moks, stopping
 
     def _stopping(self, oks: np.ndarray, coords: np.ndarray) -> dict[str, Any] | None:
-        """SC_All of the paper over the OKS of the annotated people; ``None`` without anybody.
+        """SC_All of the paper over the OKS of the labeled people; ``None`` without anybody.
 
         ``oracle`` is the same count over every person of the video (see :meth:`_oracle_stopping`).
         """
@@ -1089,7 +1091,7 @@ class ActiveLearningLoop:
     def _oracle_stopping(
         self, coords: np.ndarray, theta: float
     ) -> dict[str, Any] | None:
-        """The oracle stop of the paper (``actual`` in Table 5): does every person reach ``theta``?
+        """The actual stop (``actual`` in Table 5 of the paper): does every person reach ``theta``?
 
         The OKS of the predicted joints ``coords`` of all people of the video against the ground
         truth, the people not labeled yet included. The loop never reads it; it only records it,
@@ -1116,7 +1118,7 @@ class ActiveLearningLoop:
         )
 
     def _build_ae(self) -> WholeBodyAE:
-        """The pretrained autoencoder, tuned on the hybrid features of the labels with a visible joint.
+        """The pretrained autoencoder, fine-tuned on the hybrid features of labels with a visible joint.
 
         The features are those of the answers of the oracle, with the label visibility as weights
         (with the simulated oracle the answers are the ground truth); a joint with no visibility
@@ -1143,7 +1145,7 @@ class ActiveLearningLoop:
         return ae
 
     def _finetune_ae(self) -> None:
-        """Tune a new autoencoder on the labeled people for the next round's scores."""
+        """Fine-tune a new autoencoder on the labeled people for the next round's scores."""
         self._ae = self._build_ae()
 
     # ------------------------------------------------------------------ step 8: state

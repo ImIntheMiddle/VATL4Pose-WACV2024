@@ -1,21 +1,21 @@
 """The round state of the active-learning loop and its files.
 
-A run that is killed, or that waits for human annotations, must continue with the round after the
+A run that is killed, or that waits for the annotator, must continue with the round after the
 last one it finished and give the result an uninterrupted run would have given. Everything that the
 next round reads is therefore written when a round is finished, to a directory of ``state/``::
 
     state/current.json            points at the directory of the last finished round
-    state/round_02/state.json     the records of rounds 0 to 2, the labeled samples, the settings
+    state/round_02/state.json     the records of rounds 0 to 2, the labeled people, the settings
     state/round_02/torch_rng.pt   the state of the global torch random generator
-    state/round_02/finetuner.pt   model, optimizer and schedule of the Finetuner
+    state/round_02/finetuner.pt   estimator, optimizer and schedule of the Finetuner
     state/pending_03/...          the query of round 3 while it waits for annotations
 
-``state.json`` holds a record per finished round (:class:`RoundRecord`: what was queried, the
-answers of the oracle, the metrics, the timings), the sorted list of labeled samples, the state of
-the numpy random generator and the settings of the run (``config``), which a resume compares with
-its own settings.
+``state.json`` holds a record per finished round (:class:`RoundRecord`: who was selected, the
+answers of the oracle, the metrics, the timings), the sorted indices of the labeled people, the
+state of the numpy random generator and the settings of the run (``config``), which a resume
+compares with its own settings.
 
-Atomic commit. :func:`save_state` writes the three files into a new directory ``round_NN`` (``NN``
+Atomic commit. :func:`save_state` writes the three files into a new directory ``round_XX`` (``XX``
 is the index of the finished round) and only then replaces ``current.json`` with a pointer to it,
 through a temporary file and ``os.replace``. :func:`load_state` reads the directory that the
 pointer names and nothing else. A run killed at any moment therefore leaves either the old round or
@@ -23,11 +23,11 @@ the new round as the current one, never a mix; a directory written before the po
 ignored and replaced by the next save. The directories of older rounds are removed after the
 pointer has moved.
 
-Pending query. When the oracle has no answers yet (a human has to annotate), the round has already
-chosen its people. :func:`save_pending` stores that choice, the predictions that were given to the
-oracle and what the round has computed so far, so that the next ``run`` asks the oracle for the same
-people without inference or selection (:func:`load_pending`). The directory ``pending_NN`` belongs
-to round ``NN`` and is removed when the state of round ``NN`` is committed.
+Pending query. When the oracle has no answers yet (an annotator has to annotate), the round has
+already selected its people. :func:`save_pending` stores that selection, the predictions that were
+given to the oracle and what the round has computed so far, so that the next ``run`` asks the
+oracle for the same people without inference or selection (:func:`load_pending`). The directory
+``pending_XX`` belongs to round ``XX`` and is removed when the state of round ``XX`` is committed.
 
 Everything is JSON, ``.npy`` or ``torch.save`` data of tensors, numbers, strings and plain
 containers, so ``torch.load(weights_only=True)`` and ``np.load(allow_pickle=False)`` read it and no
@@ -66,32 +66,32 @@ class RoundRecord:
     """Everything one finished round produced. Lists hold plain Python numbers.
 
     Attributes:
-        percentage: Share of labeled samples in percent when the round evaluated, before its query.
-        performance: The ten AP and AR values of the predictions of all samples; ``None`` in a video
+        percentage: Share of labeled people in percent when the round evaluated, before its query.
+        performance: The ten AP and AR values of the predictions of all people; ``None`` in a video
             in which some person has no ground truth.
-        performance_ann: The same after the labeled samples' predictions were replaced by their
-            labels; ``None`` as ``performance``.
+        performance_ann: The same after the predictions for the labeled people were replaced by
+            their labels; ``None`` as ``performance``.
         ospa: OSPA of the predictions; ``None`` as ``performance``.
         ospa_ann: OSPA after the replacement; ``None`` as ``performance``.
-        combine_weight: Mean local peak of the heatmaps of the unlabeled samples in the round (a
+        combine_weight: Mean local peak of the heatmaps of the unlabeled people in the round (a
             field of the 2023 result files); ``None`` when nobody is unlabeled.
-        score_means: Mean raw score of every scorer over the unlabeled samples; ``None`` when the
+        score_means: Mean raw score of every scorer over the unlabeled people; ``None`` when the
             round scored nothing (no query, an empty query, or a forced query that takes everybody).
-        queried: Sorted sample indices queried in the round; ``[]`` for a query of size 0; ``None``
+        queried: Sorted sample indices selected in the round; ``[]`` for a query of size 0; ``None``
             in the final round, which has no query.
         answers: Labels of the oracle for ``queried``, row for row, as ``(k, K, 3)`` nested lists
             of x, y and visibility; ``None`` where ``queried`` is ``None`` or empty.
-        moks_queried: Mean OKS of the predictions for the queried people against their labels, from
-            the model before it learned from them, over the people with a visible joint; ``None``
-            without a query or when no queried person has a visible joint.
+        moks_queried: Mean OKS of the predictions for the selected people against their labels,
+            from the estimator before it learned from them, over the people with a visible joint;
+            ``None`` without a query or when no selected person has a visible joint.
         stopping: The stopping criterion of the paper (SC_All) judged in the round, with
             ``loop.stopping``: ``theta`` (``retrain.finish_acc``), ``people`` (the labeled people
-            with a visible joint, the queried ones included), ``above`` (those whose OKS under
-            the model before the round's training is at least ``theta``), ``lowest`` (their
+            with a visible joint, the selected ones included), ``above`` (those whose OKS under
+            the estimator before the round's training is at least ``theta``), ``lowest`` (their
             lowest OKS) and ``met`` (``above == people``). ``oracle`` holds ``people``, ``above``,
             ``lowest`` and ``met`` again for every person of the video against the ground truth
-            (the labeled and the unlabeled ones; the "actual" stop of Table 5), or ``None`` when
-            some person has no ground truth. The whole value is ``None`` without
+            (the labeled and the unlabeled ones; the "actual" stop of Table 5 of the paper), or
+            ``None`` when some person has no ground truth. The whole value is ``None`` without
             ``loop.stopping``, without a query and when nobody labeled has a visible joint.
         timings: Seconds of each step (``infer``, ``eval``, ``select``, ``oracle``, ``retrain``,
             ``ae``) and ``total``, the work of the whole round without the write of the state.
@@ -132,7 +132,7 @@ class LoopState:
 
     @property
     def labeled(self) -> list[int]:
-        """Sorted sample indices queried in the finished rounds."""
+        """Sorted sample indices selected in the finished rounds."""
         return sorted(i for record in self.rounds for i in (record.queried or []))
 
 
@@ -154,7 +154,7 @@ class PendingQuery:
         config: The settings of the run, as in :attr:`LoopState.config`.
         queried: Sorted sample indices the oracle was asked for.
         predictions: ``(N, K, 3)`` float64 predictions (x, y, peak value) that were given to the
-            oracle, from the model before it learns from the answers.
+            oracle, from the estimator before it learns from the answers.
         evaluation: The metrics of the round (percentage, AP and OSPA with and without labels,
             ``combine_weight``) as JSON data.
         score_means: Mean raw score of every scorer that scored, as in :class:`RoundRecord`.
@@ -319,7 +319,7 @@ def load_state(state_dir: pathlib.Path) -> LoadedState | None:
         )
     if document["labeled"] != state.labeled:
         raise ValueError(
-            f"{path}: the list 'labeled' differs from the samples queried in the rounds"
+            f"{path}: the list 'labeled' differs from the people selected in the rounds"
         )
     rng = _load_torch(directory / TORCH_RNG_NAME, state.rounds_done)["cpu"]
     finetuner = _load_torch(directory / FINETUNER_NAME, state.rounds_done)["finetuner"]
